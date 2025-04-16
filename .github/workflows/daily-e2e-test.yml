@@ -1,0 +1,96 @@
+name: Daily E2E Tests
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # Every day at 07:00 UTC
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐳 Start Portainer via Docker Compose
+        run: make up
+
+      - name: 🛠️ Install kubectl
+        run: make install-kubectl
+
+      - name: 🔧 Install k3d
+        run: make install-k3d
+
+      - name: ☸️ Create K3d cluster
+        run: make k3d-up
+
+      - name: ☸️ Verify K3d cluster
+        run: make k3d-status
+
+      - name: 🧠 Deploy Portainer Agent into Kubernetes
+        run: make k8s-deploy-agent
+
+      - name: 🧬 Connect Portainer to k3d network
+        run: make k3d-connect-portainer
+
+      - name: 🌐 Get Kubernetes server IP and export for Terraform
+        run: make k3d-export-ip
+
+      - name: ⬇️ Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: 🔍 Validate formatting (terraform fmt)
+        run: terraform fmt -check -recursive
+
+      - name: 🧪 Run Terraform E2E tests - Create Kubernetes Environment
+        run: |
+          cd e2e-tests/environment
+          terraform init -input=false
+          terraform fmt -check
+          terraform apply -auto-approve
+
+      - name: 🧪 Run Terraform E2E tests
+        run: |
+          APPLY_ONLY_DIRS=("stack" "webhook" "container_exec" "backup" "auth" "settings" "open_amt" "endpoint_snapshot" "endpoint_settings" "kubernetes_namespace")
+          FULL_CYCLE_DIRS=("kubernetes_application" "kubernetes_clusterrole" "kubernetes_clusterrolebinding" "kubernetes_configmaps" "kubernetes_cronjob" "kubernetes_helm" "kubernetes_ingress" "kubernetes_ingresscontrollers" "kubernetes_job" "kubernetes_namespace_ingresscontrollers" "kubernetes_namespace_system" "kubernetes_role" "kubernetes_rolebinding" "kubernetes_secret" "kubernetes_service" "kubernetes_serviceaccounts" "kubernetes_storage" "kubernetes_volume"
+          "custom_template" "docker_image" "docker_network" "docker_volume" "stack" "endpoint_group" "tag" "user-team-teammembership" "registry")
+
+          for dir in "${FULL_CYCLE_DIRS[@]}"; do
+            if [ -d "e2e-tests/$dir" ]; then
+              echo "▶️ Running full Terraform cycle in e2e-tests/$dir"
+              cd "e2e-tests/$dir"
+              terraform init -input=false
+              terraform fmt -check
+              terraform validate
+              terraform apply -auto-approve
+              terraform destroy -auto-approve
+              cd -
+            fi
+          done
+
+          for dir in "${APPLY_ONLY_DIRS[@]}"; do
+            if [ -d "e2e-tests/$dir" ]; then
+              echo "▶️ Running apply-only Terraform in e2e-tests/$dir"
+              cd "e2e-tests/$dir"
+              terraform init -input=false
+              terraform fmt -check
+              terraform validate
+              terraform apply -auto-approve
+              cd -
+            fi
+          done
+
+      - name: 🧽 Run Terraform E2E tests - Destroy Kubernetes Environment
+        run: |
+          cd e2e-tests/environment
+          terraform destroy -auto-approve
+
+      - name: 🧪 Run Terraform E2E tests - Added SSL for Portainer
+        run: |
+          cd e2e-tests/ssl
+          terraform init -input=false
+          terraform fmt -check
+          terraform apply -auto-approve

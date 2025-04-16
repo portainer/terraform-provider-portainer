@@ -1,0 +1,37 @@
+name: OpenTofu CI
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  opentofu:
+    name: OpenTofu Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: latest
+
+      - name: Show OpenTofu version
+        run: tofu version
+
+      - name: Initialize OpenTofu
+        run: make o-init
+
+      - name: Validate OpenTofu configuration
+        run: make o-validate
+
+      - name: Check OpenTofu formatting
+        run: make o-fmt-check

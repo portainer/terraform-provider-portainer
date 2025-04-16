@@ -1,0 +1,29 @@
+#  Local .terraform directories
+**/.terraform/*
+terraform-provider-*
+.terraform.lock.hcl
+*.backup
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+plan.bin
+
+# .tfvars files
+*.tfvars
+*.log
+*.env
+
+# .DS_Store file
+.DS_Store 
+
+# go packages
+vendor/*
+.vscode
+.idea
+dev.tfrc
+
+# testing providers
+backup.tar.gz
+generated.tf
+imported.json

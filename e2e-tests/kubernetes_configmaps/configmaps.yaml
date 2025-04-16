@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo-config
+data:
+  database_host: "192.168.0.1"
+  debug_mode: "1"
+  log_level: "verbose"
