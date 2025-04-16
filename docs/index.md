@@ -115,6 +115,13 @@ Is there a Portainer resource you'd like to see supported?
 
 📘 See [CONTRIBUTING.md](https://github.com/portainer/terraform-provider-portainer/blob/main/.github/CONTRIBUTING.md) for guidelines.
 
+## 💬 Community & Feedback
+Have questions, suggestions or want to contribute ideas?  
+Join the **Portainer Community Slack** and hop into the [`#portainer-terraform`](https://app.slack.com/client/T2AGA35A4/C08NHK6PLUT) channel!
+
+Want to report issues, submit pull requests or browse the source code?  
+Check out the [GitHub Repository](https://github.com/portainer/terraform-provider-portainer) for this provider.
+
 ## ✅ Daily End-to-End Testing
 To ensure maximum reliability and functionality of this provider, **automated end-to-end tests are executed every day** via GitHub Actions.
 
@@ -155,7 +162,8 @@ This script reads the current Terraform state and generates a file named `genera
 > ℹ️ Note: Only resources with import support listed as ✅ in the table above can be imported.
 
 ## 📜 License
-This module is 100% Open Source and all versions of this provider starting from v2.0.0 are distributed under the AGPL-3.0 License. See [LICENSE](https://github.com/portainer/terraform-provider-portainer/blob/main/LICENSE) for more information.
+This module is 100% Open Source and is distributed under the MIT License.  
+See the [LICENSE](https://github.com/portainer/terraform-provider-portainer/blob/main/LICENSE) file for more information.
 
 ## 🌐 Acknowledgements
 - [HashiCorp Terraform](https://www.hashicorp.com/products/terraform)

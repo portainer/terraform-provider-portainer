@@ -161,6 +161,13 @@ Is there a Portainer resource you'd like to see supported?
 
 📘 See [CONTRIBUTING.md](./.github/CONTRIBUTING.md) for guidelines.
 
+## 💬 Community & Feedback
+Have questions, suggestions or want to contribute ideas?  
+Join the **Portainer Community Slack** and hop into the [`#portainer-terraform`](https://app.slack.com/client/T2AGA35A4/C08NHK6PLUT) channel!
+
+Want to report issues, submit pull requests or browse the source code?  
+Check out the [GitHub Repository](https://github.com/portainer/terraform-provider-portainer) for this provider.
+
 ## ♻️ Terraform Import Guide
 You can import existing Portainer-managed resources into Terraform using the `terraform import` command. This is useful for adopting GitOps practices or migrating manually created resources into code.
 
@@ -280,7 +287,9 @@ Now you're ready to test your provider against the local Portainer instance.
 See the [open issues](https://github.com/portainer/terraform-provider-portainer/issues) for a list of proposed features (and known issues). See [CONTRIBUTING](./.github/CONTRIBUTING.md) for more information.
 
 ## License
-This module is 100% Open Source and all versions of this provider starting from v2.0.0 are distributed under the AGPL-3.0 License. See [LICENSE](https://github.com/portainer/terraform-provider-portainer/blob/main/LICENSE) for more information.
+This module is 100% Open Source and is distributed under the MIT License.  
+See the [LICENSE](https://github.com/portainer/terraform-provider-portainer/blob/main/LICENSE) file for more information.
+
 
 ## Acknowledgements
 - [HashiCorp Terraform](https://www.hashicorp.com/products/terraform)
