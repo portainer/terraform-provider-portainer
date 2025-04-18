@@ -14,19 +14,19 @@ variable "portainer_api_key" {
 variable "edge_group_name" {
   description = "Name of the edge group"
   type        = string
-  default     = "dynamic-group"
+  default     = "static-group"
 }
 
 variable "edge_group_dynamic" {
   description = "Whether the edge group is dynamic"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "edge_group_partial_match" {
   description = "Whether to use partial match when dynamic = true"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "edge_group_tag_ids" {
