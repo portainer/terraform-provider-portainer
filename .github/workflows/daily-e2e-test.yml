@@ -52,10 +52,17 @@ jobs:
           terraform fmt -check
           terraform apply -auto-approve
 
+      - name: 🧽 Run Terraform E2E tests - Apply Portainer settings
+        run: |
+          cd e2e-tests/settings
+          terraform init -input=false
+          terraform fmt -check
+          terraform apply -auto-approve
+
       - name: 🧪 Run Terraform E2E tests
         run: |
-          APPLY_ONLY_DIRS=("stack" "webhook" "container_exec" "backup" "auth" "settings" "open_amt" "endpoint_snapshot" "endpoint_settings" "kubernetes_namespace")
-          FULL_CYCLE_DIRS=("kubernetes_application" "kubernetes_clusterrole" "kubernetes_clusterrolebinding" "kubernetes_configmaps" "kubernetes_cronjob" "kubernetes_helm" "kubernetes_ingress" "kubernetes_ingresscontrollers" "kubernetes_job" "kubernetes_namespace_ingresscontrollers" "kubernetes_namespace_system" "kubernetes_role" "kubernetes_rolebinding" "kubernetes_secret" "kubernetes_service" "kubernetes_serviceaccounts" "kubernetes_storage" "kubernetes_volume"
+          APPLY_ONLY_DIRS=("stack" "webhook" "container_exec" "backup" "auth" "open_amt" "kubernetes_role" "kubernetes_delete_object" "endpoint_snapshot" "endpoint_settings" "kubernetes_namespace")
+          FULL_CYCLE_DIRS=("edge" "kubernetes_application" "kubernetes_clusterrole" "kubernetes_clusterrolebinding" "kubernetes_configmaps" "kubernetes_cronjob" "kubernetes_helm" "kubernetes_ingress" "kubernetes_ingresscontrollers" "kubernetes_job" "kubernetes_namespace_ingresscontrollers" "kubernetes_namespace_system" "kubernetes_role" "kubernetes_rolebinding" "kubernetes_secret" "kubernetes_service" "kubernetes_serviceaccounts" "kubernetes_storage" "kubernetes_volume"
           "custom_template" "docker_image" "docker_network" "docker_volume" "stack" "endpoint_group" "tag" "user-team-teammembership" "registry")
 
           for dir in "${FULL_CYCLE_DIRS[@]}"; do

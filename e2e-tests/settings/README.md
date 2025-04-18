@@ -18,6 +18,7 @@
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_authentication_method"></a> [authentication\_method](#input\_authentication\_method) | Authentication method | `number` | `1` | no |
+| <a name="input_enable_edge_compute_features"></a> [enable\_edge\_compute\_features](#input\_enable\_edge\_compute\_features) | Enable Edge compute management support | `bool` | `true` | no |
 | <a name="input_enable_telemetry"></a> [enable\_telemetry](#input\_enable\_telemetry) | Enable Portainer telemetry | `bool` | `false` | no |
 | <a name="input_ldap_anonymous_mode"></a> [ldap\_anonymous\_mode](#input\_ldap\_anonymous\_mode) | Enable anonymous LDAP mode | `bool` | `true` | no |
 | <a name="input_ldap_auto_create_users"></a> [ldap\_auto\_create\_users](#input\_ldap\_auto\_create\_users) | Auto-create users from LDAP | `bool` | `true` | no |
