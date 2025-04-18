@@ -1,4 +1,4 @@
-# 🔗 **Resource Documentation: `portainer_endpoint_association`**
+# 🔗🗑️ **Resource Documentation: `portainer_endpoint_association`**
 
 # portainer_endpoint_association
 The `portainer_endpoint_association` resource allows you to de-associate an Edge environment (endpoint) from Portainer.
