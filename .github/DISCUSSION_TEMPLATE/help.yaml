@@ -1,0 +1,11 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before asking a question, make sure it hasn't been already asked and answered. You can search our [discussions](https://github.com/portainer/terraform-provider-portainer/discussions) and [bug reports](https://github.com/portainer/terraform-provider-portainer/issues) in GitHub.  Also, be sure to check our [community Slack channel](https://app.slack.com/client/T2AGA35A4/C08NHK6PLUT) first.
+
+  - type: textarea
+    attributes:
+      label: Ask a Question!
+    validations:
+      required: true

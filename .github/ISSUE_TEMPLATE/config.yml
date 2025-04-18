@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question
+    url: https://github.com/portainer/terraform-provider-portainer/discussions/new?category=help
+    about: Ask us a question about Portainer usage or deployment.
+  - name: Idea or Feature Request
+    url: https://github.com/portainer/terraform-provider-portainer/discussions/new?category=ideas
+    about: Suggest an idea or feature/enhancement that should be added in Portainer.
+  - name: Community Slack channel
+    url: https://app.slack.com/client/T2AGA35A4/C08NHK6PLUT
+    about: Check our community Slack channel.

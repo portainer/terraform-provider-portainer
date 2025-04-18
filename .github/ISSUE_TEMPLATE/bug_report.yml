@@ -1,0 +1,153 @@
+name: Bug Report
+description: Create a report to help us improve.
+labels: kind/bug,bug/need-confirmation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # Welcome!
+
+        The issue tracker is for reporting bugs. If you have an [idea for a new feature](https://github.com/portainer/terraform-provider-portainer/discussions/categories/ideas) or a [general question about Portainer Terraform provider](https://github.com/portainer/terraform-provider-portainer/discussions/categories/help) please post in our [GitHub Discussions](https://github.com/portainer/terraform-provider-portainer/discussions).
+
+        You can also ask for help in our [community Slack channel](https://app.slack.com/client/T2AGA35A4/C08NHK6PLUT).
+
+        Please note that we only provide support for current versions of Portainer.
+
+        **DO NOT FILE ISSUES FOR GENERAL SUPPORT QUESTIONS**.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Before you start please confirm the following.
+      options:
+        - label: Yes, I've searched similar issues on [GitHub](https://github.com/portainer/terraform-provider-portainer/issues).
+          required: true
+        - label: Yes, I've checked whether this issue is covered/solved in the Portainer Terraform provider [discussions](https://github.com/portainer/terraform-provider-portainer/discussions/categories/help).
+          required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        # About your issue
+
+        Tell us a bit about the issue you're having.
+
+  - type: textarea
+    attributes:
+      label: Problem Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Actual Behavior
+      description: A clear and concise description of what actually happens.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Steps to Reproduce
+      description: Please be as detailed as possible when providing steps to reproduce.
+      placeholder: |
+        1. Write a minimal Terraform config
+        2. Run `terraform apply`
+        3. Observe the error output
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Logs / Screenshots / Terraform Output
+      description: Provide relevant logs or output from Terraform plan/apply, Portainer logs, or any screenshots related to the issue.
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Affected Resource(s)
+      description: |
+        Name(s) of the resource(s) that are causing the issue. Example: portainer_stack, portainer_environment
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Terraform Command Used
+      description: |
+        The Terraform CLI command that triggered the issue. Example: terraform apply
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Relevant Terraform Configuration
+      description: |
+        Provide the Terraform configuration (HCL) that triggers the bug. You can redact sensitive values.
+      render: hcl
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        # About your environment
+
+        Tell us a bit about your Portainer and Terraform environment.
+
+  - type: input
+    attributes:
+      label: Provider Version
+      description: |
+        Version of the terraform-provider-portainer. Example: v0.6.0
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Terraform Version
+      description: |
+        Version of Terraform. Example: 1.7.5
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Portainer Version
+      description: |
+        Version of the Portainer instance you are using. Example: 2.20.3
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Platform and Version
+      description: |
+        Enter your container management platform (Docker | Swarm | Kubernetes) along with the version. 
+        Example: Docker 24.0.3 | Kubernetes 1.26
+    validations:
+      required: false
+
+  - type: input
+    attributes:
+      label: OS and Architecture
+      description: |
+        Enter your Operating System, Version and Architecture. Example: Ubuntu 22.04, AMD64 | Raspbian OS, ARM64
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Additional Information
+      description: |
+        Any additional information about your environment, the bug, or anything else you think might be helpful.
+    validations:
+      required: false
