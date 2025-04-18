@@ -96,6 +96,40 @@ jobs:
           cd e2e-tests/environment
           terraform destroy -auto-approve
 
+      - name: 🐳 Init Docker Swarm
+        run: make swarm-init
+
+      - name: 🧪 Run Terraform E2E tests specific for swarm
+        run: |
+          SWARM_RESOURCES_FULL_CYCLE=("docker_config" "docker_secret")
+          SWARM_RESOURCES_BASIC_CYCLE=("endpoint_swarm_stack" "endpoint_service_update")
+
+          for dir in "${SWARM_RESOURCES_FULL_CYCLE[@]}"; do
+            if [ -d "e2e-tests/$dir" ]; then
+              echo "▶️ Running full Terraform cycle in e2e-tests/$dir (Swarm)"
+              cd "e2e-tests/$dir"
+              terraform init -input=false
+              terraform fmt -check
+              terraform validate
+              terraform apply -auto-approve
+              terraform destroy -auto-approve
+              cd -
+            fi
+          done
+
+          for dir in "${SWARM_RESOURCES_BASIC_CYCLE[@]}"; do
+            if [ -d "e2e-tests/$dir" ]; then
+              echo "▶️ Running full Terraform cycle in e2e-tests/$dir (Swarm)"
+              cd "e2e-tests/$dir"
+              terraform init -input=false
+              terraform fmt -check
+              terraform validate
+              terraform apply -auto-approve
+              cd -
+              sleep 20
+            fi
+          done
+
       - name: 🧪 Run Terraform E2E tests - Added SSL for Portainer
         run: |
           cd e2e-tests/ssl
