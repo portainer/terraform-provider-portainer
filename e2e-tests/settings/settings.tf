@@ -1,9 +1,10 @@
 resource "portainer_settings" "example" {
-  authentication_method = var.authentication_method
-  enable_telemetry      = var.enable_telemetry
-  logo_url              = var.logo_url
-  snapshot_interval     = var.snapshot_interval
-  user_session_timeout  = var.user_session_timeout
+  authentication_method        = var.authentication_method
+  enable_telemetry             = var.enable_telemetry
+  logo_url                     = var.logo_url
+  snapshot_interval            = var.snapshot_interval
+  user_session_timeout         = var.user_session_timeout
+  enable_edge_compute_features = var.enable_edge_compute_features
 
   internal_auth_settings {
     required_password_length = var.required_password_length

@@ -20,6 +20,8 @@ help:
 	@echo "  up                     Start Docker Compose services"
 	@echo "  launch                 Open https://localhost:9000 in default browser"
 	@echo "  down                   Stop Docker Compose services"
+	@echo "  swarm-init             Initialize Docker Swarm (if not already active)"
+	@echo "  swarm-leave            Leave Docker Swarm (forcefully, if active)"
 	@echo "  up-agent               Start Portainer Agent via docker-compose.agent.yml"
 	@echo "  down-agent             Stop Portainer Agent"
 	@echo "  install-k3d            Install k3d CLI"
@@ -151,6 +153,16 @@ up-agent:
 .PHONY: down-agent
 down-agent:
 	docker compose -f docker-compose.agent.yml down
+
+.PHONY: swarm-init
+swarm-init:
+	@echo "🚀 Initializing Docker Swarm (if not already active)..."
+	@docker info | grep -q "Swarm: active" || docker swarm init || true
+
+.PHONY: swarm-leave
+swarm-leave:
+	@echo "🧹 Leaving Docker Swarm (if active)..."
+	@docker info | grep -q "Swarm: active" && docker swarm leave --force || echo "No Swarm to leave."
 
 ### Kubernetes / k3d
 .PHONY: install-k3d
