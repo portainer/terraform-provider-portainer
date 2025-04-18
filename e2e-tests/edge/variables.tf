@@ -34,3 +34,38 @@ variable "edge_group_tag_ids" {
   type        = list(number)
   default     = [] # Replace with actual tag IDs
 }
+
+variable "edge_stack_name" {
+  description = "Name of the Portainer Edge Stack"
+  type        = string
+  default     = "example-edge-stack"
+}
+
+variable "edge_stack_file_content" {
+  description = "Inline stack file content for the Edge Stack"
+  type        = string
+  default     = <<-EOT
+    version: '3'
+    services:
+      hello-world:
+        image: hello-world
+  EOT
+}
+
+variable "edge_stack_deployment_type" {
+  description = "Deployment type (0 = Compose, 1 = Kubernetes)"
+  type        = number
+  default     = 0
+}
+
+variable "edge_stack_registries" {
+  description = "List of registry IDs"
+  type        = list(number)
+  default     = []
+}
+
+variable "edge_stack_use_manifest_namespaces" {
+  description = "Whether to use manifest namespaces"
+  type        = bool
+  default     = false
+}
