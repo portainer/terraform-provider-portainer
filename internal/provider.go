@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	sdk "github.com/portainer/client-api-go/v2/client"
 )
 
 // Provider defines the Portainer Terraform provider schema and resources.
@@ -104,6 +106,7 @@ type APIClient struct {
 	Endpoint   string
 	APIKey     string
 	HTTPClient http.Client
+	SDKClient  *sdk.PortainerClient
 }
 
 // DoRequest is a reusable method for making API requests
@@ -166,27 +169,47 @@ func (c *APIClient) DoMultipartRequest(method, url string, body *bytes.Buffer, h
 
 // configureProvider sets up the API client and appends '/api' if missing from the endpoint.
 func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-	endpoint := d.Get("endpoint").(string)
+	rawURL := d.Get("endpoint").(string)
 	apiKey := d.Get("api_key").(string)
+	skipVerify := d.Get("skip_ssl_verify").(bool)
+
+	// Parse URL to extract scheme and host
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, diag.FromErr(fmt.Errorf("invalid endpoint URL: %w", err))
+	}
+
+	scheme := parsed.Scheme
+	host := parsed.Host
+
+	// If missing path, default to /api
+	basePath := parsed.Path
+	if basePath == "" {
+		basePath = "/api"
+	}
+
+	// Set up http client
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: d.Get("skip_ssl_verify").(bool),
+			InsecureSkipVerify: skipVerify,
 		},
 	}
-	http_client := &http.Client{
-		Transport: transport,
-	}
+	httpClient := &http.Client{Transport: transport}
 
-	if !strings.HasSuffix(endpoint, "/api") {
-		endpoint = strings.TrimRight(endpoint, "/") + "/api"
-	}
+	sdkClient := sdk.NewPortainerClient(
+		host,
+		apiKey,
+		sdk.WithScheme(scheme),
+		sdk.WithBasePath(basePath),
+		sdk.WithSkipTLSVerify(skipVerify),
+	)
 
 	client := &APIClient{
-		Endpoint:   endpoint,
+		Endpoint:   fmt.Sprintf("%s://%s%s", scheme, host, basePath),
 		APIKey:     apiKey,
-		HTTPClient: *http_client,
+		HTTPClient: *httpClient,
+		SDKClient:  sdkClient,
 	}
 
-	var diags diag.Diagnostics
-	return client, diags
+	return client, nil
 }
