@@ -154,6 +154,17 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_kubernetes_volume`                     | [kubernetes_volume.md](docs/resources/kubernetes_volume.md)                            | [example](examples/kubernetes_volume/)                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)     | ![Not yet](https://img.shields.io/badge/import-no-lightgrey)     | ![Daily](https://img.shields.io/badge/running-daily-blue)  |
 | `portainer_kubernetes_storage`                    | [kubernetes_storage.md](docs/resources/kubernetes_storage.md)                          | [example](examples/kubernetes_storage/)                     | ![Done](https://img.shields.io/badge/status-done-brightgreen)     | ![Not yet](https://img.shields.io/badge/import-no-lightgrey)     | ![Daily](https://img.shields.io/badge/running-daily-blue)  |
 
+
+### 🐳 Podman Support via Docker Resources
+
+[Podman is compatible with the Docker API](https://docs.podman.io/en/latest/_static/api.html), which means you can use existing `portainer_docker_*` resources with Podman – **no special `portainer_podman_*` resources are needed**.
+
+✅ **Use Docker resources for Podman**  
+Podman works out of the box with most `portainer_docker_*` Terraform resources.
+
+> ⚠️ **Note**:  
+> Podman **does not support Docker Swarm** – any swarm-based features are **not compatible**.
+
 ---
 
 ### 💡 Missing a resource?
