@@ -1,7 +1,7 @@
 variable "portainer_url" {
   description = "Default Portainer URL"
   type        = string
-  default     = "http://localhost:9000"
+  default     = "https://localhost:9443"
 }
 
 variable "portainer_api_key" {
@@ -15,4 +15,10 @@ variable "portainer_tag_name" {
   description = "Portainer tag name"
   type        = string
   default     = "your-tag"
+}
+
+variable "portainer_skip_ssl_verify" {
+  description = "Set to true to skip TLS certificate verification (useful for self-signed certs)"
+  type        = bool
+  default     = true
 }
