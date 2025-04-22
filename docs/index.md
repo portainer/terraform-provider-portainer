@@ -73,6 +73,7 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_docker_image`   | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_docker_volume`  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_docker_secret`  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_docker_node`    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_docker_config`  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_open_amt`       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_settings`       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
@@ -80,6 +81,7 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_endpoint_service_update`| ![Done](https://img.shields.io/badge/status-done-brightgreen)       |
 | `portainer_endpoint_snapshot`| ![Done](https://img.shields.io/badge/status-done-brightgreen)      |
 | `portainer_endpoint_association`| ![Done](https://img.shields.io/badge/status-done-brightgreen)      |
+| `portainer_stack_associate`| ![Done](https://img.shields.io/badge/status-done-brightgreen)      |
 | `portainer_webhook`        | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_webhook_execute`| ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_resource_control`| ![Done](https://img.shields.io/badge/status-done-brightgreen) |
@@ -105,6 +107,17 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_kubernetes_ingress`                        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_volume`                         | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_storage`                        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+
+
+### 🐳 Podman Support via Docker Resources
+
+[Podman is compatible with the Docker API](https://docs.podman.io/en/latest/_static/api.html), which means you can use existing `portainer_docker_*` resources with Podman – **no special `portainer_podman_*` resources are needed**.
+
+✅ **Use Docker resources for Podman**  
+Podman works out of the box with most `portainer_docker_*` Terraform resources.
+
+> ⚠️ **Note**:  
+> Podman **does not support Docker Swarm** – any swarm-based features are **not compatible**.
 
 ---
 

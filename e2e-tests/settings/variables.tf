@@ -83,3 +83,9 @@ variable "ldap_url" {
   description = "LDAP server URL"
   default     = "ldap.example.com:389"
 }
+
+variable "enable_edge_compute_features" {
+  type        = bool
+  description = "Enable Edge compute management support"
+  default     = true
+}

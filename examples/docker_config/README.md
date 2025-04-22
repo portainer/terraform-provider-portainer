@@ -11,24 +11,17 @@
 
 | Name | Type |
 |------|------|
-| [portainer_docker_network.test_bridge](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/docker_network) | resource |
+| [portainer_docker_config.example_config](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/docker_config) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_endpoint_id"></a> [endpoint\_id](#input\_endpoint\_id) | ID of the environment where the network will be created | `number` | n/a | yes |
-| <a name="input_network_attachable"></a> [network\_attachable](#input\_network\_attachable) | Whether containers can be attached manually | `bool` | `false` | no |
-| <a name="input_network_config_from"></a> [network\_config\_from](#input\_network\_config\_from) | Name of another config-only network to inherit from | `string` | `""` | no |
-| <a name="input_network_config_only"></a> [network\_config\_only](#input\_network\_config\_only) | If this network is only configuration | `bool` | `false` | no |
-| <a name="input_network_driver"></a> [network\_driver](#input\_network\_driver) | Network driver (bridge, overlay, macvlan, etc.) | `string` | `"bridge"` | no |
-| <a name="input_network_enable_ipv4"></a> [network\_enable\_ipv4](#input\_network\_enable\_ipv4) | Enable IPv4 networking | `bool` | `true` | no |
-| <a name="input_network_enable_ipv6"></a> [network\_enable\_ipv6](#input\_network\_enable\_ipv6) | Enable IPv6 networking | `bool` | `false` | no |
-| <a name="input_network_ingress"></a> [network\_ingress](#input\_network\_ingress) | Whether it's an ingress network | `bool` | `false` | no |
-| <a name="input_network_internal"></a> [network\_internal](#input\_network\_internal) | Whether the network is internal | `bool` | `false` | no |
-| <a name="input_network_labels"></a> [network\_labels](#input\_network\_labels) | Labels to apply to the network | `map(string)` | <pre>{<br/>  "env": "test",<br/>  "purpose": "terraform"<br/>}</pre> | no |
-| <a name="input_network_name"></a> [network\_name](#input\_network\_name) | Name of the Docker network | `string` | n/a | yes |
-| <a name="input_network_options"></a> [network\_options](#input\_network\_options) | Driver-specific options | `map(string)` | <pre>{<br/>  "com.docker.network.bridge.enable_icc": "true",<br/>  "com.docker.network.bridge.enable_ip_masquerade": "true"<br/>}</pre> | no |
+| <a name="input_config_data"></a> [config\_data](#input\_config\_data) | Base64-encoded data for Docker config | `string` | `"THIS IS NOT A REAL CERTIFICATE\n"` | no |
+| <a name="input_config_labels"></a> [config\_labels](#input\_config\_labels) | Map Docker config labels | `map(string)` | <pre>{<br/>  "foo": "bar",<br/>  "property1": "string",<br/>  "property2": "string"<br/>}</pre> | no |
+| <a name="input_config_name"></a> [config\_name](#input\_config\_name) | Name Docker config | `string` | `"server.conf"` | no |
+| <a name="input_config_templating"></a> [config\_templating](#input\_config\_templating) | Templating configuration | `map(string)` | <pre>{<br/>  "OptionA": "value for driver-specific option A",<br/>  "OptionB": "value for driver-specific option B",<br/>  "name": "some-driver"<br/>}</pre> | no |
+| <a name="input_endpoint_id"></a> [endpoint\_id](#input\_endpoint\_id) | ID of the Portainer endpointr | `number` | `3` | no |
 | <a name="input_portainer_api_key"></a> [portainer\_api\_key](#input\_portainer\_api\_key) | Default Portainer Admin API Key | `string` | n/a | yes |
 | <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | n/a | yes |
 <!-- END_TF_DOCS -->

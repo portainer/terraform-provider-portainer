@@ -12,26 +12,26 @@ variable "portainer_api_key" {
 }
 
 variable "endpoint_id" {
-  description = "ID endpointu v Portaineru"
+  description = "ID of the Portainer endpointr"
   type        = number
-  default     = 1
+  default     = 3
 }
 
 variable "config_name" {
-  description = "Název Docker configu"
+  description = "Name Docker config"
   type        = string
   default     = "server.conf"
 }
 
 variable "config_data" {
-  description = "Base64-encoded obsah Docker configu"
+  description = "Base64-encoded data for Docker config"
   type        = string
   sensitive   = true
-  default     = base64encode("THIS IS NOT A REAL CERTIFICATE\n")
+  default     = "THIS IS NOT A REAL CERTIFICATE\n"
 }
 
 variable "config_labels" {
-  description = "Map Docker config labelů"
+  description = "Map Docker config labels"
   type        = map(string)
   default = {
     property1 = "string"
@@ -41,7 +41,7 @@ variable "config_labels" {
 }
 
 variable "config_templating" {
-  description = "Templating konfigurace"
+  description = "Templating configuration"
   type        = map(string)
   default = {
     name    = "some-driver"
