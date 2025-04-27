@@ -69,10 +69,10 @@ func resourcePortainerStack() *schema.Resource {
 			},
 			"tlsskip_verify": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
 			"auto_update_webhook": {
-                Type:     schema.TypeString,
-                Computed: true,
-                Description: "Webhook UUID returned when creating the stack",
-            },
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Webhook UUID returned when creating the stack",
+			},
 			"prune": {
 				Type:        schema.TypeBool,
 				Optional:    true,
@@ -86,11 +86,11 @@ func resourcePortainerStack() *schema.Resource {
 				Description: "Whether to force pull latest images during stack update (default: true)",
 			},
 			"force_webhook_trigger": {
-                Type:     schema.TypeBool,
-                Optional: true,
-                Default:  false,
-                Description: "Force webhook trigger after stack creation/update if a webhook exists.",
-            },
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Force webhook trigger after stack creation/update if a webhook exists.",
+			},
 		},
 	}
 }
@@ -424,18 +424,18 @@ func createStackStandaloneString(d *schema.ResourceData, client *APIClient) erro
 	}
 
 	var result struct {
-		ID int `json:"Id"`
+		ID         int `json:"Id"`
 		AutoUpdate struct {
 			Webhook string `json:"webhook"`
 		} `json:"AutoUpdate"`
 	}
-	
+
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-	
+
 	if result.AutoUpdate.Webhook != "" {
 		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}	
+	}
 	return nil
 }
 
@@ -476,18 +476,18 @@ func createStackStandaloneFile(d *schema.ResourceData, client *APIClient) error 
 	}
 
 	var result struct {
-		ID int `json:"Id"`
+		ID         int `json:"Id"`
 		AutoUpdate struct {
 			Webhook string `json:"webhook"`
 		} `json:"AutoUpdate"`
 	}
-	
+
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-	
+
 	if result.AutoUpdate.Webhook != "" {
 		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}	
+	}
 	return nil
 }
 
@@ -523,18 +523,18 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 	}
 
 	var result struct {
-		ID int `json:"Id"`
+		ID         int `json:"Id"`
 		AutoUpdate struct {
 			Webhook string `json:"webhook"`
 		} `json:"AutoUpdate"`
 	}
-	
+
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-	
+
 	if result.AutoUpdate.Webhook != "" {
 		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}	
+	}
 	return nil
 }
 
@@ -567,18 +567,18 @@ func createStackSwarmString(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	var result struct {
-		ID int `json:"Id"`
+		ID         int `json:"Id"`
 		AutoUpdate struct {
 			Webhook string `json:"webhook"`
 		} `json:"AutoUpdate"`
 	}
-	
+
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-	
+
 	if result.AutoUpdate.Webhook != "" {
 		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}	
+	}
 	return nil
 }
 
@@ -620,18 +620,18 @@ func createStackSwarmFile(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	var result struct {
-		ID int `json:"Id"`
+		ID         int `json:"Id"`
 		AutoUpdate struct {
 			Webhook string `json:"webhook"`
 		} `json:"AutoUpdate"`
 	}
-	
+
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-	
+
 	if result.AutoUpdate.Webhook != "" {
 		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}	
+	}
 	return nil
 }
 
@@ -668,18 +668,18 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	var result struct {
-		ID int `json:"Id"`
+		ID         int `json:"Id"`
 		AutoUpdate struct {
 			Webhook string `json:"webhook"`
 		} `json:"AutoUpdate"`
 	}
-	
+
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-	
+
 	if result.AutoUpdate.Webhook != "" {
 		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}	
+	}
 	return nil
 }
 
@@ -712,18 +712,18 @@ func createStackK8sString(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	var result struct {
-		ID int `json:"Id"`
+		ID         int `json:"Id"`
 		AutoUpdate struct {
 			Webhook string `json:"webhook"`
 		} `json:"AutoUpdate"`
 	}
-	
+
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-	
+
 	if result.AutoUpdate.Webhook != "" {
 		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}	
+	}
 	return nil
 }
 
@@ -760,18 +760,18 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	var result struct {
-		ID int `json:"Id"`
+		ID         int `json:"Id"`
 		AutoUpdate struct {
 			Webhook string `json:"webhook"`
 		} `json:"AutoUpdate"`
 	}
-	
+
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-	
+
 	if result.AutoUpdate.Webhook != "" {
 		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}	
+	}
 	return nil
 }
 
@@ -801,17 +801,17 @@ func createStackK8sURL(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	var result struct {
-		ID int `json:"Id"`
+		ID         int `json:"Id"`
 		AutoUpdate struct {
 			Webhook string `json:"webhook"`
 		} `json:"AutoUpdate"`
 	}
-	
+
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-	
+
 	if result.AutoUpdate.Webhook != "" {
 		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}	
+	}
 	return nil
 }
