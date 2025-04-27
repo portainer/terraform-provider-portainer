@@ -321,7 +321,7 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		if d.Get("force_webhook_trigger").(bool) {
 			webhookID := d.Get("auto_update_webhook").(string)
 			if webhookID != "" {
-				webhookURL := fmt.Sprintf("%s/api/webhooks/%s", client.Endpoint, webhookID)
+				webhookURL := fmt.Sprintf("%s/stacks/webhooks/%s", client.Endpoint, webhookID)
 
 				reqWebhook, err := http.NewRequest("POST", webhookURL, nil)
 				if err != nil {
@@ -335,7 +335,7 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 				}
 				defer respWebhook.Body.Close()
 
-				if respWebhook.StatusCode != 202 {
+				if respWebhook.StatusCode != 200 {
 					body, _ := io.ReadAll(respWebhook.Body)
 					return fmt.Errorf("failed to trigger webhook, status %d: %s", respWebhook.StatusCode, string(body))
 				}
