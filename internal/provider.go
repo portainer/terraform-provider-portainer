@@ -96,6 +96,7 @@ func Provider() *schema.Provider {
 			"portainer_kubernetes_clusterrolebinding":           resourceKubernetesClusterRoleBindings(),
 			"portainer_kubernetes_volume":                       resourceKubernetesVolumes(),
 			"portainer_kubernetes_storage":                      resourceKubernetesStorage(),
+			"portainer_compose_convert":                         resourceComposeConvertResource(),
 		},
 		ConfigureContextFunc: configureProvider,
 	}

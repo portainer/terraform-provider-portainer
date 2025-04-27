@@ -77,16 +77,17 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_docker_config`  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_open_amt`       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_settings`       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
-| `portainer_endpoint_settings`| ![Done](https://img.shields.io/badge/status-done-brightgreen)       |
+| `portainer_endpoint_settings`      | ![Done](https://img.shields.io/badge/status-done-brightgreen)       |
 | `portainer_endpoint_service_update`| ![Done](https://img.shields.io/badge/status-done-brightgreen)       |
-| `portainer_endpoint_snapshot`| ![Done](https://img.shields.io/badge/status-done-brightgreen)      |
-| `portainer_endpoint_association`| ![Done](https://img.shields.io/badge/status-done-brightgreen)      |
-| `portainer_stack_associate`| ![Done](https://img.shields.io/badge/status-done-brightgreen)      |
-| `portainer_webhook`        | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
-| `portainer_webhook_execute`| ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
-| `portainer_resource_control`| ![Done](https://img.shields.io/badge/status-done-brightgreen) |
-| `portainer_licenses`       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_endpoint_snapshot`      | ![Done](https://img.shields.io/badge/status-done-brightgreen)      |
+| `portainer_endpoint_association`   | ![Done](https://img.shields.io/badge/status-done-brightgreen)      |
+| `portainer_stack_associate`  | ![Done](https://img.shields.io/badge/status-done-brightgreen)      |
+| `portainer_webhook`          | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_webhook_execute`  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_resource_control` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_licenses`         | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_cloud_credentials`| ![Done](https://img.shields.io/badge/status-done-brightgreen)       |
+| `portainer_compose_convert`  | ![Done](https://img.shields.io/badge/status-done-brightgreen)       |
 | `portainer_kubernetes_delete_object`                  | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_helm`                           | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_ingresscontrollers`             | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
@@ -118,6 +119,14 @@ Podman works out of the box with most `portainer_docker_*` Terraform resources.
 
 > ⚠️ **Note**:  
 > Podman **does not support Docker Swarm** – any swarm-based features are **not compatible**.
+
+### Docker Compose to Kubernetes Conversion
+
+You can now use the `portainer_compose_convert` resource to convert Docker Compose YAML directly into Kubernetes manifests using [Kompose](https://github.com/kubernetes/kompose).
+
+This is especially useful when migrating applications from Docker standalone or Swarm mode to Kubernetes – while keeping your deployment definitions fully managed as code in Terraform.
+> ℹ️ The resource uses Kompose internally and supports both the installed CLI binary.
+See full documentation: [docs/resources/compose_convert.md](https://github.com/portainer/terraform-provider-portainer/tree/main/docs/resources/compose_convert.md)
 
 ---
 

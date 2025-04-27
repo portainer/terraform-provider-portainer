@@ -180,18 +180,22 @@ terraform apply
 | `method`                  | string        | ✅ yes       | Creation method: `string`, `file`, `repository`, or `url` (K8s only)      |
 | `endpoint_id`             | int           | ✅ yes       | ID of the environment where stack will be deployed                        |
 | `swarm_id`                | string        | 🚫 optional  | Swarm ID (autofilled if not specified)                                    |
-| `namespace`              | string        | 🚫 optional  | Namespace (Kubernetes only)                                               |
+| `namespace`               | string        | 🚫 optional  | Namespace (Kubernetes only)                                               |
 | `stack_file_content`      | string        | 🚫 optional  | Inline Compose/YAML content                                               |
 | `stack_file_path`         | string        | 🚫 optional  | Path to a Compose file on disk                                            |
 | `repository_url`          | string        | 🚫 optional  | Git repository URL                                                        |
 | `repository_username`     | string        | 🚫 optional  | Git username                                                              |
 | `repository_password`     | string        | 🚫 optional  | Git password/token                                                        |
-| `repository_reference_name` | string     | 🚫 optional  | Git reference name (default: `refs/heads/main`)                           |
+| `repository_reference_name` | string      | 🚫 optional  | Git reference name (default: `refs/heads/main`)                           |
 | `file_path_in_repository` | string        | 🚫 optional  | Path to Compose/K8s manifest inside the repo                              |
 | `manifest_url`            | string        | 🚫 optional  | K8s only – URL to remote manifest                                         |
 | `compose_format`          | bool          | 🚫 optional  | Use Compose format for K8s (default: `false`)                             |
 | `env`                     | list(object)  | 🚫 optional  | List of env variables (`name`, `value`)                                   |
 | `tlsskip_verify`          | bool          | 🚫 optional  | Skip TLS verification for Git repository (default: `false`)               |
+| `pull_image`              | bool          | 🚫 optional  | Pull latest image on redeploy (default: false)                            |
+| `prune`                   | bool          | 🚫 optional  | Remove services no longer referenced in the stack (default: false)        |
+| `auto_update_webhook`     | string        | 🚫 optional  | (Computed) Webhook UUID for triggering stack updates externally           |
+| `force_webhook_trigger`	  | bool	        | 🚫 optional	 | Force trigger webhook after update if available (default: false)          |
 
 ---
 
