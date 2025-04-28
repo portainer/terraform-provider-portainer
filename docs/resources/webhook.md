@@ -12,14 +12,12 @@ resource "portainer_webhook" "stack" {
 }
 ```
 ## Lifecycle & Behavior
-Team membrship are updated if any of the attributes change (e.g. role).
-
-- To delete a membrship created via Terraform, simply run:
+- Create webhook, simply run:
 ```hcl
 terraform destroy
 ```
 
-- To change a team membrship role id, update the role field and re-apply:
+- Delete webhook:
 ```hcl
 terraform apply
 ```

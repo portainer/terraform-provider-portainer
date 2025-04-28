@@ -1,25 +1,17 @@
-# 🌐 **Resource Documentation: `portainer_webhook`**
+# 🌐 Resource Documentation: `portainer_stack_webhook`
 
-# portainer_webhook
-The `portainer_webhook` resource allows you to create and manage webhooks in Portainer. Webhooks can be used to trigger actions such as pulling and redeploying stacks or images via external systems.
+## portainer_stack_webhook
+The `portainer_stack_webhook` resource allows you to trigger an update of a Portainer-managed stack via its webhook.  
+This is useful for GitOps workflows or external automation systems.
 
 ## Example Usage
 ```hcl
-resource "portainer_webhook" "stack" {
-  endpoint_id   = 1
-  resource_id   = "3"        # Stack ID
-  webhook_type  = 0          # 0 = Stack
+resource "portainer_stack_webhook" "trigger_my_stack" {
+  webhook_id = "65001023-9dd7-415f-9cff-358ba0a78463"  # Webhook token of the stack
 }
 ```
 ## Lifecycle & Behavior
-Team membrship are updated if any of the attributes change (e.g. role).
-
-- To delete a membrship created via Terraform, simply run:
-```hcl
-terraform destroy
-```
-
-- To change a team membrship role id, update the role field and re-apply:
+- When you apply this resource, it triggers the execution of the webhook (stack update), simply run:
 ```hcl
 terraform apply
 ```
@@ -27,12 +19,9 @@ terraform apply
 ## Arguments Reference
 | Name          | Type   | Required | Description                                                    |
 |---------------|--------|----------|----------------------------------------------------------------|
-| `endpoint_id` | number | ✅ yes   | ID of the Portainer environment (endpoint)                     |
-| `resource_id` | string | ✅ yes   | ID of the resource (Stack or Registry)                         |
-| `webhook_type`| number | ✅ yes   | Type of the webhook:<br>`1` = Stack         |
+| `webhook_id`  | string | ✅ yes   | Webhook token for the stack to trigger redeployment            |
 
 ## Attributes Reference
 | Name | Description              |
 |------|--------------------------|
-| `id` | ID of the created webhook in Portainer     |
-| `token` |	Webhook token (used to trigger the webhook) |
+| `id` | ID of the webhook trigger|

@@ -71,13 +71,13 @@ func resourcePortainerStack() *schema.Resource {
 			"prune": {
 				Type:        schema.TypeBool,
 				Optional:    true,
-				Default:     true,
+				Default:     false,
 				Description: "Whether to prune unused services/networks during stack update (default: true)",
 			},
 			"pull_image": {
 				Type:        schema.TypeBool,
 				Optional:    true,
-				Default:     true,
+				Default:     false,
 				Description: "Whether to force pull latest images during stack update (default: true)",
 			},
 			"stack_webhook_token": {

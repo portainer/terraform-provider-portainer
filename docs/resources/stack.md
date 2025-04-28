@@ -192,8 +192,8 @@ terraform apply
 | `compose_format`          | bool          | 🚫 optional  | Use Compose format for K8s (default: `false`)                             |
 | `env`                     | list(object)  | 🚫 optional  | List of env variables (`name`, `value`)                                   |
 | `tlsskip_verify`          | bool          | 🚫 optional  | Skip TLS verification for Git repository (default: `false`)               |
-| `pull_image`              | bool          | 🚫 optional  | Pull latest image on redeploy (default: false)                            |
-| `prune`                   | bool          | 🚫 optional  | Remove services no longer referenced in the stack (default: false)        |
+| `pull_image`              | bool          | 🚫 optional  | Pull latest image on redeploy (default: `false`)                          |
+| `prune`                   | bool          | 🚫 optional  | Remove services no longer referenced in the stack (default: `false`)      |
 | `stack_webhook_token`     | string        | 🚫 optional  | When defined, a webhook will be attached to the stack during creation. If not set, no webhook will be created.           |
 
 ---
