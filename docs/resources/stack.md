@@ -194,8 +194,7 @@ terraform apply
 | `tlsskip_verify`          | bool          | 🚫 optional  | Skip TLS verification for Git repository (default: `false`)               |
 | `pull_image`              | bool          | 🚫 optional  | Pull latest image on redeploy (default: false)                            |
 | `prune`                   | bool          | 🚫 optional  | Remove services no longer referenced in the stack (default: false)        |
-| `auto_update_webhook`     | string        | 🚫 optional  | (Computed) Webhook UUID for triggering stack updates externally           |
-| `force_webhook_trigger`	  | bool	        | 🚫 optional	 | Force trigger webhook after update if available (default: false)          |
+| `stack_webhook_token`     | string        | 🚫 optional  | When defined, a webhook will be attached to the stack during creation. If not set, no webhook will be created.           |
 
 ---
 

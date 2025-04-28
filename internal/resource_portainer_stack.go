@@ -68,11 +68,6 @@ func resourcePortainerStack() *schema.Resource {
 				},
 			},
 			"tlsskip_verify": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
-			"auto_update_webhook": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Webhook UUID returned when creating the stack",
-			},
 			"prune": {
 				Type:        schema.TypeBool,
 				Optional:    true,
@@ -85,11 +80,10 @@ func resourcePortainerStack() *schema.Resource {
 				Default:     true,
 				Description: "Whether to force pull latest images during stack update (default: true)",
 			},
-			"force_webhook_trigger": {
-				Type:        schema.TypeBool,
+			"stack_webhook_token": {
+				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     false,
-				Description: "Force webhook trigger after stack creation/update if a webhook exists.",
+				Description: "Webhook UUID to attach to the stack after creation",
 			},
 		},
 	}
@@ -108,36 +102,86 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 		d.Set("swarm_id", swarmID)
 	}
 
+	var createFunc func(*schema.ResourceData, *APIClient) error
+
 	switch deployment {
 	case "standalone":
 		switch method {
 		case "string":
-			return createStackStandaloneString(d, client)
+			createFunc = createStackStandaloneString
 		case "file":
-			return createStackStandaloneFile(d, client)
+			createFunc = createStackStandaloneFile
 		case "repository":
-			return createStackStandaloneRepo(d, client)
+			createFunc = createStackStandaloneRepo
 		}
 	case "swarm":
 		switch method {
 		case "string":
-			return createStackSwarmString(d, client)
+			createFunc = createStackSwarmString
 		case "file":
-			return createStackSwarmFile(d, client)
+			createFunc = createStackSwarmFile
 		case "repository":
-			return createStackSwarmRepo(d, client)
+			createFunc = createStackSwarmRepo
 		}
 	case "kubernetes":
 		switch method {
 		case "string":
-			return createStackK8sString(d, client)
+			createFunc = createStackK8sString
 		case "repository":
-			return createStackK8sRepo(d, client)
+			createFunc = createStackK8sRepo
 		case "url":
-			return createStackK8sURL(d, client)
+			createFunc = createStackK8sURL
 		}
 	}
-	return fmt.Errorf("invalid combination of deployment_type and method")
+
+	if createFunc == nil {
+		return fmt.Errorf("invalid combination of deployment_type and method")
+	}
+
+	if err := createFunc(d, client); err != nil {
+		return err
+	}
+
+	webhookToken := d.Get("stack_webhook_token").(string)
+	if webhookToken != "" {
+		stackID := d.Id()
+		endpointID := d.Get("endpoint_id").(int)
+
+		payload := map[string]interface{}{
+			"env":              flattenEnvList(d.Get("env").([]interface{})),
+			"stackFileContent": d.Get("stack_file_content").(string),
+			"prune":            d.Get("prune").(bool),
+			"pullImage":        d.Get("pull_image").(bool),
+			"webhook":          webhookToken,
+		}
+
+		jsonBody, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("failed to marshal webhook payload: %w", err)
+		}
+
+		updateURL := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, stackID, endpointID)
+		reqUpdate, err := http.NewRequest("PUT", updateURL, bytes.NewBuffer(jsonBody))
+		if err != nil {
+			return fmt.Errorf("failed to build webhook update request: %w", err)
+		}
+		reqUpdate.Header.Set("X-API-Key", client.APIKey)
+		reqUpdate.Header.Set("Content-Type", "application/json")
+
+		respUpdate, err := http.DefaultClient.Do(reqUpdate)
+		if err != nil {
+			return fmt.Errorf("failed to update stack with webhook: %w", err)
+		}
+		defer respUpdate.Body.Close()
+
+		if respUpdate.StatusCode != 200 {
+			body, _ := io.ReadAll(respUpdate.Body)
+			return fmt.Errorf("failed to update stack webhook, status %d: %s", respUpdate.StatusCode, string(body))
+		}
+
+		d.Set("stack_webhook_token", webhookToken)
+	}
+	return nil
 }
 
 func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error {
@@ -169,9 +213,7 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 		SwarmID    string `json:"SwarmId"`
 		Namespace  string `json:"namespace"`
 		ComposeFmt bool   `json:"composeFormat"`
-		AutoUpdate struct {
-			Webhook string `json:"webhook"`
-		} `json:"AutoUpdate"`
+		Webhook    string `json:"webhook"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
 		return fmt.Errorf("failed to decode stack response: %w", err)
@@ -181,8 +223,8 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	d.Set("swarm_id", stack.SwarmID)
 	d.Set("namespace", stack.Namespace)
 	d.Set("compose_format", stack.ComposeFmt)
-	if stack.AutoUpdate.Webhook != "" {
-		d.Set("auto_update_webhook", stack.AutoUpdate.Webhook)
+	if stack.Webhook != "" {
+		d.Set("stack_webhook_token", stack.Webhook)
 	}
 
 	if v, ok := d.GetOk("deployment_type"); !ok || v == "" {
@@ -318,30 +360,6 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			return fmt.Errorf("failed to update git stack: %s", string(data))
 		}
 
-		if d.Get("force_webhook_trigger").(bool) {
-			webhookID := d.Get("auto_update_webhook").(string)
-			if webhookID != "" {
-				webhookURL := fmt.Sprintf("%s/stacks/webhooks/%s", client.Endpoint, webhookID)
-
-				reqWebhook, err := http.NewRequest("POST", webhookURL, nil)
-				if err != nil {
-					return fmt.Errorf("failed to build webhook trigger request: %w", err)
-				}
-				reqWebhook.Header.Set("X-API-Key", client.APIKey)
-
-				respWebhook, err := http.DefaultClient.Do(reqWebhook)
-				if err != nil {
-					return fmt.Errorf("failed to trigger webhook: %w", err)
-				}
-				defer respWebhook.Body.Close()
-
-				if respWebhook.StatusCode != 200 {
-					body, _ := io.ReadAll(respWebhook.Body)
-					return fmt.Errorf("failed to trigger webhook, status %d: %s", respWebhook.StatusCode, string(body))
-				}
-			}
-		}
-
 		return nil
 	}
 
@@ -374,6 +392,46 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 	if resp.StatusCode != 200 {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to update stack: %s", string(data))
+	}
+
+	webhookToken := d.Get("stack_webhook_token").(string)
+	if webhookToken != "" {
+		stackID := d.Id()
+		endpointID := d.Get("endpoint_id").(int)
+
+		payload := map[string]interface{}{
+			"env":              flattenEnvList(d.Get("env").([]interface{})),
+			"stackFileContent": d.Get("stack_file_content").(string),
+			"prune":            d.Get("prune").(bool),
+			"pullImage":        d.Get("pull_image").(bool),
+			"webhook":          webhookToken,
+		}
+
+		jsonBody, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("failed to marshal webhook payload: %w", err)
+		}
+
+		updateURL := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, stackID, endpointID)
+		reqUpdate, err := http.NewRequest("PUT", updateURL, bytes.NewBuffer(jsonBody))
+		if err != nil {
+			return fmt.Errorf("failed to build webhook update request: %w", err)
+		}
+		reqUpdate.Header.Set("X-API-Key", client.APIKey)
+		reqUpdate.Header.Set("Content-Type", "application/json")
+
+		respUpdate, err := http.DefaultClient.Do(reqUpdate)
+		if err != nil {
+			return fmt.Errorf("failed to update stack with webhook: %w", err)
+		}
+		defer respUpdate.Body.Close()
+
+		if respUpdate.StatusCode != 200 {
+			body, _ := io.ReadAll(respUpdate.Body)
+			return fmt.Errorf("failed to update stack webhook, status %d: %s", respUpdate.StatusCode, string(body))
+		}
+
+		d.Set("stack_webhook_token", webhookToken)
 	}
 
 	return nil
@@ -424,18 +482,10 @@ func createStackStandaloneString(d *schema.ResourceData, client *APIClient) erro
 	}
 
 	var result struct {
-		ID         int `json:"Id"`
-		AutoUpdate struct {
-			Webhook string `json:"webhook"`
-		} `json:"AutoUpdate"`
+		ID int `json:"Id"`
 	}
-
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-
-	if result.AutoUpdate.Webhook != "" {
-		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}
 	return nil
 }
 
@@ -476,18 +526,10 @@ func createStackStandaloneFile(d *schema.ResourceData, client *APIClient) error 
 	}
 
 	var result struct {
-		ID         int `json:"Id"`
-		AutoUpdate struct {
-			Webhook string `json:"webhook"`
-		} `json:"AutoUpdate"`
+		ID int `json:"Id"`
 	}
-
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-
-	if result.AutoUpdate.Webhook != "" {
-		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}
 	return nil
 }
 
@@ -523,18 +565,10 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 	}
 
 	var result struct {
-		ID         int `json:"Id"`
-		AutoUpdate struct {
-			Webhook string `json:"webhook"`
-		} `json:"AutoUpdate"`
+		ID int `json:"Id"`
 	}
-
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-
-	if result.AutoUpdate.Webhook != "" {
-		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}
 	return nil
 }
 
@@ -567,18 +601,10 @@ func createStackSwarmString(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	var result struct {
-		ID         int `json:"Id"`
-		AutoUpdate struct {
-			Webhook string `json:"webhook"`
-		} `json:"AutoUpdate"`
+		ID int `json:"Id"`
 	}
-
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-
-	if result.AutoUpdate.Webhook != "" {
-		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}
 	return nil
 }
 
@@ -620,18 +646,10 @@ func createStackSwarmFile(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	var result struct {
-		ID         int `json:"Id"`
-		AutoUpdate struct {
-			Webhook string `json:"webhook"`
-		} `json:"AutoUpdate"`
+		ID int `json:"Id"`
 	}
-
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-
-	if result.AutoUpdate.Webhook != "" {
-		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}
 	return nil
 }
 
@@ -668,18 +686,10 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	var result struct {
-		ID         int `json:"Id"`
-		AutoUpdate struct {
-			Webhook string `json:"webhook"`
-		} `json:"AutoUpdate"`
+		ID int `json:"Id"`
 	}
-
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-
-	if result.AutoUpdate.Webhook != "" {
-		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}
 	return nil
 }
 
@@ -712,18 +722,10 @@ func createStackK8sString(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	var result struct {
-		ID         int `json:"Id"`
-		AutoUpdate struct {
-			Webhook string `json:"webhook"`
-		} `json:"AutoUpdate"`
+		ID int `json:"Id"`
 	}
-
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-
-	if result.AutoUpdate.Webhook != "" {
-		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}
 	return nil
 }
 
@@ -760,18 +762,10 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	var result struct {
-		ID         int `json:"Id"`
-		AutoUpdate struct {
-			Webhook string `json:"webhook"`
-		} `json:"AutoUpdate"`
+		ID int `json:"Id"`
 	}
-
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-
-	if result.AutoUpdate.Webhook != "" {
-		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}
 	return nil
 }
 
@@ -801,17 +795,9 @@ func createStackK8sURL(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	var result struct {
-		ID         int `json:"Id"`
-		AutoUpdate struct {
-			Webhook string `json:"webhook"`
-		} `json:"AutoUpdate"`
+		ID int `json:"Id"`
 	}
-
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-
-	if result.AutoUpdate.Webhook != "" {
-		d.Set("auto_update_webhook", result.AutoUpdate.Webhook)
-	}
 	return nil
 }
