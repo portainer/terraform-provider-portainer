@@ -45,6 +45,12 @@ jobs:
       - name: 🌐 Get Kubernetes server IP and export for Terraform
         run: make k3d-export-ip
 
+      - name: Install Kompose
+        run: |
+          curl -L https://github.com/kubernetes/kompose/releases/download/v1.35.0/kompose-linux-amd64 -o kompose
+          chmod +x kompose
+          sudo mv ./kompose /usr/local/bin/kompose
+
       - name: ⬇️ Install Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -52,6 +58,14 @@ jobs:
 
       - name: 🔍 Validate formatting (terraform fmt)
         run: terraform fmt -check -recursive
+
+      - name: 🧪 Run Terraform E2E tests - Convert docker-compose.yml to K8S yaml
+        run: |
+          cd e2e-tests/compose_convert
+          terraform init -input=false
+          terraform fmt -check
+          bash run.sh
+          ls -alh output/
 
       - name: 🧪 Run Terraform E2E tests - Create Kubernetes Environment
         run: |
