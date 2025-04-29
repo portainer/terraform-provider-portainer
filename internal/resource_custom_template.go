@@ -113,7 +113,7 @@ func createTemplateFromFile(d *schema.ResourceData, client *APIClient, path stri
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func postTemplateJSON(d *schema.ResourceData, client *APIClient, payload map[str
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -192,7 +192,7 @@ func resourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) error 
 	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/custom_templates/%s", client.Endpoint, d.Id()), nil)
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -282,7 +282,7 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 		}
 		req.Header.Set("X-API-Key", client.APIKey)
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
 			return err
 		}
@@ -302,7 +302,7 @@ func resourceCustomTemplateDelete(d *schema.ResourceData, meta interface{}) erro
 	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/custom_templates/%s", client.Endpoint, d.Id()), nil)
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}

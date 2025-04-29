@@ -21,5 +21,6 @@
 | <a name="input_portainer_environment_address"></a> [portainer\_environment\_address](#input\_portainer\_environment\_address) | Portainer environment address | `string` | `"tcp://host:9001"` | no |
 | <a name="input_portainer_environment_name"></a> [portainer\_environment\_name](#input\_portainer\_environment\_name) | Portainer environment name | `string` | `"Your test environment name"` | no |
 | <a name="input_portainer_environment_type"></a> [portainer\_environment\_type](#input\_portainer\_environment\_type) | Portainer environment type | `number` | `2` | no |
-| <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"http://localhost:9000"` | no |
+| <a name="input_portainer_skip_ssl_verify"></a> [portainer\_skip\_ssl\_verify](#input\_portainer\_skip\_ssl\_verify) | Set to true to skip TLS certificate verification (useful for self-signed certs) | `bool` | `true` | no |
+| <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"https://localhost:9443"` | no |
 <!-- END_TF_DOCS -->

@@ -20,8 +20,9 @@
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_portainer_api_key"></a> [portainer\_api\_key](#input\_portainer\_api\_key) | Default Portainer Admin API Key | `string` | `"ptr_xrP7XWqfZEOoaCJRu5c8qKaWuDtVc2Zb07Q5g22YpS8="` | no |
+| <a name="input_portainer_skip_ssl_verify"></a> [portainer\_skip\_ssl\_verify](#input\_portainer\_skip\_ssl\_verify) | Set to true to skip TLS certificate verification (useful for self-signed certs) | `bool` | `true` | no |
 | <a name="input_portainer_team_name"></a> [portainer\_team\_name](#input\_portainer\_team\_name) | Portainer Team Name | `string` | `"your-team"` | no |
-| <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"http://localhost:9000"` | no |
+| <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"https://localhost:9443"` | no |
 | <a name="input_portainer_user_password"></a> [portainer\_user\_password](#input\_portainer\_user\_password) | Portainer password used for resource provisioning | `string` | `"your-user-password"` | no |
 | <a name="input_portainer_user_role"></a> [portainer\_user\_role](#input\_portainer\_user\_role) | Role to assign to the Portainer user | `number` | `2` | no |
 | <a name="input_portainer_user_username"></a> [portainer\_user\_username](#input\_portainer\_user\_username) | Portainer username used for resource provisioning | `string` | `"your-user"` | no |

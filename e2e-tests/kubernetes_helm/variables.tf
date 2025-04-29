@@ -1,7 +1,7 @@
 variable "portainer_url" {
   description = "Default Portainer URL"
   type        = string
-  default     = "http://localhost:9000"
+  default     = "https://localhost:9443"
 }
 
 variable "portainer_api_key" {
@@ -45,4 +45,10 @@ variable "helm_values" {
   description = "Optional Helm chart values provided as a raw YAML string"
   type        = string
   default     = ""
+}
+
+variable "portainer_skip_ssl_verify" {
+  description = "Set to true to skip TLS certificate verification (useful for self-signed certs)"
+  type        = bool
+  default     = true
 }

@@ -76,7 +76,7 @@ func resourceKubernetesIngressControllersCreate(d *schema.ResourceData, meta int
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}

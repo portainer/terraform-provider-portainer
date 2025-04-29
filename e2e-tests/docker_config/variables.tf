@@ -1,7 +1,7 @@
 variable "portainer_url" {
   description = "Default Portainer URL"
   type        = string
-  default     = "http://localhost:9000"
+  default     = "https://localhost:9443"
 }
 
 variable "portainer_api_key" {
@@ -24,7 +24,7 @@ variable "config_name" {
 }
 
 variable "config_data" {
-  description = "Base64-encoded data for Docker config"
+  description = "Base64ncoded data for Docker config"
   type        = string
   sensitive   = true
   default     = "THIS IS NOT A REAL CERTIFICATE\n"
@@ -48,4 +48,10 @@ variable "config_templating" {
     OptionA = "value for driver-specific option A"
     OptionB = "value for driver-specific option B"
   }
+}
+
+variable "portainer_skip_ssl_verify" {
+  description = "Set to true to skip TLS certificate verification (useful for self-signed certs)"
+  type        = bool
+  default     = true
 }

@@ -66,7 +66,7 @@ func resourceKubernetesStorageCreate(d *schema.ResourceData, meta interface{}) e
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to create Kubernetes Job: %w", err)
 	}
@@ -94,7 +94,7 @@ func resourceKubernetesStorageDelete(d *schema.ResourceData, meta interface{}) e
 	}
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to delete Job: %w", err)
 	}

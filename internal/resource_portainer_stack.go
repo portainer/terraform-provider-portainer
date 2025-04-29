@@ -168,7 +168,7 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 		reqUpdate.Header.Set("X-API-Key", client.APIKey)
 		reqUpdate.Header.Set("Content-Type", "application/json")
 
-		respUpdate, err := http.DefaultClient.Do(reqUpdate)
+		respUpdate, err := client.HTTPClient.Do(reqUpdate)
 		if err != nil {
 			return fmt.Errorf("failed to update stack with webhook: %w", err)
 		}
@@ -192,7 +192,7 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to fetch stack: %w", err)
 	}
@@ -244,7 +244,7 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	fileReq, _ := http.NewRequest("GET", fileURL, nil)
 	fileReq.Header.Set("X-API-Key", client.APIKey)
 
-	fileResp, err := http.DefaultClient.Do(fileReq)
+	fileResp, err := client.HTTPClient.Do(fileReq)
 	if err != nil {
 		return fmt.Errorf("failed to fetch stack file: %w", err)
 	}
@@ -272,7 +272,7 @@ func fetchSwarmID(client *APIClient, endpointID int) (string, error) {
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -304,7 +304,7 @@ func resourcePortainerStackDelete(d *schema.ResourceData, meta interface{}) erro
 	}
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -349,7 +349,7 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		req.Header.Set("X-API-Key", client.APIKey)
 		req.Header.Set("Content-Type", "application/json")
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
 			return err
 		}
@@ -383,7 +383,7 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -420,7 +420,7 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		reqUpdate.Header.Set("X-API-Key", client.APIKey)
 		reqUpdate.Header.Set("Content-Type", "application/json")
 
-		respUpdate, err := http.DefaultClient.Do(reqUpdate)
+		respUpdate, err := client.HTTPClient.Do(reqUpdate)
 		if err != nil {
 			return fmt.Errorf("failed to update stack with webhook: %w", err)
 		}
@@ -470,7 +470,7 @@ func createStackStandaloneString(d *schema.ResourceData, client *APIClient) erro
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -514,7 +514,7 @@ func createStackStandaloneFile(d *schema.ResourceData, client *APIClient) error 
 	req, _ := http.NewRequest("POST", url, body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("X-API-Key", client.APIKey)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -553,7 +553,7 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -589,7 +589,7 @@ func createStackSwarmString(d *schema.ResourceData, client *APIClient) error {
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -634,7 +634,7 @@ func createStackSwarmFile(d *schema.ResourceData, client *APIClient) error {
 	req, _ := http.NewRequest("POST", url, body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("X-API-Key", client.APIKey)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -674,7 +674,7 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -710,7 +710,7 @@ func createStackK8sString(d *schema.ResourceData, client *APIClient) error {
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -750,7 +750,7 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -783,7 +783,7 @@ func createStackK8sURL(d *schema.ResourceData, client *APIClient) error {
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
