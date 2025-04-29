@@ -210,7 +210,7 @@ func resourceContainerExecDelete(d *schema.ResourceData, meta interface{}) error
 func apiGET(url string, apiKey string) ([]byte, error) {
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("X-API-Key", apiKey)
-	resp, err := client.HTTPClient.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
