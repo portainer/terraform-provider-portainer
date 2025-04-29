@@ -60,7 +60,7 @@ func resourceEndpointServiceUpdateExecute(d *schema.ResourceData, meta interface
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func resolveServiceID(client *APIClient, endpointID int, name string) (string, e
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}

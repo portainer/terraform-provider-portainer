@@ -62,7 +62,7 @@ func resourceStackAssociateCreate(d *schema.ResourceData, meta interface{}) erro
 	}
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}

@@ -88,7 +88,7 @@ func resourceDockerNodeUpdate(d *schema.ResourceData, meta interface{}) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -120,7 +120,7 @@ func resourceDockerNodeDelete(d *schema.ResourceData, meta interface{}) error {
 	}
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send delete request: %w", err)
 	}

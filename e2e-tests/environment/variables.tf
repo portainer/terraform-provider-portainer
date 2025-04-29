@@ -1,7 +1,7 @@
 variable "portainer_url" {
   description = "Default Portainer URL"
   type        = string
-  default     = "http://localhost:9000"
+  default     = "https://localhost:9443"
 }
 
 variable "portainer_api_key" {
@@ -27,4 +27,10 @@ variable "portainer_environment_type" {
   description = "Portainer environment type"
   type        = number
   default     = 2 # Environment type: `1` = Docker, `2` = Agent, `3` = Azure, `4` = Edge Agent, `5` = Kubernetes.
+}
+
+variable "portainer_skip_ssl_verify" {
+  description = "Set to true to skip TLS certificate verification (useful for self-signed certs)"
+  type        = bool
+  default     = true
 }

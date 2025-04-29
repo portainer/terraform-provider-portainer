@@ -26,5 +26,6 @@
 | <a name="input_custom_template_title"></a> [custom\_template\_title](#input\_custom\_template\_title) | Title of the custom template | `string` | `"Portainer Agent"` | no |
 | <a name="input_custom_template_type"></a> [custom\_template\_type](#input\_custom\_template\_type) | Stack type: 1 = swarm, 2 = compose, 3 = kubernetes | `number` | `2` | no |
 | <a name="input_portainer_api_key"></a> [portainer\_api\_key](#input\_portainer\_api\_key) | Default Portainer Admin API Key | `string` | `"ptr_xrP7XWqfZEOoaCJRu5c8qKaWuDtVc2Zb07Q5g22YpS8="` | no |
-| <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"http://localhost:9000"` | no |
+| <a name="input_portainer_skip_ssl_verify"></a> [portainer\_skip\_ssl\_verify](#input\_portainer\_skip\_ssl\_verify) | Set to true to skip TLS certificate verification (useful for self-signed certs) | `bool` | `true` | no |
+| <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"https://localhost:9443"` | no |
 <!-- END_TF_DOCS -->

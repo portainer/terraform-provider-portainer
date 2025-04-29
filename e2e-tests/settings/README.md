@@ -28,7 +28,8 @@
 | <a name="input_ldap_url"></a> [ldap\_url](#input\_ldap\_url) | LDAP server URL | `string` | `"ldap.example.com:389"` | no |
 | <a name="input_logo_url"></a> [logo\_url](#input\_logo\_url) | Custom logo URL | `string` | `"https://www.portainer.io/hubfs/portainer-logo-black.svg"` | no |
 | <a name="input_portainer_api_key"></a> [portainer\_api\_key](#input\_portainer\_api\_key) | Default Portainer Admin API Key | `string` | `"ptr_xrP7XWqfZEOoaCJRu5c8qKaWuDtVc2Zb07Q5g22YpS8="` | no |
-| <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"http://localhost:9000"` | no |
+| <a name="input_portainer_skip_ssl_verify"></a> [portainer\_skip\_ssl\_verify](#input\_portainer\_skip\_ssl\_verify) | Set to true to skip TLS certificate verification (useful for self-signed certs) | `bool` | `true` | no |
+| <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"https://localhost:9443"` | no |
 | <a name="input_required_password_length"></a> [required\_password\_length](#input\_required\_password\_length) | Minimum password length for internal auth | `number` | `18` | no |
 | <a name="input_snapshot_interval"></a> [snapshot\_interval](#input\_snapshot\_interval) | Interval for snapshots (e.g., 15m) | `string` | `"15m"` | no |
 | <a name="input_user_session_timeout"></a> [user\_session\_timeout](#input\_user\_session\_timeout) | Session timeout duration (e.g., 8h) | `string` | `"8h"` | no |

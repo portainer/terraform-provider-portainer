@@ -28,7 +28,8 @@
 | <a name="input_path_host"></a> [path\_host](#input\_path\_host) | Host for ingress path | `string` | `"example.com"` | no |
 | <a name="input_path_type"></a> [path\_type](#input\_path\_type) | Type of the path (e.g., Prefix) | `string` | `"Prefix"` | no |
 | <a name="input_portainer_api_key"></a> [portainer\_api\_key](#input\_portainer\_api\_key) | Default Portainer Admin API Key | `string` | `"ptr_xrP7XWqfZEOoaCJRu5c8qKaWuDtVc2Zb07Q5g22YpS8="` | no |
-| <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"http://localhost:9000"` | no |
+| <a name="input_portainer_skip_ssl_verify"></a> [portainer\_skip\_ssl\_verify](#input\_portainer\_skip\_ssl\_verify) | Set to true to skip TLS certificate verification (useful for self-signed certs) | `bool` | `true` | no |
+| <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"https://localhost:9443"` | no |
 | <a name="input_service_name"></a> [service\_name](#input\_service\_name) | Name of the Kubernetes service | `string` | `"nginx-service"` | no |
 | <a name="input_service_port"></a> [service\_port](#input\_service\_port) | Port number for the service | `number` | `80` | no |
 | <a name="input_tls_hosts"></a> [tls\_hosts](#input\_tls\_hosts) | List of TLS hosts | `list(string)` | <pre>[<br/>  "example.com"<br/>]</pre> | no |

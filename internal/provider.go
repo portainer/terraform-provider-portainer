@@ -151,7 +151,7 @@ func (c *APIClient) DoMultipartRequest(method, url string, body *bytes.Buffer, h
 		req.Header.Set(k, v)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}

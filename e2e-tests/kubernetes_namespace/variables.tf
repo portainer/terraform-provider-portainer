@@ -1,7 +1,7 @@
 variable "portainer_url" {
   description = "Default Portainer URL"
   type        = string
-  default     = "http://localhost:9000"
+  default     = "https://localhost:9443"
 }
 
 variable "portainer_api_key" {
@@ -20,7 +20,7 @@ variable "environment_id" {
 variable "namespace_name" {
   description = "Name of the Kubernetes namespace to create."
   type        = string
-  default     = "test-kubernetes-environment"
+  default     = "test-kubernetesnvironment"
 }
 
 variable "namespace_owner" {
@@ -48,4 +48,10 @@ variable "namespace_resource_quota" {
     cpu    = "800m"
     memory = "129Mi"
   }
+}
+
+variable "portainer_skip_ssl_verify" {
+  description = "Set to true to skip TLS certificate verification (useful for self-signed certs)"
+  type        = bool
+  default     = true
 }

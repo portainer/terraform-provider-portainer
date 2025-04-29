@@ -63,7 +63,7 @@ func resourceEdgeGroupCreate(d *schema.ResourceData, meta interface{}) error {
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func resourceEdgeGroupRead(d *schema.ResourceData, meta interface{}) error {
 	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/edge_groups/%s", client.Endpoint, d.Id()), nil)
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func resourceEdgeGroupUpdate(d *schema.ResourceData, meta interface{}) error {
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func resourceEdgeGroupDelete(d *schema.ResourceData, meta interface{}) error {
 	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/edge_groups/%s", client.Endpoint, d.Id()), nil)
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}

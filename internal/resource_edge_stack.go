@@ -138,7 +138,7 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 		req.Header.Set("X-API-Key", client.APIKey)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
 			return err
 		}
@@ -205,7 +205,7 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func createEdgeStackFromJSON(client *APIClient, d *schema.ResourceData, payload 
 	req.Header.Set("X-API-Key", client.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -270,7 +270,7 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil)
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -300,7 +300,7 @@ func resourceEdgeStackDelete(d *schema.ResourceData, meta interface{}) error {
 	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil)
 	req.Header.Set("X-API-Key", client.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
