@@ -58,7 +58,7 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 
 	filter := fmt.Sprintf(`{"name":["%s"]}`, container)
 	containersURL := fmt.Sprintf("%s/endpoints/%d/docker/containers/json?filters=%s", client.Endpoint, endpointID, url.QueryEscape(filter))
-	containersResp, err := apiGET(containersURL, client.APIKey)
+	containersResp, err := apiGET(containersURL, client.APIKey, client)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 	filter := fmt.Sprintf(`{"service":{"%s":true},"desired-state":{"running":true}}`, service)
 	encodedFilter := url.QueryEscape(filter)
 	tasksURL := fmt.Sprintf("%s/endpoints/%d/docker/tasks?filters=%s", client.Endpoint, endpointID, encodedFilter)
-	tasksResp, err := apiGET(tasksURL, client.APIKey)
+	tasksResp, err := apiGET(tasksURL, client.APIKey, client)
 	if err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	nodeID := tasks[0]["NodeID"].(string)
-	nodeResp, err := apiGET(fmt.Sprintf("%s/endpoints/%d/docker/nodes/%s", client.Endpoint, endpointID, nodeID), client.APIKey)
+	nodeResp, err := apiGET(fmt.Sprintf("%s/endpoints/%d/docker/nodes/%s", client.Endpoint, endpointID, nodeID), client.APIKey, client)
 	if err != nil {
 		return err
 	}
@@ -207,10 +207,10 @@ func resourceContainerExecDelete(d *schema.ResourceData, meta interface{}) error
 	return nil
 }
 
-func apiGET(url string, apiKey string) ([]byte, error) {
+func apiGET(url string, apiKey string, client *APIClient) ([]byte, error) {
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("X-API-Key", apiKey)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
