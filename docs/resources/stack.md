@@ -50,11 +50,24 @@ resource "portainer_stack" "standalone_repo" {
   method                    = "repository"
   endpoint_id               = 1
   repository_url            = "https://github.com/example/repo"
-  repository_username       = "gituser"
-  repository_password       = "secure"
   repository_reference_name = "refs/heads/main"
   file_path_in_repository   = "docker-compose.yml"
+  
+  # Optional GitOps enhancements:
+  stack_webhook             = true                      # Enables GitOps webhook
+  update_interval           = "5m"                       # Auto-update interval
+  pull_image                = true                       # Pull latest image on update
+  force_update              = true                       # Prune services not in compose file
+  git_repository_authentication = true                   # If authentication is required
+  repository_username       = "gituser"
+  repository_password       = "secure"
+
   tlsskip_verify            = false
+}
+
+output "webhook_url" {
+  description = "GitOps webhook trigger URL"
+  value       = portainer_stack.standalone_repo.webhook_url
 }
 ```
 ### Deploy Swarm Stack from String
@@ -173,28 +186,33 @@ terraform apply
 
 ## Arguments Reference
 
-| Name                      | Type          | Required     | Description                                                                |
-|---------------------------|---------------|--------------|----------------------------------------------------------------------------|
-| `name`                    | string        | ✅ yes       | Name of the stack                                                          |
-| `deployment_type`         | string        | ✅ yes       | One of: `standalone`, `swarm`, `kubernetes`                               |
-| `method`                  | string        | ✅ yes       | Creation method: `string`, `file`, `repository`, or `url` (K8s only)      |
-| `endpoint_id`             | int           | ✅ yes       | ID of the environment where stack will be deployed                        |
-| `swarm_id`                | string        | 🚫 optional  | Swarm ID (autofilled if not specified)                                    |
-| `namespace`               | string        | 🚫 optional  | Namespace (Kubernetes only)                                               |
-| `stack_file_content`      | string        | 🚫 optional  | Inline Compose/YAML content                                               |
-| `stack_file_path`         | string        | 🚫 optional  | Path to a Compose file on disk                                            |
-| `repository_url`          | string        | 🚫 optional  | Git repository URL                                                        |
-| `repository_username`     | string        | 🚫 optional  | Git username                                                              |
-| `repository_password`     | string        | 🚫 optional  | Git password/token                                                        |
-| `repository_reference_name` | string      | 🚫 optional  | Git reference name (default: `refs/heads/main`)                           |
-| `file_path_in_repository` | string        | 🚫 optional  | Path to Compose/K8s manifest inside the repo                              |
-| `manifest_url`            | string        | 🚫 optional  | K8s only – URL to remote manifest                                         |
-| `compose_format`          | bool          | 🚫 optional  | Use Compose format for K8s (default: `false`)                             |
-| `env`                     | list(object)  | 🚫 optional  | List of env variables (`name`, `value`)                                   |
-| `tlsskip_verify`          | bool          | 🚫 optional  | Skip TLS verification for Git repository (default: `false`)               |
-| `pull_image`              | bool          | 🚫 optional  | Pull latest image on redeploy (default: `false`)                          |
-| `prune`                   | bool          | 🚫 optional  | Remove services no longer referenced in the stack (default: `false`)      |
-| `stack_webhook_token`     | string        | 🚫 optional  | When defined, a webhook will be attached to the stack during creation. If not set, no webhook will be created.           |
+| Name                        | Type          | Required     | Description                                                                |
+|-----------------------------|---------------|--------------|----------------------------------------------------------------------------|
+| `name`                      | string        | ✅ yes       | Name of the stack                                                          |
+| `deployment_type`           | string        | ✅ yes       | One of: `standalone`, `swarm`, `kubernetes`                               |
+| `method`                    | string        | ✅ yes       | Creation method: `string`, `file`, `repository`, or `url` (K8s only)      |
+| `endpoint_id`               | int           | ✅ yes       | ID of the environment where stack will be deployed                        |
+| `swarm_id`                  | string        | 🚫 optional  | Swarm ID (autofilled if not specified)                                    |
+| `namespace`                 | string        | 🚫 optional  | Namespace (Kubernetes only)                                               |
+| `stack_file_content`        | string        | 🚫 optional  | Inline Compose/YAML content                                               |
+| `stack_file_path`           | string        | 🚫 optional  | Path to a Compose file on disk                                            |
+| `repository_url`            | string        | 🚫 optional  | Git repository URL                                                        |
+| `repository_username`       | string        | 🚫 optional  | Git username                                                              |
+| `repository_password`       | string        | 🚫 optional  | Git password/token                                                        |
+| `repository_reference_name` | string        | 🚫 optional  | Git reference name (default: `refs/heads/main`)                           |
+| `file_path_in_repository`   | string        | 🚫 optional  | Path to Compose/K8s manifest inside the repo                              |
+| `manifest_url`              | string        | 🚫 optional  | K8s only – URL to remote manifest                                         |
+| `compose_format`            | bool          | 🚫 optional  | Use Compose format for K8s (default: `false`)                             |
+| `env`                       | list(object)  | 🚫 optional  | List of env variables (`name`, `value`)                                   |
+| `tlsskip_verify`            | bool          | 🚫 optional  | Skip TLS verification for Git repository (default: `false`)               |
+| `pull_image`                | bool          | 🚫 optional  | Whether to force pull latest images during stack update (default: `false`)|
+| `prune`                     | bool          | 🚫 optional  | Remove services no longer referenced in the stack (default: `false`)      |
+| `git_repository_authentication` | bool      | 🚫 optional  | Whether to enable authentication for Git repository (default: `false`)    |
+| `force_update`              | bool          | 🚫 optional  | Whether to prune unused services/networks during stack update (default: `false`) |
+| `update_interval`           | string        | 🚫 optional  | Interval string for Git auto updates (e.g. `1h30m`)                        |
+| `stack_webhook`             | bool          | 🚫 optional  | Enable autoUpdate webhook (GitOps)                                        |
+| `webhook_id`                | string        | 🧮 computed  | UUID of the GitOps webhook (read-only)                                    |
+| `webhook_url`               | string        | 🧮 computed  | Full URL of the webhook trigger                                           |
 
 ---
 
