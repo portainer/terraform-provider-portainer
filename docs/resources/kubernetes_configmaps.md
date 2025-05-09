@@ -27,7 +27,7 @@ To update the Configmaps (e.g. name, image), simply modify the manifest and re-a
 terraform apply
 ```
 
-To remove the Job:
+To remove the configmaps:
 ```sh
 terraform destroy
 ```

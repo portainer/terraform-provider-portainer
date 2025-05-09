@@ -26,7 +26,7 @@ To update the Storage (e.g. name, image), simply modify the manifest and re-appl
 terraform apply
 ```
 
-To remove the Job:
+To remove the storage:
 ```sh
 terraform destroy
 ```

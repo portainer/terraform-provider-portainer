@@ -83,6 +83,7 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_endpoint_association`   | ![Done](https://img.shields.io/badge/status-done-brightgreen)      |
 | `portainer_stack_associate`  | ![Done](https://img.shields.io/badge/status-done-brightgreen)      |
 | `portainer_stack_webhook`    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_edge_stack_webhook`    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_webhook`          | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_webhook_execute`  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_resource_control` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |

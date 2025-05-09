@@ -7,17 +7,21 @@ The `portainer_licenses` resource allows you to attach license keys to your Port
 ```hcl
 resource "portainer_licenses" "example" {
   key   = "your-license-key-here"
-  force = true
+  force = true # optional
 }
 ```
 ## Lifecycle & Behavior
-Licenses are added using the `/licenses/add` Portainer API endpoint.
+Apply and update licenses key by:
+```sh
+terraform apply
+```
 
-Setting `force = true` will overwrite any conflicting license keys already registered in Portainer.
+To remove the licenses key:
+```sh
+terraform destroy
+```
 
-If the provided license key is already active, the resource will still be marked as successfully created.
-
-> ⚠️ **Note:** This resource is **write-only** — it does not support reading or importing existing license keys.
+> Setting `force = true` will overwrite any conflicting license keys already registered in Portainer.
 
 ## Arguments Reference
 | Name   | Type   | Required | Description                                                             |

@@ -27,7 +27,7 @@ To update the Role (e.g. name, image), simply modify the manifest and re-apply:
 terraform apply
 ```
 
-To remove the Job:
+To remove the role:
 ```sh
 terraform destroy
 ```

@@ -98,6 +98,7 @@ func Provider() *schema.Provider {
 			"portainer_kubernetes_storage":                      resourceKubernetesStorage(),
 			"portainer_compose_convert":                         resourceComposeConvertResource(),
 			"portainer_stack_webhook":                           resourcePortainerStackWebhook(),
+			"portainer_edge_stack_webhook":                      resourcePortainerEdgeStackWebhook(),
 		},
 		ConfigureContextFunc: configureProvider,
 	}

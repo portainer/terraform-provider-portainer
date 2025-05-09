@@ -10,6 +10,7 @@ import (
 type sslSettings struct {
 	Cert        string `json:"cert"`
 	Key         string `json:"key"`
+	ClientCert  string `json:"clientCert"`
 	HTTPEnabled bool   `json:"httpenabled"`
 }
 
@@ -32,6 +33,12 @@ func resourceSSLSettings() *schema.Resource {
 				Description: "SSL private key content",
 				Sensitive:   true,
 			},
+			"client_cert": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "SSL client certificate content",
+				Sensitive:   true,
+			},
 			"http_enabled": {
 				Type:        schema.TypeBool,
 				Required:    true,
@@ -47,6 +54,7 @@ func resourceSSLSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
 	payload := sslSettings{
 		Cert:        d.Get("cert").(string),
 		Key:         d.Get("key").(string),
+		ClientCert:  d.Get("client_cert").(string),
 		HTTPEnabled: d.Get("http_enabled").(bool),
 	}
 

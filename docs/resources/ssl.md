@@ -28,13 +28,13 @@ $ mkdir certs
 $ openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.crt -days 365 -nodes -subj "/CN=localhost"
 ```
 
-
 ## Arguments Reference
-| Name          | Type   | Required | Description                                                              |
-|---------------|--------|----------|--------------------------------------------------------------------------|
-| `cert`        | string | ✅ yes   | Contents of the SSL certificate (e.g., `file("certs/server.crt")`)      |
-| `key`         | string | ✅ yes   | Contents of the private key (e.g., `file("certs/server.key")`)          |
-| `http_enabled`| bool   | 🚫 no    | Whether to keep HTTP access enabled (default: `false`)                  |
+| Name           | Type   | Required | Description                                                              |
+|----------------|--------|----------|--------------------------------------------------------------------------|
+| `cert`         | string | ✅ yes   | Contents of the SSL certificate (e.g., `file("certs/server.crt")`)      |
+| `key`          | string | ✅ yes   | Contents of the private key (e.g., `file("certs/server.key")`)          |
+| `client_cert`  | string | 🚫 no    | Contents of the client certificate, if required for mutual TLS          |
+| `http_enabled` | bool   | 🚫 no    | Whether to keep HTTP access enabled (default: `false`)                  |
 
 ## Attributes Reference
 

@@ -10,7 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -35,10 +37,30 @@ func resourceEdgeStack() *schema.Resource {
 				Optional: true,
 				ForceNew: true,
 			},
+			"pre_pull_image": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
+			"retry_deploy": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
+			"dryrun": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
 			"repository_url": {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
+			},
+			"git_repository_authentication": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
 			},
 			"repository_username": {
 				Type:     schema.TypeString,
@@ -83,6 +105,38 @@ func resourceEdgeStack() *schema.Resource {
 				Optional: true,
 				Default:  false,
 			},
+			"stack_webhook": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Enable autoUpdate webhook (GitOps).",
+			},
+			"force_update": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Whether to prune unused services/networks during stack update (default: true)",
+			},
+			"update_interval": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"pull_image": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Whether to force pull latest images during stack update (default: true)",
+			},
+			"webhook_id": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "UUID of the GitOps webhook (read-only).",
+			},
+			"webhook_url": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Full URL of the webhook trigger",
+			},
 		},
 	}
 }
@@ -126,6 +180,8 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 		_ = writer.WriteField("EdgeGroups", toJSONString(edgeGroups))
 		_ = writer.WriteField("UseManifestNamespaces", strconv.FormatBool(useManifest))
 		_ = writer.WriteField("Registries", toJSONString(registries))
+		_ = writer.WriteField("PrePullImage", strconv.FormatBool(d.Get("pre_pull_image").(bool)))
+		_ = writer.WriteField("RetryDeploy", strconv.FormatBool(d.Get("retry_deploy").(bool)))
 
 		part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 		if err != nil {
@@ -134,7 +190,12 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 		_, _ = io.Copy(part, file)
 		writer.Close()
 
-		req, _ := http.NewRequest("POST", fmt.Sprintf("%s/edge_stacks/create/file", client.Endpoint), body)
+		// Build query string for dryrun
+		endpoint := fmt.Sprintf("%s/edge_stacks/create/file", client.Endpoint)
+		if d.Get("dryrun").(bool) {
+			endpoint += "?dryrun=true"
+		}
+		req, _ := http.NewRequest("POST", endpoint, body)
 		req.Header.Set("X-API-Key", client.APIKey)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 
@@ -153,24 +214,45 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 			ID int `json:"Id"`
 		}
 		_ = json.NewDecoder(resp.Body).Decode(&result)
-		d.SetId(strconv.Itoa(result.ID))
-		return resourceEdgeStackRead(d, meta)
+
+		if !d.Get("dryrun").(bool) {
+			d.SetId(strconv.Itoa(result.ID))
+			return resourceEdgeStackRead(d, meta)
+		}
+
+		return nil
 	}
 
 	// Method: repository
 	if repoURLRaw, ok := d.GetOk("repository_url"); ok {
 		repoURL := repoURLRaw.(string)
 		payload := map[string]interface{}{
-			"name":                    name,
-			"deploymentType":          deployType,
-			"edgeGroups":              edgeGroups,
-			"repositoryURL":           repoURL,
-			"repositoryUsername":      d.Get("repository_username").(string),
-			"repositoryPassword":      d.Get("repository_password").(string),
-			"repositoryReferenceName": d.Get("repository_reference_name").(string),
-			"filePathInRepository":    d.Get("file_path_in_repository").(string),
-			"useManifestNamespaces":   useManifest,
-			"registries":              registries,
+			"name":                     name,
+			"deploymentType":           deployType,
+			"edgeGroups":               edgeGroups,
+			"repositoryURL":            repoURL,
+			"repositoryAuthentication": d.Get("git_repository_authentication").(bool),
+			"repositoryUsername":       d.Get("repository_username").(string),
+			"repositoryPassword":       d.Get("repository_password").(string),
+			"repositoryReferenceName":  d.Get("repository_reference_name").(string),
+			"filePathInRepository":     d.Get("file_path_in_repository").(string),
+			"useManifestNamespaces":    useManifest,
+			"registries":               registries,
+		}
+		stackWebhook := d.Get("stack_webhook").(bool)
+		if stackWebhook {
+			webhookID := uuid.New().String()
+			autoUpdate := map[string]interface{}{
+				"forcePullImage": d.Get("pull_image").(bool),
+				"forceUpdate":    d.Get("force_update").(bool),
+				"interval":       d.Get("update_interval").(string),
+				"webhook":        webhookID,
+			}
+			payload["autoUpdate"] = autoUpdate
+			d.Set("webhook_id", webhookID)
+			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+			webhookURL := fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, webhookID)
+			d.Set("webhook_url", webhookURL)
 		}
 		return createEdgeStackFromJSON(client, d, payload, "/edge_stacks/create/repository")
 	}
@@ -187,6 +269,21 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 		"edgeGroups":            toIntSlice(d.Get("edge_groups").([]interface{})),
 		"updateVersion":         true,
 		"useManifestNamespaces": d.Get("use_manifest_namespaces").(bool),
+	}
+
+	if d.Get("stack_webhook").(bool) && d.Get("repository_url").(string) != "" {
+		webhookID := uuid.New().String()
+		autoUpdate := map[string]interface{}{
+			"forcePullImage": d.Get("pull_image").(bool),
+			"forceUpdate":    d.Get("force_update").(bool),
+			"interval":       d.Get("update_interval").(string),
+			"webhook":        webhookID,
+		}
+		payload["autoUpdate"] = autoUpdate
+		d.Set("webhook_id", webhookID)
+		baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+		webhookURL := fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, webhookID)
+		d.Set("webhook_url", webhookURL)
 	}
 
 	if v, ok := d.GetOk("stack_file_content"); ok {

@@ -94,8 +94,10 @@ func resourcePortainerStack() *schema.Resource {
 				Optional: true,
 				Default:  "docker-compose.yml",
 			},
-			"manifest_url":   {Type: schema.TypeString, Optional: true, ForceNew: true},
-			"compose_format": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
+			"manifest_url":          {Type: schema.TypeString, Optional: true, ForceNew: true},
+			"compose_format":        {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
+			"support_relative_path": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
+			"filesystem_path":       {Type: schema.TypeString, Optional: true},
 			"env": {
 				Type:     schema.TypeList,
 				Optional: true,
@@ -347,6 +349,7 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 
 	if method == "repository" {
 		payload := map[string]interface{}{
+			"supportRelativePath":       d.Get("support_relative_path").(bool),
 			"env":                       flattenEnvList(d.Get("env").([]interface{})),
 			"prune":                     d.Get("prune").(bool),
 			"pullImage":                 d.Get("pull_image").(bool),
@@ -356,6 +359,10 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			"repositoryReferenceName":   d.Get("repository_reference_name").(string),
 			"repositoryGitCredentialID": 0,
 			"tlsskipVerify":             d.Get("tlsskip_verify").(bool),
+		}
+
+		if v, ok := d.GetOk("filesystem_path"); ok {
+			payload["filesystemPath"] = v.(string)
 		}
 
 		if d.Get("stack_webhook").(bool) {
@@ -614,9 +621,14 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 		"repositoryPassword":       d.Get("repository_password").(string),
 		"repositoryReferenceName":  d.Get("repository_reference_name").(string),
 		"repositoryAuthentication": d.Get("git_repository_authentication").(bool),
+		"supportRelativePath":      d.Get("support_relative_path").(bool),
 		"env":                      flattenEnvList(d.Get("env").([]interface{})),
 		"fromAppTemplate":          false,
 		"tlsskipVerify":            d.Get("tlsskip_verify").(bool),
+	}
+
+	if v, ok := d.GetOk("filesystem_path"); ok {
+		payload["filesystemPath"] = v.(string)
 	}
 
 	stackWebhook := d.Get("stack_webhook").(bool)
@@ -751,10 +763,15 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 		"repositoryPassword":       d.Get("repository_password").(string),
 		"repositoryReferenceName":  d.Get("repository_reference_name").(string),
 		"repositoryAuthentication": d.Get("git_repository_authentication").(bool),
+		"supportRelativePath":      d.Get("support_relative_path").(bool),
 		"env":                      flattenEnvList(d.Get("env").([]interface{})),
 		"fromAppTemplate":          false,
 		"tlsskipVerify":            d.Get("tlsskip_verify").(bool),
 		"swarmID":                  d.Get("swarm_id").(string),
+	}
+
+	if v, ok := d.GetOk("filesystem_path"); ok {
+		payload["filesystemPath"] = v.(string)
 	}
 
 	stackWebhook := d.Get("stack_webhook").(bool)

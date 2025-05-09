@@ -43,6 +43,13 @@ func resourceCustomTemplate() *schema.Resource {
 			"repository_reference": {Type: schema.TypeString, Optional: true, Default: "refs/heads/main", ForceNew: true},
 			"compose_file_path":    {Type: schema.TypeString, Optional: true, Default: "docker-compose.yml", ForceNew: true},
 			"tlsskip_verify":       {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
+			"repository_authentication": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				ForceNew:    true,
+				Description: "Enable authentication for the Git repository (default: false). If true, `repository_username` and `repository_password` will be used.",
+			},
 		},
 	}
 }
@@ -133,6 +140,7 @@ func createTemplateFromFile(d *schema.ResourceData, client *APIClient, path stri
 }
 
 func createTemplateFromRepository(d *schema.ResourceData, client *APIClient, repoURL string) error {
+	useAuth := d.Get("repository_authentication").(bool)
 	payload := map[string]interface{}{
 		"title":                       d.Get("title").(string),
 		"description":                 d.Get("description").(string),
@@ -143,12 +151,16 @@ func createTemplateFromRepository(d *schema.ResourceData, client *APIClient, rep
 		"edgeTemplate":                d.Get("edge_template").(bool),
 		"isComposeFormat":             d.Get("is_compose_format").(bool),
 		"repositoryURL":               repoURL,
-		"repositoryUsername":          d.Get("repository_username").(string),
-		"repositoryPassword":          d.Get("repository_password").(string),
+		"repositoryAuthentication":    useAuth,
 		"repositoryReferenceName":     d.Get("repository_reference").(string),
 		"composeFilePathInRepository": d.Get("compose_file_path").(string),
 		"tlsskipVerify":               d.Get("tlsskip_verify").(bool),
 		"variables":                   getVariables(d),
+	}
+
+	if useAuth {
+		payload["repositoryUsername"] = d.Get("repository_username").(string)
+		payload["repositoryPassword"] = d.Get("repository_password").(string)
 	}
 
 	return postTemplateJSON(d, client, payload, "/custom_templates/create/repository")
@@ -244,13 +256,17 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 	if v, ok := d.GetOk("file_content"); ok {
 		payload["fileContent"] = v.(string)
 	}
+
+	useAuth := d.Get("repository_authentication").(bool)
 	if v, ok := d.GetOk("repository_url"); ok {
 		isGitBased = true
 		payload["repositoryURL"] = v.(string)
-		payload["repositoryUsername"] = d.Get("repository_username").(string)
-		payload["repositoryPassword"] = d.Get("repository_password").(string)
 		payload["repositoryReferenceName"] = d.Get("repository_reference").(string)
-		payload["repositoryAuthentication"] = true
+		payload["repositoryAuthentication"] = useAuth
+		if useAuth {
+			payload["repositoryUsername"] = d.Get("repository_username").(string)
+			payload["repositoryPassword"] = d.Get("repository_password").(string)
+		}
 	}
 
 	jsonBody, _ := json.Marshal(payload)

@@ -67,25 +67,39 @@ terraform apply
 ```
 
 ## Arguments Reference
-| Name                   | Type         | Required    | Description                                                                 |
-|------------------------|--------------|-------------|-----------------------------------------------------------------------------|
-| `title`                | string       | ✅ yes      | Title of the custom template                                                |
-| `description`          | string       | ✅ yes      | Description of the template                                                 |
-| `note`                 | string       | ✅ yes      | Display note (can contain HTML)                                             |
-| `platform`             | int          | ✅ yes      | Platform: `1` = Linux, `2` = Windows                                        |
-| `type`                 | int          | ✅ yes      | Stack type: `1` = Swarm, `2` = Compose, `3` = Kubernetes                    |
-| `file_content`         | string       | 🚫 optional | Inline Compose content (exclusive with `file_path` or `repository_url`)     |
-| `file_path`            | string       | 🚫 optional | Path to local Compose file                                                  |
-| `repository_url`       | string       | 🚫 optional | Git repository URL                                                          |
-| `repository_username`  | string       | 🚫 optional | Git username                                                                |
-| `repository_password`  | string       | 🚫 optional | Git password/token                                                          |
-| `repository_reference` | string       | 🚫 optional | Git reference (branch/tag), default: `refs/heads/main`                      |
-| `compose_file_path`    | string       | 🚫 optional | Path to Compose file inside repo, default: `docker-compose.yml`            |
-| `tlsskip_verify`       | bool         | 🚫 optional | Skip TLS verification for Git repo (default: `false`)                      |
-| `logo`                 | string       | 🚫 optional | URL of template logo                                                        |
-| `edge_template`        | bool         | 🚫 optional | Whether this is an Edge template (default: `false`)                         |
-| `is_compose_format`    | bool         | 🚫 optional | Whether to treat as Compose format (default: `false`)                       |
-| `variables`            | list(object) | 🚫 optional | List of input variables (`name`, `label`, `description`, `defaultValue`)    |
+### Common Arguments
+| Name                | Type         | Required    | Description                                                                |
+|---------------------|--------------|-------------|----------------------------------------------------------------------------|
+| `title`             | string       | ✅ yes      | Title of the custom template                                               |
+| `description`       | string       | ✅ yes      | Description of the template                                                |
+| `note`              | string       | ✅ yes      | Display note (can contain HTML)                                            |
+| `platform`          | int          | ✅ yes      | Platform: `1` = Linux, `2` = Windows                                       |
+| `type`              | int          | ✅ yes      | Stack type: `1` = Swarm, `2` = Compose, `3` = Kubernetes                   |
+| `logo`              | string       | 🚫 optional | URL of template logo                                                       |
+| `edge_template`     | bool         | 🚫 optional | Whether this is an Edge template (default: `false`)                        |
+| `is_compose_format` | bool         | 🚫 optional | Whether to treat as Compose format (default: `false`)                      |
+| `variables`         | list(object) | 🚫 optional | List of input variables (`name`, `label`, `description`, `defaultValue`)   |
+
+### For String-based Template
+| Name           | Type   | Required    | Description                                                  |
+|----------------|--------|-------------|--------------------------------------------------------------|
+| `file_content` | string | ✅ required | Inline Compose content (exclusive with `file_path` and `repository_url`) |
+
+### For File-based Template
+| Name       | Type   | Required    | Description                                                       |
+|------------|--------|-------------|-------------------------------------------------------------------|
+| `file_path`| string | ✅ required | Path to local Compose file (exclusive with `file_content` and `repository_url`) |
+
+### For Repository-based Template
+| Name                        | Type   | Required    | Description                                                          |
+| --------------------------- | ------ | ----------- | -------------------------------------------------------------------- |
+| `repository_url`            | string | ✅ required  | Git repository URL                                                  |
+| `repository_reference`      | string | ✅ required | Git reference (branch/tag), default: `refs/heads/main`               |
+| `compose_file_path`         | string | ✅ required | Path to Compose file inside repo, default: `docker-compose.yml`      |
+| `tlsskip_verify`            | bool   | 🚫 optional | Skip TLS verification for Git repo (default: `false`)                |
+| `repository_authentication` | bool   | 🚫 optional | Whether to enable authentication for the Git repo (default: `false`) |
+| `repository_username`       | string | 🚫 optional | Git username (required if `repository_authentication = true`)        |
+| `repository_password`       | string | 🚫 optional | Git password/token (required if `repository_authentication = true`)  |
 
 ## Attributes Reference
 

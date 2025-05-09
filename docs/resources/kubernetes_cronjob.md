@@ -27,7 +27,7 @@ To update the Cronjob (e.g. name, image), simply modify the manifest and re-appl
 terraform apply
 ```
 
-To remove the Job:
+To remove the cronjob:
 ```sh
 terraform destroy
 ```
