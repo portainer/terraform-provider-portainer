@@ -110,6 +110,7 @@ func Provider() *schema.Provider {
 			"portainer_edge_update_schedules":                   resourcePortainerEdgeUpdateSchedules(),
 			"portainer_support_debug_log":                       resourcePortainerSupportDebugLog(),
 			"portainer_sshkeygen":                               resourcePortainerSSHKeygen(),
+			"portainer_cloud_provider_provision":                resourcePortainerCloudProvision(),
 		},
 		ConfigureContextFunc: configureProvider,
 	}

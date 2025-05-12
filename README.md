@@ -47,10 +47,10 @@ make build
 ```
 
 ## Provider Support
-| Provider       | Provider Support Status              |
-|----------------|--------------------------------------|
+| Provider                                                                             | Provider Support Status                                                 |
+|--------------------------------------------------------------------------------------|-------------------------------------------------------------------------|
 | [Terraform](https://registry.terraform.io/providers/portainer/portainer/latest)      | ![Done](https://img.shields.io/badge/status-done-brightgreen)           |
-| [OpenTofu](https://search.opentofu.org/provider/portainer/portainer/latest)       | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| [OpenTofu](https://search.opentofu.org/provider/portainer/portainer/latest)          | ![Done](https://img.shields.io/badge/status-done-brightgreen)           |
 
 
 ## Example Provider Configuration
@@ -86,11 +86,11 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 ```
 
 ## Arguments Reference
-| Name       | Type   | Required | Description                                                                 |
-|------------|--------|----------|-----------------------------------------------------------------------------|
-| `endpoint` | string | ✅ yes   | The URL of the Portainer instance. `/api` will be appended automatically if missing. |
-| `api_key`  | string | ✅ yes   | API key used to authenticate requests.                                      |
-| `skip_ssl_verify` | boolean | ❌ no | 	Set to `true` to skip TLS certificate verification (useful for self-signed certs). Default: `false` |
+| Name       | Type           | Required | Description                                                                                               |
+|------------|----------------|----------|-----------------------------------------------------------------------------------------------------------|
+| `endpoint` | string         | ✅ yes   | The URL of the Portainer instance. `/api` will be appended automatically if missing.                      |
+| `api_key`  | string         | ✅ yes   | API key used to authenticate requests.                                                                    |
+| `skip_ssl_verify` | boolean | ❌ no    | 	Set to `true` to skip TLS certificate verification (useful for self-signed certs). Default: `false`     |
 
 ## Usage
 See our [examples](./docs/resources/) per resources in docs.
@@ -143,6 +143,7 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_resource_control` | [resource_control.md](docs/resources/resource_control.md)| [example](examples/resource_control/)  | ![Done](https://img.shields.io/badge/status-done-brightgreen)     | ![Not yet](https://img.shields.io/badge/import-no-lightgrey)     | ![None](https://img.shields.io/badge/running-false-grey)  |
 | `portainer_licenses`         | [licenses.md](docs/resources/licenses.md)                  | [example](examples/licenses/)           | ![Done](https://img.shields.io/badge/status-done-brightgreen)     | ![Not yet](https://img.shields.io/badge/import-no-lightgrey)     | ![None](https://img.shields.io/badge/running-false-grey)  |
 | `portainer_cloud_credentials`| [cloud_credentials.md](docs/resources/cloud_credentials.md)| [example](examples/cloud_credentials/)  | ![Done](https://img.shields.io/badge/status-done-brightgreen)     | ![Not yet](https://img.shields.io/badge/import-no-lightgrey)     | ![None](https://img.shields.io/badge/running-false-grey)  |
+| `portainer_cloud_provider_provision`| [cloud_provider_provision.md](docs/resources/cloud_provider_provision.md)| [example](examples/cloud_provider_provision/)  | ![Done](https://img.shields.io/badge/status-done-brightgreen)     | ![Not yet](https://img.shields.io/badge/import-no-lightgrey)     | ![None](https://img.shields.io/badge/running-false-grey)  |
 | `portainer_compose_convert`  | [compose_convert.md](docs/resources/compose_convert.md)    | [example](examples/compose_convert/)    | ![Done](https://img.shields.io/badge/status-done-brightgreen)     | ![Not yet](https://img.shields.io/badge/import-no-lightgrey)     | ![Daily](https://img.shields.io/badge/running-daily-blue) |
 | `portainer_chat`                         | [chat.md](docs/resources/chat.md)                           | [example](examples/chat/)             | ![Done](https://img.shields.io/badge/status-done-brightgreen) | ![Not yet](https://img.shields.io/badge/import-no-lightgrey)     | ![None](https://img.shields.io/badge/running-false-grey)  |
 | `portainer_support`                      | [support.md](docs/resources/support.md)                     | [example](examples/support/)          | ![Done](https://img.shields.io/badge/status-done-brightgreen) | ![Not yet](https://img.shields.io/badge/import-no-lightgrey)     | ![None](https://img.shields.io/badge/running-false-grey)  |
