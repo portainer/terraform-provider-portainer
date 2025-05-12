@@ -114,7 +114,7 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_stack`                              | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_stack_associate`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_stack_webhook`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
-| `portainer_support`                            | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_support_debug_log`                  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_tag`                                | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_team`                               | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_team_membership`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
