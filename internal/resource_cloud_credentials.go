@@ -25,19 +25,16 @@ func resourceCloudCredentials() *schema.Resource {
 			"cloud_provider": {
 				Type:        schema.TypeString,
 				Required:    true,
-				ForceNew:    true,
 				Description: "Cloud provider name (e.g., aws, gcp, digitalocean)",
 			},
 			"name": {
 				Type:        schema.TypeString,
 				Required:    true,
-				ForceNew:    true,
 				Description: "Human-readable name of the credentials",
 			},
 			"credentials": {
 				Type:        schema.TypeMap,
 				Required:    true,
-				ForceNew:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
 				Description: "JSON-encoded credentials for the provider",
 			},

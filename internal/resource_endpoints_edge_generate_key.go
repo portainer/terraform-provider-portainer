@@ -17,7 +17,6 @@ func resourcePortainerEdgeGenerateKey() *schema.Resource {
 	return &schema.Resource{
 		Create: resourcePortainerEdgeGenerateKeyCreate,
 		Read:   schema.Noop,
-		Update: schema.Noop,
 		Delete: schema.RemoveFromState,
 		Schema: map[string]*schema.Schema{
 			"edge_key": {

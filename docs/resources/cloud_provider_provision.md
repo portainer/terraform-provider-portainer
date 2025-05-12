@@ -15,7 +15,7 @@ It currently supports:
 ### 🌐 DigitalOcean (Civo, Linode)
 ```hcl
 resource "portainer_cloud_provider_provision" "do_cluster" {
-  provider = "digitalocean"
+  cloud_provider = "digitalocean"
 
   payload = {
     credentialID       = 1
@@ -37,7 +37,7 @@ resource "portainer_cloud_provider_provision" "do_cluster" {
 ### ☁️ Amazon (EKS)
 ```hcl
 resource "portainer_cloud_provider_provision" "eks_cluster" {
-  provider = "amazon"
+  cloud_provider = "amazon"
 
   payload = {
     credentialID       = 1
@@ -61,7 +61,7 @@ resource "portainer_cloud_provider_provision" "eks_cluster" {
 ### ☁️ Azure (AKS)
 ```hcl
 resource "portainer_cloud_provider_provision" "aks_cluster" {
-  provider = "azure"
+  cloud_provider = "azure"
 
   payload = {
     credentialID        = 1
@@ -89,7 +89,7 @@ resource "portainer_cloud_provider_provision" "aks_cluster" {
 ### ☸️ Google Kubernetes Engine (GKE)
 ```hcl
 resource "portainer_cloud_provider_provision" "gke_cluster" {
-  provider = "gke"
+  cloud_provider = "gke"
 
   payload = {
     credentialID       = 1
@@ -121,7 +121,7 @@ resource "portainer_cloud_provider_provision" "gke_cluster" {
 ### Top-Level
 | Name      | Type   | Required | Description                                |
 |-----------|--------|----------|--------------------------------------------|
-| `provider`| string | ✅ yes   | One of `civo`, `digitalocean`, `linode`, `amazon`, `azure` |
+| `cloud_provider`| string | ✅ yes   | One of `civo`, `digitalocean`, `linode`, `amazon`, `azure` |
 | `payload` | map    | ✅ yes   | Provisioning details (see per-provider table) |
 
 ---

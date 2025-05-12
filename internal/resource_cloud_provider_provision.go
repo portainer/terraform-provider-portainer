@@ -40,7 +40,7 @@ func resourcePortainerCloudProvision() *schema.Resource {
 		Read:   schema.Noop,
 		Delete: schema.RemoveFromState,
 		Schema: map[string]*schema.Schema{
-			"provider": {
+			"cloud_provider": {
 				Type:        schema.TypeString,
 				Required:    true,
 				ForceNew:    true,
@@ -59,7 +59,7 @@ func resourcePortainerCloudProvision() *schema.Resource {
 
 func resourceCloudProvisionCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	provider := d.Get("provider").(string)
+	provider := d.Get("cloud_provider").(string)
 
 	payload := mapStringInterfaceCloudProviderProvision(d.Get("payload").(map[string]interface{}))
 	jsonBody, err := json.Marshal(payload)

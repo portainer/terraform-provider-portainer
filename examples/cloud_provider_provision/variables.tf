@@ -11,6 +11,12 @@ variable "portainer_api_key" {
   # default     = "your-api-key-from-portainer"
 }
 
+variable "cloud_provider" {
+  type        = string
+  default     = "digitalocean"
+  description = "Cloud provider to use for provisioning (e.g., digitalocean, civo, linode, amazon, azure, gke)"
+}
+
 variable "do_credential_id" {
   type    = number
   default = 1

@@ -1,5 +1,5 @@
 resource "portainer_cloud_provider_provision" "do_cluster" {
-  provider = "digitalocean"
+  cloud_provider = var.cloud_provider
 
   payload = {
     credentialID      = var.do_credential_id

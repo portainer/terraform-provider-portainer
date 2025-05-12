@@ -5,18 +5,19 @@
 
 | Name | Version |
 |------|---------|
-| <a name="provider_digitalocean"></a> [digitalocean](#provider\_digitalocean) | n/a |
+| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | n/a |
 
 ## Resources
 
 | Name | Type |
 |------|------|
-| [digitalocean_portainer_cloud_provider_provision.do_cluster](https://registry.terraform.io/providers/hashicorp/digitalocean/latest/docs/resources/portainer_cloud_provider_provision) | resource |
+| [portainer_cloud_provider_provision.do_cluster](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/cloud_provider_provision) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
+| <a name="input_cloud_provider"></a> [cloud\_provider](#input\_cloud\_provider) | Cloud provider to use for provisioning (e.g., digitalocean, civo, linode, amazon, azure, gke) | `string` | `"digitalocean"` | no |
 | <a name="input_do_credential_id"></a> [do\_credential\_id](#input\_do\_credential\_id) | n/a | `number` | `1` | no |
 | <a name="input_do_group_id"></a> [do\_group\_id](#input\_do\_group\_id) | n/a | `number` | `1` | no |
 | <a name="input_do_kubernetes_version"></a> [do\_kubernetes\_version](#input\_do\_kubernetes\_version) | n/a | `string` | `"1.25.0"` | no |
