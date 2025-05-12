@@ -5,17 +5,20 @@ The `portainer_endpoint_settings` resource allows you to configure per-endpoint 
 ## Example Usage
 ```hcl
 resource "portainer_endpoint_settings" "example" {
-  endpoint_id                    = var.endpoint_id
-  allow_bind_mounts             = true
-  allow_container_capabilities  = true
-  allow_device_mapping          = true
-  allow_host_namespace          = true
-  allow_privileged_mode         = false
-  allow_stack_management        = true
-  allow_sysctl_setting          = true
-  allow_volume_browser          = true
-  enable_gpu_management         = false
-  enable_host_management        = true
+  endpoint_id               = 3
+  enable_gpu_management     = false
+
+  security_settings {
+    allow_bind_mounts            = true
+    allow_container_capabilities = true
+    allow_device_mapping         = true
+    allow_host_namespace         = true
+    allow_privileged_mode        = false
+    allow_stack_management       = true
+    allow_sysctl_setting         = true
+    allow_volume_browser         = true
+    enable_host_management       = true
+  }
 
   dynamic "gpus" {
     for_each = var.gpus
