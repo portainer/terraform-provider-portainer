@@ -18,6 +18,7 @@ type CloudCredentialPayload struct {
 func resourceCloudCredentials() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCloudCredentialsCreate,
+		Update: resourceCloudCredentialsUpdate,
 		Delete: resourceCloudCredentialsDelete,
 		Read:   resourceCloudCredentialsRead,
 		Schema: map[string]*schema.Schema{
@@ -94,6 +95,62 @@ func resourceCloudCredentialsDelete(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceCloudCredentialsRead(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+	id := d.Id()
+
+	path := fmt.Sprintf("/cloud/credentials/%s", id)
+	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to read cloud credential: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("failed to read cloud credential: HTTP %d", resp.StatusCode)
+	}
+
+	var result struct {
+		ID          int                    `json:"id"`
+		Name        string                 `json:"name"`
+		Provider    string                 `json:"provider"`
+		Credentials map[string]interface{} `json:"credentials"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	d.Set("name", result.Name)
+	d.Set("cloud_provider", result.Provider)
+	d.Set("credentials", result.Credentials)
+
+	return nil
+}
+
+func resourceCloudCredentialsUpdate(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+	id := d.Id()
+
+	credentialsJSON, err := json.Marshal(mapStringInterface(d.Get("credentials").(map[string]interface{})))
+	if err != nil {
+		return fmt.Errorf("failed to encode credentials to JSON: %w", err)
+	}
+
+	form := map[string]string{
+		"provider":    d.Get("cloud_provider").(string),
+		"name":        d.Get("name").(string),
+		"credentials": string(credentialsJSON),
+	}
+
+	resp, err := client.DoRequest(http.MethodPut, fmt.Sprintf("/cloud/credentials/%s", id), form, nil)
+	if err != nil {
+		return fmt.Errorf("failed to update cloud credential: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("failed to update cloud credential: HTTP %d", resp.StatusCode)
+	}
+
 	return nil
 }
 

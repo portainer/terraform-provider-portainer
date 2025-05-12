@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -74,6 +75,28 @@ func resourceSSLSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceSSLSettingsRead(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+
+	resp, err := client.DoRequest("GET", "/ssl", nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to read SSL settings: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read SSL settings: %s", string(body))
+	}
+
+	var result struct {
+		HTTPEnabled bool `json:"httpEnabled"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+
+	d.Set("http_enabled", result.HTTPEnabled)
+	d.SetId("portainer-ssl")
 	return nil
 }
 

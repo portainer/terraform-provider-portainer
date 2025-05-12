@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -87,7 +88,42 @@ func resourceBackupS3Create(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceBackupS3Read(d *schema.ResourceData, meta interface{}) error {
-	// Backup is one-time action; nothing to read. You can optionally clear the ID to mark as destroyed.
+	client := meta.(*APIClient)
+
+	resp, err := client.DoRequest("GET", "/backup/s3/settings", nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to fetch S3 backup settings: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read S3 backup settings: %s", string(data))
+	}
+
+	var result struct {
+		AccessKeyID      string `json:"accessKeyID"`
+		SecretAccessKey  string `json:"secretAccessKey"`
+		BucketName       string `json:"bucketName"`
+		Region           string `json:"region"`
+		S3CompatibleHost string `json:"s3CompatibleHost"`
+		Password         string `json:"password"`
+		CronRule         string `json:"cronRule"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode S3 settings: %w", err)
+	}
+
+	d.Set("access_key_id", result.AccessKeyID)
+	d.Set("secret_access_key", result.SecretAccessKey)
+	d.Set("bucket_name", result.BucketName)
+	d.Set("region", result.Region)
+	d.Set("s3_compatible_host", result.S3CompatibleHost)
+	d.Set("password", result.Password)
+	d.Set("cron_rule", result.CronRule)
+
+	d.SetId("portainer_backup_s3")
 	return nil
 }
 

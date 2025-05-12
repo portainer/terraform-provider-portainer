@@ -66,6 +66,9 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_edge_group`     | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_edge_stack`     | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_edge_job`       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_endpoints_edge_generate_key`               | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_edge_configurations`                       | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_edge_update_schedules`                     | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_stack`          | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_custom_template`| ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_container_exec` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
@@ -76,7 +79,13 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_docker_node`    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_docker_config`  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_open_amt`       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_open_amt_activate`                         | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_open_amt_devices_action`                   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_open_amt_devices_features`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_settings`       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_tls`            | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_ssl`            | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_settings_experimental`                     | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_endpoint_settings`      | ![Done](https://img.shields.io/badge/status-done-brightgreen)       |
 | `portainer_endpoint_service_update`| ![Done](https://img.shields.io/badge/status-done-brightgreen)       |
 | `portainer_endpoint_snapshot`      | ![Done](https://img.shields.io/badge/status-done-brightgreen)      |
@@ -90,6 +99,9 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_licenses`         | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_cloud_credentials`| ![Done](https://img.shields.io/badge/status-done-brightgreen)       |
 | `portainer_compose_convert`  | ![Done](https://img.shields.io/badge/status-done-brightgreen)       |
+| `portainer_chat`                                      | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_support`                                   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_sshkeygen`                                 | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_delete_object`                  | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_helm`                           | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_ingresscontrollers`             | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
