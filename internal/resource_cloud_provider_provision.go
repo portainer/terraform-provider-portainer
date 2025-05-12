@@ -43,11 +43,13 @@ func resourcePortainerCloudProvision() *schema.Resource {
 			"provider": {
 				Type:        schema.TypeString,
 				Required:    true,
+				ForceNew:    true,
 				Description: "Cloud provider (civo, digitalocean, linode, amazon, azure, gke)",
 			},
 			"payload": {
 				Type:        schema.TypeMap,
 				Required:    true,
+				ForceNew:    true,
 				Description: "Raw payload with provisioning parameters.",
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
