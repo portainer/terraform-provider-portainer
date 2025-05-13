@@ -27,7 +27,7 @@ To update the Service account (e.g. name, image), simply modify the manifest and
 terraform apply
 ```
 
-To remove the Job:
+To remove the service account:
 ```sh
 terraform destroy
 ```

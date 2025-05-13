@@ -26,7 +26,7 @@ To update the Clusterrole (e.g. name, image), simply modify the manifest and re-
 terraform apply
 ```
 
-To remove the Job:
+To remove the clusterrole:
 ```sh
 terraform destroy
 ```

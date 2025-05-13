@@ -87,10 +87,59 @@ func resourceLicensesCreate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceLicensesRead(d *schema.ResourceData, meta interface{}) error {
-	return nil // Not supported by Portainer API
+	client := meta.(*APIClient)
+
+	resp, err := client.DoRequest("GET", "/licenses", nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get licenses: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read licenses, status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var licenses []struct {
+		LicenseKey string `json:"licenseKey"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&licenses); err != nil {
+		return fmt.Errorf("failed to decode licenses list: %w", err)
+	}
+
+	currentKey := d.Id()
+	found := false
+	for _, lic := range licenses {
+		if lic.LicenseKey == currentKey {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		d.SetId("")
+	}
+	return nil
 }
 
 func resourceLicensesDelete(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+
+	payload := map[string]interface{}{
+		"licenseKeys": []string{d.Id()},
+	}
+
+	resp, err := client.DoRequest("POST", "/licenses/remove", nil, payload)
+	if err != nil {
+		return fmt.Errorf("failed to send license removal request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete license: %s", string(body))
+	}
+
 	d.SetId("")
 	return nil
 }

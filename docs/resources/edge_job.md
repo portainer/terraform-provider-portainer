@@ -54,15 +54,25 @@ terraform apply
 > ⚠️ You must provide either file_content or file_path – not both. ⚠️ If recurring = false, the job runs once immediately.
 
 ## Arguments Reference
-| Name             | Type       | Required      | Description                                                                 |
-|------------------|------------|---------------|-----------------------------------------------------------------------------|
-| `name`           | string     | ✅ yes        | Name of the Edge Job                                                        |
-| `cron_expression`| string     | ✅ yes        | Cron expression for job scheduling (e.g. `0 * * * *`)                       |
-| `edge_groups`    | list(int)  | ✅ yes        | List of Edge Group IDs where the job will run                               |
-| `endpoints`      | list(int)  | ✅ yes        | List of specific environment IDs where job will run                         |
-| `recurring`      | bool       | 🚫 optional   | Whether the job should repeat based on cron expression (default: `true`)    |
-| `file_content`   | string     | 🚫 optional   | Inline shell script content (mutually exclusive with `file_path`)           |
-| `file_path`      | string     | 🚫 optional   | Path to local script file (mutually exclusive with `file_content`)          |
+
+### Common Arguments
+| Name              | Type       | Required      | Description                                                                |
+|-------------------|------------|---------------|----------------------------------------------------------------------------|
+| `name`            | string     | ✅ yes        | Name of the Edge Job                                                       |
+| `cron_expression` | string     | ✅ yes        | Cron expression for job scheduling (e.g. `0 * * * *`)                      |
+| `edge_groups`     | list(int)  | ✅ yes        | List of Edge Group IDs where the job will run                              |
+| `endpoints`       | list(int)  | ✅ yes        | List of specific environment IDs where job will run                        |
+| `recurring`       | bool       | 🚫 optional   | Whether the job should repeat based on cron expression (default: `true`)   |
+
+### For String-based Job Creation
+| Name           | Type   | Required    | Description                                                  |
+|----------------|--------|-------------|--------------------------------------------------------------|
+| `file_content` | string | ✅ required | Inline shell script content (mutually exclusive with `file_path`) |
+
+### For File-based Job Creation
+| Name       | Type   | Required    | Description                                               |
+|------------|--------|-------------|-----------------------------------------------------------|
+| `file_path`| string | ✅ required | Path to local script file (mutually exclusive with `file_content`) |
 
 ## Attributes Reference
 

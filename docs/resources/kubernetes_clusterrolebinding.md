@@ -26,7 +26,7 @@ To update the Clusterrolebinding (e.g. name, image), simply modify the manifest 
 terraform apply
 ```
 
-To remove the Job:
+To remove the clusterrolebinding:
 ```sh
 terraform destroy
 ```

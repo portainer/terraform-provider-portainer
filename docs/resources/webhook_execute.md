@@ -11,17 +11,25 @@ resource "portainer_webhook_execute" "restart_service" {
 }
 ```
 
-### Trigger webhook by token (for Docker service restart/update)
+### Trigger GitOps webhook for a stack
 ```hcl
-resource "portainer_webhook_execute" "restart_service" {
-  token = "your-webhook-token"
+resource "portainer_webhook_execute" "trigger_gitops_stack" {
+  stack_id = "your-webhook-token-for-stack"
+}
+```
+
+### Trigger GitOps webhook for an edge stack
+```hcl
+resource "portainer_webhook_execute" "trigger_gitops_edge_stack" {
+  edge_stack_id = "your-webhook-token-for-edge-stack"
 }
 ```
 
 ## Lifecycle & Behavior
-- This resource performs a **one-time execution** of a webhook, either:
-  - Restarting a Docker service via `/webhooks/{token}` using the `token`, or
-  - Triggering a Git update for a stack via `/stacks/webhooks/{stack_id}` using the `stack_id`.
+- This resource performs a **one-time execution** of a webhook. It supports the following modes:
+  - **Docker service restart/update** using a `token`: triggers the `/webhooks/{token}` endpoint.
+  - **Stack Git update** using a `stack_id`: triggers the `/stacks/webhooks/{stack_id}` endpoint.
+  - **Edge Stack Git update** using an `edge_stack_id`: triggers the `/edge_stacks/webhooks/{edge_stack_id}` endpoint.
 
 - It does **not** track the state of the webhook execution — once applied, it will always recreate the resource if re-applied.
 
@@ -30,12 +38,14 @@ resource "portainer_webhook_execute" "restart_service" {
 > ⚠️ This resource is meant for triggering webhook actions, not managing webhook configurations.
 
 ## Arguments Reference
-| Name       | Type   | Required | Description                                                                 |
-|------------|--------|----------|-----------------------------------------------------------------------------|
-| `token`    | string | 🚫 optional | Token used for the `/webhooks/{token}` endpoint (service restart)           |
-| `stack_id` | string | 🚫 optional | Stack ID used for `/stacks/webhooks/{stack_id}` endpoint (git update)       |
 
-> ✅ You must provide **either** `token` or `stack_id`, but not both.
+| Name             | Type   | Required    | Description                                                                 |
+|------------------|--------|-------------|-----------------------------------------------------------------------------|
+| `token`          | string | 🚫 optional | Token used for the `/webhooks/{token}` endpoint (service restart webhook)   |
+| `stack_id`       | string | 🚫 optional | Stack ID used for `/stacks/webhooks/{stack_id}` endpoint (GitOps update)    |
+| `edge_stack_id`  | string | 🚫 optional | Edge Stack ID used for `/edge_stacks/webhooks/{edge_stack_id}` endpoint     |
+
+> ⚠️ Exactly one of `token`, `stack_id`, or `edge_stack_id` must be set. They are mutually exclusive.
 
 ## Attributes Reference
 | Name | Description              |

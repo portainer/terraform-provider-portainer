@@ -31,13 +31,13 @@ terraform destroy
 ### Arguments Reference
 | Name               | Type           | Required | Description                                                                 |
 |--------------------|----------------|----------|-----------------------------------------------------------------------------|
-| `resource_id`      | string         | ✅ yes   | Unique ID of the resource to control (e.g., container or service ID).      |
-| `type`             | number         | ✅ yes   | Type of the resource (`1` = container, `2` = service, `3` = volume, etc.). |
-| `administrators_only` | bool       | 🚫 no    | Restrict access to administrators only. Default: `false`.                  |
-| `public`           | bool           | 🚫 no    | Make resource public to all users. Default: `false`.                       |
-| `sub_resource_ids` | list(string)   | 🚫 no    | List of sub-resource IDs, e.g. container IDs within a stack.              |
-| `teams`            | list(number)   | 🚫 no    | List of team IDs with access.                                              |
-| `users`            | list(number)   | 🚫 no    | List of user IDs with access.                                              |
+| `resource_id`      | string         | ✅ yes   | Unique ID of the resource to control (e.g., container or service ID).       |
+| `type`             | number         | ✅ yes   | Type of the resource (`1` = container, `2` = service, `3` = volume, etc.).  |
+| `administrators_only` | bool        | 🚫 no    | Restrict access to administrators only. Default: `false`.                   |
+| `public`           | bool           | 🚫 no    | Make resource public to all users. Default: `false`.                        |
+| `sub_resource_ids` | list(string)   | 🚫 no    | List of sub-resource IDs, e.g. container IDs within a stack.                |
+| `teams`            | list(number)   | 🚫 no    | List of team IDs with access.                                               |
+| `users`            | list(number)   | 🚫 no    | List of user IDs with access.                                               |
 
 ---
 

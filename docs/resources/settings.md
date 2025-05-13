@@ -48,6 +48,14 @@ trraform apply
 | `helm_repository_url`         | string   | 🚫 no    | Default Helm repository URL                                                  |
 | `enable_edge_compute_features`| bool     | 🚫 no    | Enable Edge compute management support                                       |
 | `enforce_edge_id`             | bool     | 🚫 no    | Enforce the use of Portainer Edge ID                                         |
+| `trust_on_first_connect`      | bool   | 🚫 no    | Automatically trust TLS fingerprint on first connection |
+| `edge_agent_checkin_interval` | number | 🚫 no    | Interval (in seconds) for Edge Agent check-ins          |
+
+### `global_deployment_options` Block
+| Name                        | Type | Required | Description                     |
+| --------------------------- | ---- | -------- | ------------------------------- |
+| `hide_stacks_functionality` | bool | 🚫 no    | Hide the Stacks UI in Portainer |
+
 
 ### `internal_auth_settings` Block
 | Name                      | Type     | Required | Description                              |
@@ -55,14 +63,29 @@ trraform apply
 | `required_password_length`| number   | 🚫 no    | Minimum password length for users        |
 
 ### `ldap_settings` Block
-| Name              | Type   | Required | Description                                       |
-|-------------------|--------|----------|---------------------------------------------------|
-| `anonymous_mode`  | bool   | 🚫 no    | Use anonymous bind                                |
-| `auto_create_users`| bool  | 🚫 no    | Automatically create users on login               |
-| `password`        | string | 🚫 no    | Password for bind account (use `reader_dn`)       |
-| `reader_dn`       | string | 🚫 no    | Reader distinguished name                         |
-| `start_tls`       | bool   | 🚫 no    | Enable StartTLS for LDAP connection               |
-| `url`             | string | ✅ yes   | LDAP server URL, e.g., `ldap.example.com:389`     |
+| Name                    | Type         | Required | Description                                   |
+| ----------------------- | ------------ | -------- | --------------------------------------------- |
+| `anonymous_mode`        | bool         | 🚫 no    | Use anonymous bind                            |
+| `auto_create_users`     | bool         | 🚫 no    | Automatically create users on login           |
+| `password`              | string       | 🚫 no    | Password for bind account (use `reader_dn`)   |
+| `reader_dn`             | string       | 🚫 no    | Reader distinguished name                     |
+| `start_tls`             | bool         | 🚫 no    | Enable StartTLS for LDAP connection           |
+| `url`                   | string       | ✅ yes    | LDAP server URL, e.g., `ldap.example.com:389`|
+| `search_settings`       | list(object) | 🚫 no    | List of user search settings                  |
+| `base_dn`             | string       | 🚫 no    | Base DN for user search                         |
+| `filter`              | string       | 🚫 no    | Filter to find user entries                     |
+| `user_name_attribute` | string       | 🚫 no    | Attribute for usernames (e.g., `uid`)           |
+| `group_search_settings` | list(object) | 🚫 no    | List of group search configurations           |
+| `group_attribute`     | string       | 🚫 no    | LDAP attribute representing group membership    |
+| `group_base_dn`       | string       | 🚫 no    | Base DN for group search                        |
+| `group_filter`        | string       | 🚫 no    | Filter to locate groups                         |
+| `tls_config`            | object       | 🚫 no    | TLS configuration for secure LDAP             |
+| `tls`                 | bool         | 🚫 no    | Enable TLS                                      |
+| `tls_ca_cert`         | string       | 🚫 no    | Path to CA cert file                            |
+| `tls_cert`            | string       | 🚫 no    | Path to client cert file                        |
+| `tls_key`             | string       | 🚫 no    | Path to client key file                         |
+| `tls_skip_verify`     | bool         | 🚫 no    | Skip certificate verification                   |
+
 
 ### `oauth_settings` Block
 | Name                  | Type           | Required | Description                                                                 |

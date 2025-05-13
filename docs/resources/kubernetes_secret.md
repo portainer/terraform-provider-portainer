@@ -27,7 +27,7 @@ To update the Secret (e.g. name, image), simply modify the manifest and re-apply
 terraform apply
 ```
 
-To remove the Job:
+To remove the secret:
 ```sh
 terraform destroy
 ```

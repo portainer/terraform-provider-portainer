@@ -27,7 +27,7 @@ To update the Service (e.g. name, image), simply modify the manifest and re-appl
 terraform apply
 ```
 
-To remove the Job:
+To remove the service:
 ```sh
 terraform destroy
 ```

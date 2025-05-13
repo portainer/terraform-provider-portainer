@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -10,6 +11,7 @@ import (
 type sslSettings struct {
 	Cert        string `json:"cert"`
 	Key         string `json:"key"`
+	ClientCert  string `json:"clientCert"`
 	HTTPEnabled bool   `json:"httpenabled"`
 }
 
@@ -32,6 +34,12 @@ func resourceSSLSettings() *schema.Resource {
 				Description: "SSL private key content",
 				Sensitive:   true,
 			},
+			"client_cert": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "SSL client certificate content",
+				Sensitive:   true,
+			},
 			"http_enabled": {
 				Type:        schema.TypeBool,
 				Required:    true,
@@ -47,6 +55,7 @@ func resourceSSLSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
 	payload := sslSettings{
 		Cert:        d.Get("cert").(string),
 		Key:         d.Get("key").(string),
+		ClientCert:  d.Get("client_cert").(string),
 		HTTPEnabled: d.Get("http_enabled").(bool),
 	}
 
@@ -66,6 +75,28 @@ func resourceSSLSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceSSLSettingsRead(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+
+	resp, err := client.DoRequest("GET", "/ssl", nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to read SSL settings: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read SSL settings: %s", string(body))
+	}
+
+	var result struct {
+		HTTPEnabled bool `json:"httpEnabled"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+
+	d.Set("http_enabled", result.HTTPEnabled)
+	d.SetId("portainer-ssl")
 	return nil
 }
 

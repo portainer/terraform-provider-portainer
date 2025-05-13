@@ -8,7 +8,7 @@ The `portainer_webhook` resource allows you to create and manage webhooks in Por
 resource "portainer_webhook" "stack" {
   endpoint_id   = 1
   resource_id   = "3"        # Stack ID
-  webhook_type  = 0          # 0 = Stack
+  webhook_type  = 1          # 1 = Stack
 }
 ```
 ## Lifecycle & Behavior

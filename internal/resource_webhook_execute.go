@@ -17,15 +17,22 @@ func resourceWebhookExecute() *schema.Resource {
 				Type:          schema.TypeString,
 				Optional:      true,
 				ForceNew:      true,
-				ConflictsWith: []string{"stack_id"},
+				ConflictsWith: []string{"stack_id", "edge_stack_id"},
 				Description:   "Webhook token for service restart webhook",
 			},
 			"stack_id": {
 				Type:          schema.TypeString,
 				Optional:      true,
 				ForceNew:      true,
-				ConflictsWith: []string{"token"},
-				Description:   "Stack ID for triggering stack git update",
+				ConflictsWith: []string{"token", "edge_stack_id"},
+				Description:   "Stack ID for triggering stack GitOps update",
+			},
+			"edge_stack_id": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				ConflictsWith: []string{"token", "stack_id"},
+				Description:   "Edge Stack ID for triggering edge stack GitOps update",
 			},
 		},
 	}
@@ -35,14 +42,24 @@ func resourceWebhookExecuteCreate(d *schema.ResourceData, meta interface{}) erro
 	client := meta.(*APIClient)
 
 	var url string
-	if token, ok := d.GetOk("token"); ok {
+	switch {
+	case d.Get("token").(string) != "":
+		token := d.Get("token").(string)
 		url = fmt.Sprintf("%s/webhooks/%s", client.Endpoint, token)
-		d.SetId(token.(string))
-	} else if stackID, ok := d.GetOk("stack_id"); ok {
+		d.SetId(token)
+
+	case d.Get("stack_id").(string) != "":
+		stackID := d.Get("stack_id").(string)
 		url = fmt.Sprintf("%s/stacks/webhooks/%s", client.Endpoint, stackID)
-		d.SetId(stackID.(string))
-	} else {
-		return fmt.Errorf("either 'token' or 'stack_id' must be set")
+		d.SetId(stackID)
+
+	case d.Get("edge_stack_id").(string) != "":
+		edgeStackID := d.Get("edge_stack_id").(string)
+		url = fmt.Sprintf("%s/edge_stacks/webhooks/%s", client.Endpoint, edgeStackID)
+		d.SetId(edgeStackID)
+
+	default:
+		return fmt.Errorf("one of 'token', 'stack_id' or 'edge_stack_id' must be set")
 	}
 
 	req, err := http.NewRequest("POST", url, nil)

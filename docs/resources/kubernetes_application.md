@@ -27,7 +27,7 @@ To update the Application (e.g. name, image), simply modify the manifest and re-
 terraform apply
 ```
 
-To remove the Job:
+To remove the application:
 ```sh
 terraform destroy
 ```
