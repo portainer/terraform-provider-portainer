@@ -18,7 +18,7 @@
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_custom_template_description"></a> [custom\_template\_description](#input\_custom\_template\_description) | Description of the custom template | `string` | `"Deploy Portainer Agent container"` | no |
-| <a name="input_custom_template_file_path"></a> [custom\_template\_file\_path](#input\_custom\_template\_file\_path) | Inline file content for the template (YAML/Compose) | `string` | `"./portainer-agent.yml"` | no |
+| <a name="input_custom_template_file_path"></a> [custom\_template\_file\_path](#input\_custom\_template\_file\_path) | Inline file content for the template (YAML/Compose) | `string` | `"portainer-agent.yml"` | no |
 | <a name="input_custom_template_note"></a> [custom\_template\_note](#input\_custom\_template\_note) | Note that appears in the UI | `string` | `"Runs Portainer Agent container with required mounts"` | no |
 | <a name="input_custom_template_platform"></a> [custom\_template\_platform](#input\_custom\_template\_platform) | Platform: 1 = linux, 2 = windows | `number` | `1` | no |
 | <a name="input_custom_template_title"></a> [custom\_template\_title](#input\_custom\_template\_title) | Title of the custom template | `string` | `"Portainer Agent"` | no |

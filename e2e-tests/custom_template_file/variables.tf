@@ -44,7 +44,7 @@ variable "custom_template_type" {
 variable "custom_template_file_path" {
   description = "Inline file content for the template (YAML/Compose)"
   type        = string
-  default     = "./portainer-agent.yml"
+  default     = "portainer-agent.yml"
 }
 
 variable "portainer_skip_ssl_verify" {
