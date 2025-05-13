@@ -38,13 +38,13 @@ variable "stack_endpoint_id" {
 variable "stack_repository_url" {
   description = "Inline Docker Compose file content"
   type        = string
-  default     = "https://github.com/portainer/terraform-provider-portainer"
+  default     = "https://github.com/docker/awesome-compose"
 }
 
 variable "stack_file_path_in_repository" {
   description = "Inline file content for the template (YAML/Compose)"
   type        = string
-  default     = "docker-compose.agent.yml"
+  default     = "gitea-postgres/compose.yaml"
 }
 
 variable "stack_env_name" {
