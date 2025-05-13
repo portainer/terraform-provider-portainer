@@ -4,7 +4,7 @@ resource "portainer_stack" "swarm_file" {
   method          = var.stack_method
   endpoint_id     = var.stack_endpoint_id
 
-  stack_file_path = "${path.module}/${var.stack_file_path}"
+  stack_file_path = file("${path.module}/${var.stack_file_path}")
 
   env {
     name  = var.stack_env_name
