@@ -14,7 +14,7 @@ variable "portainer_api_key" {
 variable "stack_name" {
   description = "Name of the stack"
   type        = string
-  default     = "nginx-standalone-string"
+  default     = "nginx-swarm-string"
 }
 
 variable "stack_deployment_type" {

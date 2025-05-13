@@ -26,5 +26,5 @@
 | <a name="input_stack_env_value"></a> [stack\_env\_value](#input\_stack\_env\_value) | Environment variable value | `string` | `"value"` | no |
 | <a name="input_stack_file_path"></a> [stack\_file\_path](#input\_stack\_file\_path) | Inline Docker Compose file content | `string` | `"nginx.yml"` | no |
 | <a name="input_stack_method"></a> [stack\_method](#input\_stack\_method) | Creation method: string, file, repository, or url | `string` | `"file"` | no |
-| <a name="input_stack_name"></a> [stack\_name](#input\_stack\_name) | Name of the stack | `string` | `"nginx-standalone-string"` | no |
+| <a name="input_stack_name"></a> [stack\_name](#input\_stack\_name) | Name of the stack | `string` | `"nginx-standalone-file"` | no |
 <!-- END_TF_DOCS -->
