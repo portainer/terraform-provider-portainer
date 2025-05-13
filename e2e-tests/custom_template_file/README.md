@@ -11,7 +11,7 @@
 
 | Name | Type |
 |------|------|
-| [portainer_custom_template.example_string](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/custom_template) | resource |
+| [portainer_custom_template.example_custom_template_file](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/custom_template) | resource |
 
 ## Inputs
 

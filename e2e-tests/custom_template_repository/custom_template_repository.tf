@@ -1,4 +1,4 @@
-resource "portainer_custom_template" "example_string" {
+resource "portainer_custom_template" "example_custom_template_repository" {
   title                = var.custom_template_title
   description          = var.custom_template_description
   note                 = var.custom_template_note

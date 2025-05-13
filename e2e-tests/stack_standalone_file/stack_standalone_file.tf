@@ -1,4 +1,4 @@
-resource "portainer_stack" "standalone_string" {
+resource "portainer_stack" "standalone_file" {
   name            = var.stack_name
   deployment_type = var.stack_deployment_type
   method          = var.stack_method

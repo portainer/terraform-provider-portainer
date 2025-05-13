@@ -11,7 +11,7 @@
 
 | Name | Type |
 |------|------|
-| [portainer_stack.standalone_string](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/stack) | resource |
+| [portainer_stack.standalone_repository](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/stack) | resource |
 
 ## Inputs
 
