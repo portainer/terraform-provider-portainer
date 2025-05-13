@@ -4,5 +4,5 @@ resource "portainer_custom_template" "example_string" {
   note        = var.custom_template_note
   platform    = var.custom_template_platform
   type        = var.custom_template_type
-  file_path   = file(var.custom_template_file_path)
+  file_path   = "${path.module}/${var.custom_template_file_path}"
 }
