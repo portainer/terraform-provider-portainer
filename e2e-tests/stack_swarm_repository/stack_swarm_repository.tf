@@ -4,8 +4,8 @@ resource "portainer_stack" "standalone_string" {
   method          = var.stack_method
   endpoint_id     = var.stack_endpoint_id
 
-  repository_url          = var.stack_repository_url
-  file_path_in_repository = var.stack_file_path_in_repository
+  repository_url            = var.stack_repository_url
+  file_path_in_repository   = var.stack_file_path_in_repository
   repository_reference_name = var.stack_repository_reference_name
 
   env {

@@ -48,8 +48,8 @@ variable "stack_file_path_in_repository" {
 }
 
 variable "stack_repository_reference_name" {
-  type        = string
-  default     = "refs/heads/master"
+  type    = string
+  default = "refs/heads/master"
 }
 
 variable "stack_env_name" {
