@@ -44,13 +44,13 @@ variable "edge_stack_name" {
 variable "edge_stack_repository_url" {
   description = "Inline stack file content for the Edge Stack"
   type        = string
-  default     = "https://github.com/docker/awesome-compose"
+  default     = "https://github.com/portainer/terraform-provider-portainer"
 }
 
 variable "edge_stack_file_path_in_repository" {
   description = "Inline file content for the template (YAML/Compose)"
   type        = string
-  default     = "gitea-postgres/compose.yaml"
+  default     = "docker-compose.agent.yml"
 }
 
 variable "edge_stack_deployment_type" {
