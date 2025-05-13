@@ -12,5 +12,4 @@ resource "portainer_edge_stack" "repository_example" {
   deployment_type         = var.edge_stack_deployment_type
   edge_groups             = [portainer_edge_group.example_static.id]
   registries              = var.edge_stack_registries
-  use_manifest_namespaces = var.edge_stack_use_manifest_namespaces
 }

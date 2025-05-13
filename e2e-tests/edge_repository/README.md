@@ -12,7 +12,7 @@
 | Name | Type |
 |------|------|
 | [portainer_edge_group.example_static](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/edge_group) | resource |
-| [portainer_edge_stack.string_example](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/edge_stack) | resource |
+| [portainer_edge_stack.repository_example](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/edge_stack) | resource |
 
 ## Inputs
 
