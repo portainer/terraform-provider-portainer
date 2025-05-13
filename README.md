@@ -1,4 +1,3 @@
-
 <p align="center">
   <a href="https://registry.terraform.io/providers/portainer/portainer/latest/docs">
     <img src="https://camo.githubusercontent.com/cdda8928975712cecce7be8b6a1506e3b327b1643cd3391dcf40515e25b54f73/68747470733a2f2f7777772e6461746f636d732d6173736574732e636f6d2f323838352f313733313337333331302d7465727261666f726d5f77686974652e737667" alt="Terraform Logo" width="200">
