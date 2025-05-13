@@ -44,7 +44,7 @@ variable "custom_template_type" {
 variable "custom_template_repository_reference" {
   description = "Whether this is an Edge template"
   type        = string
-  default     = "refs/heads/main"
+  default     = "refs/heads/master"
 }
 
 variable "custom_template_repository_url" {

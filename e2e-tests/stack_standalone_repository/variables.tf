@@ -47,6 +47,11 @@ variable "stack_file_path_in_repository" {
   default     = "gitea-postgres/compose.yaml"
 }
 
+variable "stack_repository_reference_name" {
+  type        = string
+  default     = "refs/heads/master"
+}
+
 variable "stack_env_name" {
   description = "Environment variable name"
   type        = string

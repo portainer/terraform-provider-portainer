@@ -27,5 +27,6 @@
 | <a name="input_stack_file_path_in_repository"></a> [stack\_file\_path\_in\_repository](#input\_stack\_file\_path\_in\_repository) | Inline file content for the template (YAML/Compose) | `string` | `"gitea-postgres/compose.yaml"` | no |
 | <a name="input_stack_method"></a> [stack\_method](#input\_stack\_method) | Creation method: string, file, repository, or url | `string` | `"string"` | no |
 | <a name="input_stack_name"></a> [stack\_name](#input\_stack\_name) | Name of the stack | `string` | `"nginx-standalone-string"` | no |
+| <a name="input_stack_repository_reference_name"></a> [stack\_repository\_reference\_name](#input\_stack\_repository\_reference\_name) | n/a | `string` | `"refs/heads/master"` | no |
 | <a name="input_stack_repository_url"></a> [stack\_repository\_url](#input\_stack\_repository\_url) | Inline Docker Compose file content | `string` | `"https://github.com/docker/awesome-compose"` | no |
 <!-- END_TF_DOCS -->
