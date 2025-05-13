@@ -5,7 +5,7 @@ resource "portainer_edge_group" "example_static" {
   tag_ids       = var.edge_group_tag_ids
 }
 
-resource "portainer_edge_stack" "string_example" {
+resource "portainer_edge_stack" "repository_example" {
   name                    = var.edge_stack_name
   repository_url          = var.edge_stack_repository_url
   file_path_in_repository = var.edge_stack_file_path_in_repository
