@@ -41,7 +41,7 @@ variable "edge_stack_name" {
   default     = "example-edge-stack"
 }
 
-variable "edge_stack_stack_file_path" {
+variable "edge_stack_file_path" {
   description = "Inline stack file content for the Edge Stack"
   type        = string
   default     = "hello-world.yml"
