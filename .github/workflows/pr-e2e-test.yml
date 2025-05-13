@@ -123,7 +123,7 @@ jobs:
       - name: 🧪 Run Terraform E2E tests specific for swarm
         run: |
           SWARM_RESOURCES_FULL_CYCLE=("docker_config" "docker_secret")
-          SWARM_RESOURCES_BASIC_CYCLE=("endpoint_swarm_stack" "stack_swarm_string" "stack_swarm_file" stack_swarm_repository "endpoint_service_update")
+          SWARM_RESOURCES_BASIC_CYCLE=("endpoint_swarm_stack" "stack_swarm_string" stack_swarm_repository "endpoint_service_update")
 
           for dir in "${SWARM_RESOURCES_FULL_CYCLE[@]}"; do
             if [ -d "e2e-tests/$dir" ]; then

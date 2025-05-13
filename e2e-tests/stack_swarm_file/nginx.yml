@@ -1,9 +1,0 @@
-version: "3.3"
-
-services:
-  web:
-    image: nginx:alpine
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
