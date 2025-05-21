@@ -57,7 +57,7 @@ func resourceLicensesCreate(d *schema.ResourceData, meta interface{}) error {
 		Key: licenseKey,
 	}
 
-	url := fmt.Sprintf("%s/licenses/add", client.Endpoint)
+	url := "/licenses/add"
 	if force {
 		url += "?force=true"
 	}
