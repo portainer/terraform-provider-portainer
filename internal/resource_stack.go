@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -43,7 +41,7 @@ func resourcePortainerStack() *schema.Resource {
 			"swarm_id":           {Type: schema.TypeString, Optional: true, ForceNew: true, Computed: true},
 			"namespace":          {Type: schema.TypeString, Optional: true, ForceNew: true},
 			"stack_file_content": {Type: schema.TypeString, Optional: true},
-			"stack_file_path":    {Type: schema.TypeString, Optional: true, ForceNew: true},
+			"stack_file_path":    {Type: schema.TypeString, Optional: true},
 			"git_repository_authentication": {
 				Type:     schema.TypeBool,
 				Optional: true,
@@ -119,17 +117,59 @@ func resourcePortainerStack() *schema.Resource {
 	}
 }
 
+func findExistingStackByName(client *APIClient, name string, endpointID int) (int, error) {
+	url := fmt.Sprintf("%s/stacks", client.Endpoint)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("X-API-Key", client.APIKey)
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		data, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("failed to list stacks: %s", string(data))
+	}
+
+	var stacks []struct {
+		ID         int    `json:"Id"`
+		Name       string `json:"Name"`
+		EndpointID int    `json:"EndpointId"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&stacks); err != nil {
+		return 0, err
+	}
+
+	for _, s := range stacks {
+		if s.Name == name && s.EndpointID == endpointID {
+			return s.ID, nil
+		}
+	}
+	return 0, nil // not found
+}
+
 func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	deployment := d.Get("deployment_type").(string)
 	method := d.Get("method").(string)
+	name := d.Get("name").(string)
+	endpointID := d.Get("endpoint_id").(int)
 
 	if deployment == "swarm" && d.Get("swarm_id") == "" {
-		swarmID, err := fetchSwarmID(client, d.Get("endpoint_id").(int))
+		swarmID, err := fetchSwarmID(client, endpointID)
 		if err != nil {
 			return fmt.Errorf("failed to fetch swarm_id: %w", err)
 		}
 		d.Set("swarm_id", swarmID)
+	}
+
+	if existingID, err := findExistingStackByName(client, name, endpointID); err != nil {
+		return fmt.Errorf("error checking for existing stack: %w", err)
+	} else if existingID != 0 {
+		d.SetId(strconv.Itoa(existingID))
+		return resourcePortainerStackUpdate(d, meta)
 	}
 
 	switch deployment {
@@ -138,7 +178,13 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 		case "string":
 			return createStackStandaloneString(d, client)
 		case "file":
-			return createStackStandaloneFile(d, client)
+			path := d.Get("stack_file_path").(string)
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("failed to read stack file from path: %w", err)
+			}
+			d.Set("stack_file_content", string(content))
+			return createStackStandaloneString(d, client)
 		case "repository":
 			return createStackStandaloneRepo(d, client)
 		}
@@ -147,7 +193,13 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 		case "string":
 			return createStackSwarmString(d, client)
 		case "file":
-			return createStackSwarmFile(d, client)
+			path := d.Get("stack_file_path").(string)
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("failed to read stack file from path: %w", err)
+			}
+			d.Set("stack_file_content", string(content))
+			return createStackSwarmString(d, client)
 		case "repository":
 			return createStackSwarmRepo(d, client)
 		}
@@ -346,6 +398,15 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 	stackID := d.Id()
 	endpointID := d.Get("endpoint_id").(int)
 	method := d.Get("method").(string)
+
+	if method == "file" {
+		path := d.Get("stack_file_path").(string)
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to read stack file for update: %w", err)
+		}
+		d.Set("stack_file_content", string(content))
+	}
 
 	if method == "repository" {
 		payload := map[string]interface{}{
@@ -568,50 +629,6 @@ func createStackStandaloneString(d *schema.ResourceData, client *APIClient) erro
 	return nil
 }
 
-func createStackStandaloneFile(d *schema.ResourceData, client *APIClient) error {
-	path := d.Get("stack_file_path").(string)
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	writer.WriteField("Name", d.Get("name").(string))
-	writer.WriteField("Env", string(mustJSON(flattenEnvList(d.Get("env").([]interface{})))))
-
-	part, err := writer.CreateFormFile("file", filepath.Base(path))
-	if err != nil {
-		return err
-	}
-	io.Copy(part, file)
-	writer.Close()
-
-	endpointID := d.Get("endpoint_id").(int)
-	url := fmt.Sprintf("%s/stacks/create/standalone/file?endpointId=%d", client.Endpoint, endpointID)
-	req, _ := http.NewRequest("POST", url, body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("X-API-Key", client.APIKey)
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create standalone stack from file: %s", string(data))
-	}
-
-	var result struct {
-		ID int `json:"Id"`
-	}
-	json.NewDecoder(resp.Body).Decode(&result)
-	d.SetId(strconv.Itoa(result.ID))
-	return nil
-}
-
 func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error {
 	payload := map[string]interface{}{
 		"name":                     d.Get("name").(string),
@@ -699,51 +716,6 @@ func createStackSwarmString(d *schema.ResourceData, client *APIClient) error {
 	if resp.StatusCode != 200 {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to create swarm stack: %s", string(data))
-	}
-
-	var result struct {
-		ID int `json:"Id"`
-	}
-	json.NewDecoder(resp.Body).Decode(&result)
-	d.SetId(strconv.Itoa(result.ID))
-	return nil
-}
-
-func createStackSwarmFile(d *schema.ResourceData, client *APIClient) error {
-	path := d.Get("stack_file_path").(string)
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	writer.WriteField("Name", d.Get("name").(string))
-	writer.WriteField("Env", string(mustJSON(flattenEnvList(d.Get("env").([]interface{})))))
-	writer.WriteField("SwarmID", d.Get("swarm_id").(string))
-
-	part, err := writer.CreateFormFile("file", filepath.Base(path))
-	if err != nil {
-		return err
-	}
-	io.Copy(part, file)
-	writer.Close()
-
-	endpointID := d.Get("endpoint_id").(int)
-	url := fmt.Sprintf("%s/stacks/create/swarm/file?endpointId=%d", client.Endpoint, endpointID)
-	req, _ := http.NewRequest("POST", url, body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("X-API-Key", client.APIKey)
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create swarm stack from file: %s", string(data))
 	}
 
 	var result struct {
