@@ -33,25 +33,68 @@ func resourceTeamCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	teamName := d.Get("name").(string)
 
-	body := map[string]interface{}{
-		"Name": teamName,
-	}
-
-	resp, err := client.DoRequest("POST", "/teams", nil, body)
+	// Check if team already exists
+	resp, err := client.DoRequest("GET", "/teams", nil, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to list teams: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to list teams, status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var teams []struct {
+		ID   int    `json:"Id"`
+		Name string `json:"Name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&teams); err != nil {
+		return fmt.Errorf("failed to decode team list: %w", err)
+	}
+
+	for _, t := range teams {
+		if t.Name == teamName {
+			// Team already exists, perform update
+			d.SetId(strconv.Itoa(t.ID))
+
+			body := map[string]interface{}{
+				"name": teamName,
+			}
+			updateResp, err := client.DoRequest("PUT", fmt.Sprintf("/teams/%d", t.ID), nil, body)
+			if err != nil {
+				return fmt.Errorf("failed to update existing team: %w", err)
+			}
+			defer updateResp.Body.Close()
+
+			if updateResp.StatusCode != 200 && updateResp.StatusCode != 204 {
+				data, _ := io.ReadAll(updateResp.Body)
+				return fmt.Errorf("failed to update existing team: %s", string(data))
+			}
+
+			return resourceTeamRead(d, meta)
+		}
+	}
+
+	// Team not found, create new
+	body := map[string]interface{}{
+		"Name": teamName,
+	}
+	createResp, err := client.DoRequest("POST", "/teams", nil, body)
+	if err != nil {
+		return err
+	}
+	defer createResp.Body.Close()
+
+	if createResp.StatusCode < 200 || createResp.StatusCode >= 300 {
+		data, _ := io.ReadAll(createResp.Body)
 		return fmt.Errorf("failed to create team: %s", string(data))
 	}
 
 	var result struct {
 		ID int `json:"Id"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(createResp.Body).Decode(&result); err != nil {
 		return err
 	}
 

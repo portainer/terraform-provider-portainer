@@ -42,9 +42,17 @@ func resourceEndpointGroup() *schema.Resource {
 
 func resourceEndpointGroupCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	name := d.Get("name").(string)
+
+	if existingID, err := findExistingEndpointGroupByName(client, name); err != nil {
+		return fmt.Errorf("failed to check for existing endpoint group: %w", err)
+	} else if existingID != 0 {
+		d.SetId(strconv.Itoa(existingID))
+		return resourceEndpointGroupUpdate(d, meta)
+	}
 
 	payload := map[string]interface{}{
-		"name": d.Get("name").(string),
+		"name": name,
 	}
 
 	if v, ok := d.GetOk("description"); ok {
@@ -83,8 +91,7 @@ func resourceEndpointGroupCreate(d *schema.ResourceData, meta interface{}) error
 	}
 
 	var result struct {
-		ID          int    `json:"Id"`
-		Description string `json:"Description"`
+		ID int `json:"Id"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return err
@@ -92,6 +99,40 @@ func resourceEndpointGroupCreate(d *schema.ResourceData, meta interface{}) error
 
 	d.SetId(strconv.Itoa(result.ID))
 	return resourceEndpointGroupRead(d, meta)
+}
+
+func findExistingEndpointGroupByName(client *APIClient, name string) (int, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/endpoint_groups", client.Endpoint), nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("X-API-Key", client.APIKey)
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		data, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("failed to list endpoint groups: %s", string(data))
+	}
+
+	var groups []struct {
+		ID   int    `json:"Id"`
+		Name string `json:"Name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&groups); err != nil {
+		return 0, err
+	}
+
+	for _, g := range groups {
+		if g.Name == name {
+			return g.ID, nil
+		}
+	}
+	return 0, nil
 }
 
 func resourceEndpointGroupRead(d *schema.ResourceData, meta interface{}) error {

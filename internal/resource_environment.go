@@ -67,6 +67,14 @@ func resourceEnvironment() *schema.Resource {
 				Optional: true,
 				Default:  true,
 			},
+			"edge_key": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"edge_id": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
 		},
 	}
 }
@@ -119,13 +127,27 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	var result struct {
-		ID int `json:"Id"`
+		ID      int    `json:"Id"`
+		EdgeKey string `json:"EdgeKey,omitempty"`
+		EdgeID  string `json:"EdgeID,omitempty"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return err
 	}
 
 	d.SetId(strconv.Itoa(result.ID))
+
+	// Optional logging
+	fmt.Printf("Created environment with ID: %d\n", result.ID)
+	if result.EdgeKey != "" {
+		fmt.Printf("EdgeKey: %s\n", result.EdgeKey)
+		_ = d.Set("edge_key", result.EdgeKey)
+	}
+	if result.EdgeID != "" {
+		fmt.Printf("EdgeID: %s\n", result.EdgeID)
+		_ = d.Set("edge_id", result.EdgeID)
+	}
+
 	return resourceEnvironmentRead(d, meta)
 }
 
@@ -158,6 +180,8 @@ func resourceEnvironmentRead(d *schema.ResourceData, meta interface{}) error {
 		PublicURL string `json:"PublicURL"`
 		GroupID   int    `json:"GroupId"`
 		TagIds    []int  `json:"TagIds"`
+		EdgeKey   string `json:"EdgeKey,omitempty"`
+		EdgeID    string `json:"EdgeID,omitempty"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
 		return err
@@ -172,6 +196,13 @@ func resourceEnvironmentRead(d *schema.ResourceData, meta interface{}) error {
 		d.Set("environment_address", env.URL)
 	} else {
 		d.Set("environment_address", env.PublicURL)
+	}
+
+	if env.EdgeKey != "" {
+		d.Set("edge_key", env.EdgeKey)
+	}
+	if env.EdgeID != "" {
+		d.Set("edge_id", env.EdgeID)
 	}
 
 	return nil

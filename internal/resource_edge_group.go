@@ -50,8 +50,50 @@ func resourceEdgeGroup() *schema.Resource {
 	}
 }
 
+func findExistingEdgeGroupByName(client *APIClient, name string) (int, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_groups", client.Endpoint), nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("X-API-Key", client.APIKey)
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		data, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("failed to list edge groups: %s", string(data))
+	}
+
+	var groups []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&groups); err != nil {
+		return 0, err
+	}
+
+	for _, g := range groups {
+		if g["Name"] == name {
+			if id, ok := g["Id"].(float64); ok {
+				return int(id), nil
+			}
+		}
+	}
+
+	return 0, nil
+}
+
 func resourceEdgeGroupCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	name := d.Get("name").(string)
+
+	if existingID, err := findExistingEdgeGroupByName(client, name); err != nil {
+		return fmt.Errorf("failed to check for existing edge group: %w", err)
+	} else if existingID != 0 {
+		d.SetId(strconv.Itoa(existingID))
+		return resourceEdgeGroupUpdate(d, meta)
+	}
 
 	payload := buildEdgeGroupPayload(d)
 	jsonBody, _ := json.Marshal(payload)

@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -48,20 +46,73 @@ func resourceCustomTemplate() *schema.Resource {
 				Optional:    true,
 				Default:     false,
 				ForceNew:    true,
-				Description: "Enable authentication for the Git repository (default: false). If true, `repository_username` and `repository_password` will be used.",
+				Description: "Enable authentication for the Git repository (default: false).",
 			},
 		},
 	}
 }
 
+func findExistingCustomTemplateByTitle(client *APIClient, title string) (int, error) {
+	req, err := http.NewRequest("GET", client.Endpoint+"/custom_templates", nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("X-API-Key", client.APIKey)
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("failed to list custom templates: %s", string(body))
+	}
+
+	var templates []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&templates); err != nil {
+		return 0, err
+	}
+
+	for _, tmpl := range templates {
+		if tmpl["Title"] == title {
+			if id, ok := tmpl["Id"].(float64); ok {
+				return int(id), nil
+			}
+		}
+	}
+
+	return 0, nil
+}
+
 func resourceCustomTemplateCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
+	title := d.Get("title").(string)
+
+	existingID, err := findExistingCustomTemplateByTitle(client, title)
+	if err != nil {
+		return fmt.Errorf("failed to check for existing custom template: %w", err)
+	} else if existingID != 0 {
+		d.SetId(strconv.Itoa(existingID))
+		return resourceCustomTemplateUpdate(d, meta)
+	}
+
 	if v, ok := d.GetOk("file_content"); ok {
 		return createTemplateFromString(d, client, v.(string))
-	} else if v, ok := d.GetOk("file_path"); ok {
-		return createTemplateFromFile(d, client, v.(string))
-	} else if v, ok := d.GetOk("repository_url"); ok {
+	}
+
+	if v, ok := d.GetOk("file_path"); ok {
+		content, err := os.ReadFile(v.(string))
+		if err != nil {
+			return fmt.Errorf("failed to read template file from path: %w", err)
+		}
+		d.Set("file_content", string(content))
+		return createTemplateFromString(d, client, string(content))
+	}
+
+	if v, ok := d.GetOk("repository_url"); ok {
 		return createTemplateFromRepository(d, client, v.(string))
 	}
 
@@ -82,61 +133,6 @@ func createTemplateFromString(d *schema.ResourceData, client *APIClient, content
 		"variables":       getVariables(d),
 	}
 	return postTemplateJSON(d, client, payload, "/custom_templates/create/string")
-}
-
-func createTemplateFromFile(d *schema.ResourceData, client *APIClient, path string) error {
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	writer.WriteField("Title", d.Get("title").(string))
-	writer.WriteField("Description", d.Get("description").(string))
-	writer.WriteField("Note", d.Get("note").(string))
-	writer.WriteField("Platform", strconv.Itoa(d.Get("platform").(int)))
-	writer.WriteField("Type", strconv.Itoa(d.Get("type").(int)))
-	writer.WriteField("Logo", d.Get("logo").(string))
-	writer.WriteField("EdgeTemplate", strconv.FormatBool(d.Get("edge_template").(bool)))
-	writer.WriteField("IsComposeFormat", strconv.FormatBool(d.Get("is_compose_format").(bool)))
-
-	varsJSON, _ := json.Marshal(getVariables(d))
-	writer.WriteField("Variables", string(varsJSON))
-
-	part, err := writer.CreateFormFile("File", filepath.Base(path))
-	if err != nil {
-		return err
-	}
-	io.Copy(part, file)
-	writer.Close()
-
-	req, err := http.NewRequest("POST", client.Endpoint+"/custom_templates/create/file", body)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("X-API-Key", client.APIKey)
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create custom template from file: %s", string(data))
-	}
-
-	var result struct {
-		Id int `json:"Id"`
-	}
-	json.NewDecoder(resp.Body).Decode(&result)
-	d.SetId(strconv.Itoa(result.Id))
-	return nil
 }
 
 func createTemplateFromRepository(d *schema.ResourceData, client *APIClient, repoURL string) error {
@@ -253,7 +249,14 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 
 	isGitBased := false
 
-	if v, ok := d.GetOk("file_content"); ok {
+	if v, ok := d.GetOk("file_path"); ok {
+		content, err := os.ReadFile(v.(string))
+		if err != nil {
+			return fmt.Errorf("failed to read template file from path: %w", err)
+		}
+		d.Set("file_content", string(content))
+		payload["fileContent"] = string(content)
+	} else if v, ok := d.GetOk("file_content"); ok {
 		payload["fileContent"] = v.(string)
 	}
 
@@ -290,7 +293,6 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 	}
 
 	if isGitBased {
-		// Also trigger git_fetch after successful update
 		u := fmt.Sprintf("%s/custom_templates/%s/git_fetch", client.Endpoint, d.Id())
 		req, err := http.NewRequest("PUT", u, nil)
 		if err != nil {

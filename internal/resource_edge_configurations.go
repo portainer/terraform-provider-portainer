@@ -99,7 +99,7 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 		return fmt.Errorf("failed to create edge configuration: %s", string(respBody))
 	}
 
-	configID := filepath.Base(filePath) // Simplified placeholder; ideally parse ID from response if available
+	configID := filepath.Base(filePath)
 	d.SetId(fmt.Sprintf("edge-config-%s", configID))
 
 	if v, ok := d.GetOk("state"); ok {

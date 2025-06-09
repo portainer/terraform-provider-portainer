@@ -34,10 +34,38 @@ func resourceDockerSecret() *schema.Resource {
 	}
 }
 
-func resourceDockerSecretCreate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*APIClient)
-	endpointID := d.Get("endpoint_id").(int)
+func findExistingDockerSecretByName(client *APIClient, endpointID int, name string) (string, error) {
+	path := fmt.Sprintf("/endpoints/%d/docker/secrets", endpointID)
+	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
 
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to list secrets: %s", string(body))
+	}
+
+	var secrets []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&secrets); err != nil {
+		return "", err
+	}
+
+	for _, s := range secrets {
+		if s["Spec"] != nil {
+			spec := s["Spec"].(map[string]interface{})
+			if spec["Name"] == name {
+				if id, ok := s["ID"].(string); ok {
+					return id, nil
+				}
+			}
+		}
+	}
+	return "", nil
+}
+
+func buildSecretPayload(d *schema.ResourceData) map[string]interface{} {
 	payload := map[string]interface{}{
 		"Name":   d.Get("name").(string),
 		"Data":   d.Get("data").(string),
@@ -45,18 +73,37 @@ func resourceDockerSecretCreate(d *schema.ResourceData, meta interface{}) error 
 	}
 
 	if v, ok := d.GetOk("driver"); ok {
+		driver := v.(map[string]interface{})
 		payload["Driver"] = map[string]interface{}{
-			"Name":    v.(map[string]interface{})["name"],
-			"Options": v.(map[string]interface{}),
+			"Name":    driver["name"],
+			"Options": driver,
 		}
 	}
 
 	if v, ok := d.GetOk("templating"); ok {
+		templating := v.(map[string]interface{})
 		payload["Templating"] = map[string]interface{}{
-			"Name":    v.(map[string]interface{})["name"],
-			"Options": v.(map[string]interface{}),
+			"Name":    templating["name"],
+			"Options": templating,
 		}
 	}
+
+	return payload
+}
+
+func resourceDockerSecretCreate(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+	endpointID := d.Get("endpoint_id").(int)
+	name := d.Get("name").(string)
+
+	if existingID, err := findExistingDockerSecretByName(client, endpointID, name); err != nil {
+		return fmt.Errorf("failed to check for existing secret: %w", err)
+	} else if existingID != "" {
+		d.SetId(existingID)
+		return resourceDockerSecretUpdate(d, meta)
+	}
+
+	payload := buildSecretPayload(d)
 
 	var response struct {
 		ID string `json:"Id"`
@@ -83,15 +130,69 @@ func resourceDockerSecretCreate(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceDockerSecretRead(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+	endpointID := d.Get("endpoint_id").(int)
+	id := d.Id()
+
+	path := fmt.Sprintf("/endpoints/%d/docker/secrets/%s", endpointID, id)
+	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to read docker secret: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		d.SetId("")
+		return nil
+	} else if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read docker secret: %s", string(body))
+	}
+
+	var result struct {
+		Spec struct {
+			Name       string                 `json:"Name"`
+			Labels     map[string]string      `json:"Labels"`
+			Driver     map[string]interface{} `json:"Driver"`
+			Templating map[string]interface{} `json:"Templating"`
+		} `json:"Spec"`
+		Version struct {
+			Index int `json:"Index"`
+		} `json:"Version"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+
+	d.Set("name", result.Spec.Name)
+	d.Set("labels", result.Spec.Labels)
+	d.Set("driver", result.Spec.Driver)
+	d.Set("templating", result.Spec.Templating)
+
 	return nil
 }
 
 func resourceDockerSecretUpdate(d *schema.ResourceData, meta interface{}) error {
-	if err := resourceDockerSecretDelete(d, meta); err != nil {
-		return fmt.Errorf("failed to delete docker secret during update: %w", err)
+	client := meta.(*APIClient)
+	endpointID := d.Get("endpoint_id").(int)
+	id := d.Id()
+
+	payload := buildSecretPayload(d)
+
+	path := fmt.Sprintf("/endpoints/%d/docker/secrets/%s/update", endpointID, id)
+	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
+	if err != nil {
+		return fmt.Errorf("failed to update docker secret: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update docker secret: %s", string(body))
 	}
 
-	return resourceDockerSecretCreate(d, meta)
+	return resourceDockerSecretRead(d, meta)
 }
 
 func resourceDockerSecretDelete(d *schema.ResourceData, meta interface{}) error {

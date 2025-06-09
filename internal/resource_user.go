@@ -67,7 +67,6 @@ func resourceUser() *schema.Resource {
 
 func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-
 	username := d.Get("username").(string)
 	password := d.Get("password").(string)
 	role := d.Get("role").(int)
@@ -80,6 +79,32 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("password is required for non-LDAP user")
 	}
 
+	resp, err := client.DoRequest("GET", "/users", nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to list users: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to list users, status %d: %s", resp.StatusCode, string(data))
+	}
+
+	var users []struct {
+		ID       int    `json:"Id"`
+		Username string `json:"Username"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
+		return fmt.Errorf("failed to decode user list: %w", err)
+	}
+
+	for _, u := range users {
+		if u.Username == username {
+			d.SetId(strconv.Itoa(u.ID))
+			return resourceUserUpdate(d, meta)
+		}
+	}
+
 	body := map[string]interface{}{
 		"Username": username,
 		"Role":     role,
@@ -88,25 +113,24 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 		body["Password"] = password
 	}
 
-	resp, err := client.DoRequest("POST", "/users", nil, body)
+	createResp, err := client.DoRequest("POST", "/users", nil, body)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
-	defer resp.Body.Close()
+	defer createResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
+	if createResp.StatusCode < 200 || createResp.StatusCode >= 300 {
+		data, _ := io.ReadAll(createResp.Body)
 		return fmt.Errorf("failed to create user: %s", string(data))
 	}
 
 	var result struct {
 		ID int `json:"Id"`
 	}
-	_ = json.NewDecoder(resp.Body).Decode(&result)
-
-	if result.ID == 0 {
-		return resourceUserReadByUsername(d, meta)
+	if err := json.NewDecoder(createResp.Body).Decode(&result); err != nil {
+		return err
 	}
+
 	d.SetId(strconv.Itoa(result.ID))
 
 	if teamID, ok := d.GetOk("team_id"); ok {
@@ -120,14 +144,14 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 			"Role":   2,
 		}
 
-		resp, err := client.DoRequest("POST", "/team_memberships", nil, teamMembership)
+		teamResp, err := client.DoRequest("POST", "/team_memberships", nil, teamMembership)
 		if err != nil {
 			return fmt.Errorf("failed to assign user to team: %w", err)
 		}
-		defer resp.Body.Close()
+		defer teamResp.Body.Close()
 
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			data, _ := io.ReadAll(resp.Body)
+		if teamResp.StatusCode < 200 || teamResp.StatusCode >= 300 {
+			data, _ := io.ReadAll(teamResp.Body)
 			return fmt.Errorf("failed to assign user to team: %s", string(data))
 		}
 	}
@@ -142,21 +166,21 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 			"password":    password,
 		}
 
-		resp, err := client.DoRequest("POST", fmt.Sprintf("/users/%d/tokens", result.ID), nil, apiPayload)
+		apiResp, err := client.DoRequest("POST", fmt.Sprintf("/users/%d/tokens", result.ID), nil, apiPayload)
 		if err != nil {
 			return fmt.Errorf("failed to generate API key: %w", err)
 		}
-		defer resp.Body.Close()
+		defer apiResp.Body.Close()
 
-		if resp.StatusCode != 200 {
-			data, _ := io.ReadAll(resp.Body)
+		if apiResp.StatusCode != 200 {
+			data, _ := io.ReadAll(apiResp.Body)
 			return fmt.Errorf("failed to generate API key: %s", string(data))
 		}
 
 		var tokenResp struct {
 			RawAPIKey string `json:"rawAPIKey"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		if err := json.NewDecoder(apiResp.Body).Decode(&tokenResp); err != nil {
 			return err
 		}
 		d.Set("api_key_raw", tokenResp.RawAPIKey)
