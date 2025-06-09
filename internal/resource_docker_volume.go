@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -83,7 +84,42 @@ func resourceDockerVolumeCreate(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceDockerVolumeRead(d *schema.ResourceData, meta interface{}) error {
-	// Stateless
+	client := meta.(*APIClient)
+	endpointID := d.Get("endpoint_id").(int)
+	name := d.Get("name").(string)
+
+	path := fmt.Sprintf("/endpoints/%d/docker/volumes/%s", endpointID, url.PathEscape(name))
+	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to read docker volume: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		d.SetId("")
+		return nil
+	} else if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read volume: %s", string(body))
+	}
+
+	var result struct {
+		Name       string            `json:"Name"`
+		Driver     string            `json:"Driver"`
+		Labels     map[string]string `json:"Labels"`
+		Options    map[string]string `json:"Options"`
+		Mountpoint string            `json:"Mountpoint"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode volume: %w", err)
+	}
+
+	d.Set("name", result.Name)
+	d.Set("driver", result.Driver)
+	d.Set("labels", result.Labels)
+	d.Set("driver_opts", result.Options)
+	d.SetId(fmt.Sprintf("%d-%s", endpointID, name))
 	return nil
 }
 

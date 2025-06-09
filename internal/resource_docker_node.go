@@ -104,7 +104,55 @@ func resourceDockerNodeUpdate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceDockerNodeRead(d *schema.ResourceData, meta interface{}) error {
-	// Stateless
+	client := meta.(*APIClient)
+	endpointID := d.Get("endpoint_id").(int)
+	nodeID := d.Get("node_id").(string)
+
+	url := fmt.Sprintf("%s/endpoints/%d/docker/nodes/%s", client.Endpoint, endpointID, nodeID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to build read request: %w", err)
+	}
+	req.Header.Set("X-API-Key", client.APIKey)
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send read request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		d.SetId("")
+		return nil
+	} else if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read node: %s", string(body))
+	}
+
+	var result struct {
+		ID      string `json:"ID"`
+		Version struct {
+			Index int `json:"Index"`
+		} `json:"Version"`
+		Spec struct {
+			Availability string            `json:"Availability"`
+			Name         string            `json:"Name"`
+			Role         string            `json:"Role"`
+			Labels       map[string]string `json:"Labels"`
+		} `json:"Spec"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	d.Set("version", result.Version.Index)
+	d.Set("name", result.Spec.Name)
+	d.Set("availability", result.Spec.Availability)
+	d.Set("role", result.Spec.Role)
+	d.Set("labels", result.Spec.Labels)
+	d.SetId(fmt.Sprintf("%d-%s", endpointID, nodeID))
 	return nil
 }
 

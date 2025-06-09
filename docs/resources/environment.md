@@ -14,6 +14,7 @@ resource "portainer_environment" "your-host" {
   type                = 1
   group_id            = 1
 }
+```
 
 ### Register agent-based environment
 ```hcl
@@ -29,6 +30,26 @@ resource "portainer_environment" "your-host" {
   tag_ids             = [portainer_tag.your-group.id]
 }
 ```
+### Register Edge Agent environment
+```hcl
+resource "portainer_environment" "edge_env" {
+  name                 = "Edge Device"
+  environment_address  = "edge-device.local"
+  type                 = 4
+  tls_enabled          = true
+  tls_skip_verify      = true
+  tls_skip_client_verify = true
+}
+
+output "edge_key" {
+  value = portainer_environment.edge_env.edge_key
+}
+
+output "edge_id" {
+  value = portainer_environment.edge_env.edge_id
+}
+```
+
 ## Lifecycle & Behavior
 
 Environments are updated if any of the attributes change (e.g., name, address, type, group_id, tag_ids).
@@ -58,7 +79,9 @@ terraform apply
 | `tls_skip_client_verify` | bool     | 🚫 optional (default `true`)| Skip client certificate verification. Used when mutual TLS is not required.                     |
 
 ## Attributes Reference
-
-| Name | Description              |
-|------|--------------------------|
-| `id` | ID of the Portainer environment |
+| Name       | Description                                |
+| ---------- | ------------------------------------------ |
+| `id`       | ID of the Portainer environment            |
+| `edge_key` | Edge key/token for Edge Agent registration |
+| `edge_id`  | Unique Edge Agent identifier (EdgeID)      |
+> `edge_key` and `edge_id` are only populated for environments of type `4` (Edge Agent).

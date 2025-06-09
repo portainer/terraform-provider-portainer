@@ -141,14 +141,52 @@ func resourceEdgeStack() *schema.Resource {
 	}
 }
 
+func findExistingEdgeStackByName(client *APIClient, name string) (int, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_stacks", client.Endpoint), nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("X-API-Key", client.APIKey)
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		data, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("failed to list edge stacks: %s", string(data))
+	}
+
+	var stacks []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&stacks); err != nil {
+		return 0, err
+	}
+
+	for _, stack := range stacks {
+		if stack["Name"] == name {
+			if id, ok := stack["Id"].(float64); ok {
+				return int(id), nil
+			}
+		}
+	}
+	return 0, nil
+}
+
 func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-
 	edgeGroups := toIntSlice(d.Get("edge_groups").([]interface{}))
 	registries := toIntSlice(d.Get("registries").([]interface{}))
 	name := d.Get("name").(string)
 	deployType := d.Get("deployment_type").(int)
 	useManifest := d.Get("use_manifest_namespaces").(bool)
+
+	if existingID, err := findExistingEdgeStackByName(client, name); err != nil {
+		return fmt.Errorf("failed to check for existing edge stack: %w", err)
+	} else if existingID != 0 {
+		d.SetId(strconv.Itoa(existingID))
+		return resourceEdgeStackUpdate(d, meta)
+	}
 
 	// Method: stackFileContent (string)
 	if content, ok := d.GetOk("stack_file_content"); ok {

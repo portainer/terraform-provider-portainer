@@ -61,10 +61,52 @@ func resourceEdgeJob() *schema.Resource {
 	}
 }
 
+func findExistingEdgeJobByName(client *APIClient, name string) (int, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_jobs", client.Endpoint), nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("X-API-Key", client.APIKey)
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		data, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("failed to list edge jobs: %s", string(data))
+	}
+
+	var jobs []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&jobs); err != nil {
+		return 0, err
+	}
+
+	for _, job := range jobs {
+		if job["Name"] == name {
+			if id, ok := job["Id"].(float64); ok {
+				return int(id), nil
+			}
+		}
+	}
+
+	return 0, nil
+}
+
 func resourceEdgeJobCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
 	name := d.Get("name").(string)
+
+	if existingID, err := findExistingEdgeJobByName(client, name); err != nil {
+		return fmt.Errorf("failed to check for existing edge job: %w", err)
+	} else if existingID != 0 {
+		d.SetId(strconv.Itoa(existingID))
+		return resourceEdgeJobUpdate(d, meta)
+	}
+
 	cron := d.Get("cron_expression").(string)
 	edgeGroups := d.Get("edge_groups").([]interface{})
 	endpoints := d.Get("endpoints").([]interface{})
@@ -74,7 +116,6 @@ func resourceEdgeJobCreate(d *schema.ResourceData, meta interface{}) error {
 	endpointJSON, _ := json.Marshal(endpoints)
 
 	if v, ok := d.GetOk("file_content"); ok {
-		// string-based submission
 		body := map[string]interface{}{
 			"name":           name,
 			"cronExpression": cron,
@@ -112,7 +153,6 @@ func resourceEdgeJobCreate(d *schema.ResourceData, meta interface{}) error {
 		d.SetId(strconv.Itoa(result.Id))
 		return nil
 	} else if v, ok := d.GetOk("file_path"); ok {
-		// file-based submission
 		path := v.(string)
 		file, err := os.Open(path)
 		if err != nil {
@@ -170,7 +210,56 @@ func resourceEdgeJobCreate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceEdgeJobRead(d *schema.ResourceData, meta interface{}) error {
-	// Optional: implement if needed
+	client := meta.(*APIClient)
+	jobID := d.Id()
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_jobs/%s", client.Endpoint, jobID), nil)
+	if err != nil {
+		return fmt.Errorf("failed to build edge job read request: %w", err)
+	}
+	req.Header.Set("X-API-Key", client.APIKey)
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send edge job read request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		d.SetId("")
+		return nil
+	}
+	if resp.StatusCode != 200 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read edge job: %s", string(data))
+	}
+
+	var result struct {
+		Name           string                 `json:"Name"`
+		CronExpression string                 `json:"CronExpression"`
+		EdgeGroups     []int                  `json:"EdgeGroups"`
+		Endpoints      map[string]interface{} `json:"Endpoints"` // not mapped back
+		Recurring      bool                   `json:"Recurring"`
+		ScriptPath     string                 `json:"ScriptPath"` // not mapped back
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode edge job response: %w", err)
+	}
+
+	d.Set("name", result.Name)
+	d.Set("cron_expression", result.CronExpression)
+	d.Set("edge_groups", result.EdgeGroups)
+	d.Set("recurring", result.Recurring)
+
+	endpointIDs := make([]int, 0, len(result.Endpoints))
+	for k := range result.Endpoints {
+		if id, err := strconv.Atoi(k); err == nil {
+			endpointIDs = append(endpointIDs, id)
+		}
+	}
+	d.Set("endpoints", endpointIDs)
+
 	return nil
 }
 

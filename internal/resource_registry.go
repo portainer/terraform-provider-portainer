@@ -32,8 +32,18 @@ func resourceRegistry() *schema.Resource {
 
 func resourceRegistryCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	registryType := d.Get("type").(int)
 	name := d.Get("name").(string)
+
+	existingID, err := findRegistryByName(client, name)
+	if err != nil {
+		return err
+	}
+	if existingID != 0 {
+		d.SetId(strconv.Itoa(existingID))
+		return resourceRegistryUpdate(d, meta)
+	}
+
+	registryType := d.Get("type").(int)
 	url := d.Get("url").(string)
 	baseURL := d.Get("base_url").(string)
 	auth := d.Get("authentication").(bool)
@@ -120,7 +130,70 @@ func resourceRegistryCreate(d *schema.ResourceData, meta interface{}) error {
 	return resourceRegistryRead(d, meta)
 }
 
+func findRegistryByName(client *APIClient, name string) (int, error) {
+	resp, err := client.DoRequest("GET", "/registries", nil, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		data, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("failed to list registries: %s", string(data))
+	}
+
+	var registries []struct {
+		Id   int    `json:"Id"`
+		Name string `json:"Name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&registries); err != nil {
+		return 0, err
+	}
+
+	for _, r := range registries {
+		if r.Name == name {
+			return r.Id, nil
+		}
+	}
+
+	return 0, nil
+}
+
 func resourceRegistryRead(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+	resp, err := client.DoRequest("GET", fmt.Sprintf("/registries/%s", d.Id()), nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to read registry: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		d.SetId("")
+		return nil
+	} else if resp.StatusCode != 200 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read registry: %s", string(data))
+	}
+
+	var registry struct {
+		Name           string `json:"Name"`
+		URL            string `json:"URL"`
+		BaseURL        string `json:"BaseURL"`
+		Type           int    `json:"Type"`
+		Authentication bool   `json:"Authentication"`
+		Username       string `json:"Username"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&registry); err != nil {
+		return err
+	}
+
+	d.Set("name", registry.Name)
+	d.Set("url", registry.URL)
+	d.Set("base_url", registry.BaseURL)
+	d.Set("type", registry.Type)
+	d.Set("authentication", registry.Authentication)
+	d.Set("username", registry.Username)
+
 	return nil
 }
 
@@ -159,7 +232,7 @@ func resourceRegistryUpdate(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("failed to update registry: %s", string(data))
 	}
 
-	return nil
+	return resourceRegistryRead(d, meta)
 }
 
 func resourceRegistryDelete(d *schema.ResourceData, meta interface{}) error {
