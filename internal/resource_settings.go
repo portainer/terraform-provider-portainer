@@ -242,13 +242,88 @@ func resourceSettingsApply(d *schema.ResourceData, meta interface{}) error {
 		}
 	}
 
-	// OAuth settings parsing (simplified)
+	// OAuth settings parsing
 	var oauth *OAuthSettings
-	// [parsing similar to earlier provided block]
+	if v, ok := d.GetOk("oauth_settings"); ok {
+		items := v.([]interface{})
+		if len(items) > 0 && items[0] != nil {
+			m := items[0].(map[string]interface{})
+			oauth = &OAuthSettings{
+				AccessTokenURI:       m["access_token_uri"].(string),
+				AuthStyle:            m["auth_style"].(int),
+				AuthorizationURI:     m["authorization_uri"].(string),
+				ClientID:             m["client_id"].(string),
+				ClientSecret:         m["client_secret"].(string),
+				DefaultTeamID:        m["default_team_id"].(int),
+				LogoutURI:            m["logout_uri"].(string),
+				OAuthAutoCreateUsers: m["oauth_auto_create_users"].(bool),
+				RedirectURI:          m["redirect_uri"].(string),
+				ResourceURI:          m["resource_uri"].(string),
+				SSO:                  m["sso"].(bool),
+				Scopes:               m["scopes"].(string),
+				UserIdentifier:       m["user_identifier"].(string),
+			}
+			if raw, ok := m["kube_secret_key"]; ok {
+				for _, v := range raw.([]interface{}) {
+					oauth.KubeSecretKey = append(oauth.KubeSecretKey, v.(int))
+				}
+			}
+		}
+	}
 
-	// LDAP settings parsing (simplified)
+	// LDAP settings parsing
 	var ldap *LDAPSettings
-	// [parsing similar to earlier provided block]
+	if v, ok := d.GetOk("ldap_settings"); ok {
+		items := v.([]interface{})
+		if len(items) > 0 && items[0] != nil {
+			m := items[0].(map[string]interface{})
+
+			ldap = &LDAPSettings{
+				AnonymousMode:   m["anonymous_mode"].(bool),
+				AutoCreateUsers: m["auto_create_users"].(bool),
+				Password:        m["password"].(string),
+				ReaderDN:        m["reader_dn"].(string),
+				StartTLS:        m["start_tls"].(bool),
+				URL:             m["url"].(string),
+			}
+
+			if raw, ok := m["search_settings"]; ok {
+				for _, v := range raw.([]interface{}) {
+					s := v.(map[string]interface{})
+					ldap.SearchSettings = append(ldap.SearchSettings, SearchSetting{
+						BaseDN:            s["base_dn"].(string),
+						Filter:            s["filter"].(string),
+						UserNameAttribute: s["user_name_attribute"].(string),
+					})
+				}
+			}
+
+			if raw, ok := m["group_search_settings"]; ok {
+				for _, v := range raw.([]interface{}) {
+					s := v.(map[string]interface{})
+					ldap.GroupSearchSettings = append(ldap.GroupSearchSettings, GroupSearch{
+						GroupAttribute: s["group_attribute"].(string),
+						GroupBaseDN:    s["group_base_dn"].(string),
+						GroupFilter:    s["group_filter"].(string),
+					})
+				}
+			}
+
+			if raw, ok := m["tls_config"]; ok {
+				tlsItems := raw.([]interface{})
+				if len(tlsItems) > 0 && tlsItems[0] != nil {
+					tlsMap := tlsItems[0].(map[string]interface{})
+					ldap.TLSConfig = &TLSConfig{
+						TLS:           tlsMap["tls"].(bool),
+						TLSCACert:     tlsMap["tls_ca_cert"].(string),
+						TLSCert:       tlsMap["tls_cert"].(string),
+						TLSKey:        tlsMap["tls_key"].(string),
+						TLSSkipVerify: tlsMap["tls_skip_verify"].(bool),
+					}
+				}
+			}
+		}
+	}
 
 	// Labels
 	var labels []LabelPair
