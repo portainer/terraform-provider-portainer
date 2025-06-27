@@ -33,7 +33,14 @@ func resourcePortainerEdgeStackWebhookCreate(d *schema.ResourceData, meta interf
 	if err != nil {
 		return fmt.Errorf("failed to build webhook trigger request: %w", err)
 	}
-	req.Header.Set("X-API-Key", client.APIKey)
+
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {

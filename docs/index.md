@@ -14,40 +14,67 @@ It supports provisioning and configuration of Portainer users and will be extend
 ```hcl
 provider "portainer" {
   endpoint = "..."
+
+  # Option 1: API key authentication
   api_key  = "..."
+
+  # Option 2: Username/password authentication (generates JWT token internally)
+  # user     = "..."
+  # password = "..."
+
   skip_ssl_verify  = true # optional (default value is `false`)
 }
 ```
 
 ## 🔐 Authentication
-- Static API key
+The Portainer Terraform provider supports two authentication methods:
+1. **API Key** (via `X-API-Key` header)
+2. **Username & Password** (via `/api/auth` → JWT token internally used)
 
-Static credentials can be provided by adding the `api_key` variables in-line in the Portainer provider block:
+Only one method is required – if both are provided, `api_key` takes precedence.
 
-> **Authentication:** This provider supports only **API keys** via the `X-API-Key` header. JWT tokens curentlly are not supported in this provider.
-
-Usage:
+#### Usage – API Key:
 
 ```hcl
 provider "portainer" {
   api_key  = "..."
 }
 ```
-### Environment variables
-You can provide your configuration via the environment variables representing your minio credentials:
+
+#### Usage – Username & Password:
 
 ```hcl
-$ export PORTAINER_ENDPOINT="http://portainer.example.com"
+provider "portainer" {
+  user     = "..."
+  password = "..."
+}
+```
+
+### Environment variables
+You can also configure the provider via environment variables:
+
+#### API key method
+```hcl
+$ export PORTAINER_ENDPOINT="https://portainer.example.com"
 $ export PORTAINER_API_KEY="your-api-key"
 $ export PORTAINER_SKIP_SSL_VERIFY=true
 ```
+#### Username and password method
+```hcl
+$ export PORTAINER_ENDPOINT="https://portainer.example.com"
+$ export PORTAINER_USER="admin"
+$ export PORTAINER_PASSWORD="your-password"
+$ export PORTAINER_SKIP_SSL_VERIFY=true
+```
 
-### Arguments Reference
-| Name       | Type   | Required | Description                                                                 |
-|------------|--------|----------|-----------------------------------------------------------------------------|
-| `endpoint` | string | ✅ yes   | The URL of the Portainer instance. `/api` will be appended automatically if missing. |
-| `api_key`  | string | ✅ yes   | API key used to authenticate requests.                                      |
-| `skip_ssl_verify` | boolean | ❌ no | 	Set to `true` to skip TLS certificate verification (useful for self-signed certs). Default: `false` |
+## Arguments Reference
+| Name              | Type    | Required | Description                                                                                    |
+| ----------------- | ------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `endpoint`        | string  | ✅ yes    | URL of the Portainer instance. `/api` will be appended automatically if missing.               |
+| `api_key`         | string  | ❌ no     | API key for authentication. Mutually exclusive with `user` and `password`.                     |
+| `user`            | string  | ❌ no     | Username for authentication (must be used with `password`). Mutually exclusive with `api_key`. |
+| `password`        | string  | ❌ no     | Password for authentication (must be used with `user`). Mutually exclusive with `api_key`.     |
+| `skip_ssl_verify` | boolean | ❌ no     | Skip TLS certificate verification (useful for self-signed certs). Default: `false`.            |
 
 ## 🧩 Supported Resources
 | Resource                                       | Status                                                                 |
