@@ -19,8 +19,8 @@ provider "portainer" {
   api_key  = "..."
 
   # Option 2: Username/password authentication (generates JWT token internally)
-  # user     = "..."
-  # password = "..."
+  # api_user     = "..."
+  # api_password = "..."
 
   skip_ssl_verify  = true # optional (default value is `false`)
 }
@@ -45,8 +45,8 @@ provider "portainer" {
 
 ```hcl
 provider "portainer" {
-  user     = "..."
-  password = "..."
+  api_user     = "..."
+  api_password = "..."
 }
 ```
 
@@ -71,9 +71,9 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | Name              | Type    | Required | Description                                                                                    |
 | ----------------- | ------- | -------- | ---------------------------------------------------------------------------------------------- |
 | `endpoint`        | string  | ✅ yes    | URL of the Portainer instance. `/api` will be appended automatically if missing.               |
-| `api_key`         | string  | ❌ no     | API key for authentication. Mutually exclusive with `user` and `password`.                     |
-| `user`            | string  | ❌ no     | Username for authentication (must be used with `password`). Mutually exclusive with `api_key`. |
-| `password`        | string  | ❌ no     | Password for authentication (must be used with `user`). Mutually exclusive with `api_key`.     |
+| `api_key`         | string  | ❌ no     | API key for authentication. Mutually exclusive with `api_user` and `api_password`.                     |
+| `api_user`            | string  | ❌ no     | Username for authentication (must be used with `api_password`). Mutually exclusive with `api_key`. |
+| `api_password`        | string  | ❌ no     | Password for authentication (must be used with `api_user`). Mutually exclusive with `api_key`.     |
 | `skip_ssl_verify` | boolean | ❌ no     | Skip TLS certificate verification (useful for self-signed certs). Default: `false`.            |
 
 ## 🧩 Supported Resources
