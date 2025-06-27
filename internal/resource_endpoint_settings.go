@@ -120,7 +120,6 @@ func resourceEndpointSettings() *schema.Resource {
 
 func resourceEndpointSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-
 	endpointID := d.Get("endpoint_id").(int)
 
 	// Parse security settings
@@ -184,19 +183,34 @@ func resourceEndpointSettingsUpdate(d *schema.ResourceData, meta interface{}) er
 		DeploymentOptions:       deploy,
 	}
 
-	jsonBody, _ := json.Marshal(payload)
+	jsonBody, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
 	url := fmt.Sprintf("%s/endpoints/%d/settings", client.Endpoint, endpointID)
-	req, _ := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
-	req.Header.Set("X-API-Key", client.APIKey)
+	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to update endpoint settings: %s", string(data))
 	}

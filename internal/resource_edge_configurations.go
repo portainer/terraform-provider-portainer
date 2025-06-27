@@ -85,7 +85,13 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 		return err
 	}
 
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := client.HTTPClient.Do(req)
@@ -108,7 +114,13 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 		if err != nil {
 			return fmt.Errorf("failed to build state update request: %w", err)
 		}
-		stateReq.Header.Set("X-API-Key", client.APIKey)
+		if client.APIKey != "" {
+			stateReq.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			stateReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
 		stateResp, err := client.HTTPClient.Do(stateReq)
 		if err != nil {
 			return fmt.Errorf("failed to send state update request: %w", err)
@@ -134,7 +146,13 @@ func resourcePortainerEdgeConfigurationsRead(d *schema.ResourceData, meta interf
 		return err
 	}
 
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	res, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
@@ -199,7 +217,13 @@ func resourcePortainerEdgeConfigurationsUpdate(d *schema.ResourceData, meta inte
 		return err
 	}
 
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := client.HTTPClient.Do(req)
@@ -219,7 +243,13 @@ func resourcePortainerEdgeConfigurationsUpdate(d *schema.ResourceData, meta inte
 		if err != nil {
 			return fmt.Errorf("failed to build state update request: %w", err)
 		}
-		stateReq.Header.Set("X-API-Key", client.APIKey)
+		if client.APIKey != "" {
+			stateReq.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			stateReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
 		stateResp, err := client.HTTPClient.Do(stateReq)
 		if err != nil {
 			return fmt.Errorf("failed to send state update request: %w", err)
@@ -245,7 +275,13 @@ func resourcePortainerEdgeConfigurationsDelete(d *schema.ResourceData, meta inte
 		return err
 	}
 
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {

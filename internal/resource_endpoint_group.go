@@ -76,7 +76,13 @@ func resourceEndpointGroupCreate(d *schema.ResourceData, meta interface{}) error
 	if err != nil {
 		return err
 	}
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
@@ -106,7 +112,13 @@ func findExistingEndpointGroupByName(client *APIClient, name string) (int, error
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return 0, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -139,7 +151,13 @@ func resourceEndpointGroupRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
 	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/endpoint_groups/%s", client.Endpoint, d.Id()), nil)
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -199,7 +217,13 @@ func resourceEndpointGroupUpdate(d *schema.ResourceData, meta interface{}) error
 	if err != nil {
 		return err
 	}
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
@@ -220,7 +244,13 @@ func resourceEndpointGroupDelete(d *schema.ResourceData, meta interface{}) error
 	client := meta.(*APIClient)
 
 	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/endpoint_groups/%s", client.Endpoint, d.Id()), nil)
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {

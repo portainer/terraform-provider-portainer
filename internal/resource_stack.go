@@ -120,7 +120,13 @@ func resourcePortainerStack() *schema.Resource {
 func findExistingStackByName(client *APIClient, name string, endpointID int) (int, error) {
 	url := fmt.Sprintf("%s/stacks", client.Endpoint)
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return 0, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -237,7 +243,13 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 		if err != nil {
 			return fmt.Errorf("failed to build webhook update request: %w", err)
 		}
-		req.Header.Set("X-API-Key", client.APIKey)
+		if client.APIKey != "" {
+			req.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.HTTPClient.Do(req)
@@ -262,7 +274,13 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 
 	url := fmt.Sprintf("%s/stacks/%s", client.Endpoint, stackID)
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -316,7 +334,13 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	if method != "repository" {
 		fileURL := fmt.Sprintf("%s/stacks/%s/file", client.Endpoint, stackID)
 		fileReq, _ := http.NewRequest("GET", fileURL, nil)
-		fileReq.Header.Set("X-API-Key", client.APIKey)
+		if client.APIKey != "" {
+			fileReq.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			fileReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
 
 		fileResp, err := client.HTTPClient.Do(fileReq)
 		if err != nil {
@@ -345,7 +369,13 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 func fetchSwarmID(client *APIClient, endpointID int) (string, error) {
 	url := fmt.Sprintf("%s/endpoints/%d/docker/swarm", client.Endpoint, endpointID)
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return "", fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -377,7 +407,13 @@ func resourcePortainerStackDelete(d *schema.ResourceData, meta interface{}) erro
 	if err != nil {
 		return err
 	}
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -451,7 +487,13 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			if err != nil {
 				return fmt.Errorf("failed to build git webhook update request: %w", err)
 			}
-			req.Header.Set("X-API-Key", client.APIKey)
+			if client.APIKey != "" {
+				req.Header.Set("X-API-Key", client.APIKey)
+			} else if client.JWTToken != "" {
+				req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+			} else {
+				return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+			}
 			req.Header.Set("Content-Type", "application/json")
 
 			resp, err := client.HTTPClient.Do(req)
@@ -487,7 +529,13 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		if err != nil {
 			return fmt.Errorf("failed to build git redeploy request: %w", err)
 		}
-		reqRedeploy.Header.Set("X-API-Key", client.APIKey)
+		if client.APIKey != "" {
+			reqRedeploy.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			reqRedeploy.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
 		reqRedeploy.Header.Set("Content-Type", "application/json")
 
 		respRedeploy, err := client.HTTPClient.Do(reqRedeploy)
@@ -522,7 +570,13 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		if err != nil {
 			return fmt.Errorf("failed to build standard update request: %w", err)
 		}
-		req.Header.Set("X-API-Key", client.APIKey)
+		if client.APIKey != "" {
+			req.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.HTTPClient.Do(req)
@@ -558,7 +612,13 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		if err != nil {
 			return fmt.Errorf("failed to build webhook update request: %w", err)
 		}
-		req.Header.Set("X-API-Key", client.APIKey)
+		if client.APIKey != "" {
+			req.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.HTTPClient.Do(req)
@@ -608,7 +668,13 @@ func createStackStandaloneString(d *schema.ResourceData, client *APIClient) erro
 	jsonBody, _ := json.Marshal(payload)
 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -669,7 +735,13 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 	jsonBody, _ := json.Marshal(payload)
 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -705,7 +777,13 @@ func createStackSwarmString(d *schema.ResourceData, client *APIClient) error {
 	jsonBody, _ := json.Marshal(payload)
 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -767,7 +845,13 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 	jsonBody, _ := json.Marshal(payload)
 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -803,7 +887,13 @@ func createStackK8sString(d *schema.ResourceData, client *APIClient) error {
 	jsonBody, _ := json.Marshal(payload)
 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -860,7 +950,13 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 	jsonBody, _ := json.Marshal(payload)
 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -893,7 +989,13 @@ func createStackK8sURL(d *schema.ResourceData, client *APIClient) error {
 	jsonBody, _ := json.Marshal(payload)
 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {

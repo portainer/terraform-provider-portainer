@@ -72,7 +72,13 @@ func resourceCloudProvisionCreate(d *schema.ResourceData, meta interface{}) erro
 	if err != nil {
 		return fmt.Errorf("failed to build request: %w", err)
 	}
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)

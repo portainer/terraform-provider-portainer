@@ -26,16 +26,28 @@ func Provider() *schema.Provider {
 			},
 			"api_key": {
 				Type:        schema.TypeString,
-				Required:    true,
+				Optional:    true,
 				Sensitive:   true,
 				DefaultFunc: schema.EnvDefaultFunc("PORTAINER_API_KEY", nil),
-				Description: "API key to authenticate with Portainer. Only API keys are supported (not JWT tokens).",
+				Description: "API key to authenticate with Portainer. Mutually exclusive with 'user' and 'password'.",
+			},
+			"api_user": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Sensitive:   true,
+				DefaultFunc: schema.EnvDefaultFunc("PORTAINER_USER", nil),
+				Description: "Username for authentication. Must be used together with 'password'.",
+			},
+			"api_password": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Sensitive:   true,
+				DefaultFunc: schema.EnvDefaultFunc("PORTAINER_PASSWORD", nil),
+				Description: "Password for authentication. Must be used together with 'user'.",
 			},
 			"skip_ssl_verify": {
 				Type:        schema.TypeBool,
-				Required:    false,
 				Optional:    true,
-				Sensitive:   false,
 				DefaultFunc: schema.EnvDefaultFunc("PORTAINER_SKIP_SSL_VERIFY", false),
 				Description: "Verify the SSL/TLS certificate for the Portainer endpoint",
 			},
@@ -120,6 +132,7 @@ func Provider() *schema.Provider {
 type APIClient struct {
 	Endpoint   string
 	APIKey     string
+	JWTToken   string
 	HTTPClient http.Client
 }
 
@@ -145,6 +158,8 @@ func (c *APIClient) DoRequest(method, path string, headers map[string]string, bo
 
 	if c.APIKey != "" {
 		req.Header.Set("X-API-Key", c.APIKey)
+	} else if c.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.JWTToken)
 	}
 
 	for k, v := range headers {
@@ -159,7 +174,13 @@ func (c *APIClient) DoMultipartRequest(method, url string, body *bytes.Buffer, h
 	if err != nil {
 		return err
 	}
-	req.Header.Set("X-API-Key", c.APIKey)
+
+	if c.APIKey != "" {
+		req.Header.Set("X-API-Key", c.APIKey)
+	} else if c.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.JWTToken)
+	}
+
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -185,9 +206,17 @@ func (c *APIClient) DoMultipartRequest(method, url string, body *bytes.Buffer, h
 func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
 	endpoint := d.Get("endpoint").(string)
 	apiKey := d.Get("api_key").(string)
+	user := d.Get("api_user").(string)
+	password := d.Get("api_password").(string)
+	skipSSL := d.Get("skip_ssl_verify").(bool)
+
+	if (apiKey == "" && (user == "" || password == "")) || (apiKey != "" && (user != "" || password != "")) {
+		return nil, diag.Errorf("You must specify either 'api_key' or both 'api_user' and 'api_password', but not both.")
+	}
+
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: d.Get("skip_ssl_verify").(bool),
+			InsecureSkipVerify: skipSSL,
 		},
 	}
 	http_client := &http.Client{
@@ -201,7 +230,35 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	client := &APIClient{
 		Endpoint:   endpoint,
 		APIKey:     apiKey,
+		JWTToken:   "",
 		HTTPClient: *http_client,
+	}
+
+	// Authenticate via user/password and fetch JWT if api_key is not used
+	if apiKey == "" && user != "" && password != "" {
+		authBody := map[string]string{
+			"Username": user,
+			"Password": password,
+		}
+		payload, _ := json.Marshal(authBody)
+		resp, err := http_client.Post(endpoint+"/auth", "application/json", bytes.NewBuffer(payload))
+		if err != nil {
+			return nil, diag.FromErr(fmt.Errorf("failed to authenticate using username/password: %w", err))
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			respBody, _ := io.ReadAll(resp.Body)
+			return nil, diag.Errorf("authentication failed: %s", string(respBody))
+		}
+
+		var authResp struct {
+			JWT string `json:"jwt"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
+			return nil, diag.FromErr(fmt.Errorf("failed to parse authentication response: %w", err))
+		}
+		client.JWTToken = authResp.JWT
 	}
 
 	var diags diag.Diagnostics

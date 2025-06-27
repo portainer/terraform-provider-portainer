@@ -82,7 +82,13 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 	execReqBody, _ := json.Marshal(execBody)
 	execURL := fmt.Sprintf("%s/endpoints/%d/docker/containers/%s/exec", client.Endpoint, endpointID, containerID)
 	execReq, _ := http.NewRequest("POST", execURL, bytes.NewBuffer(execReqBody))
-	execReq.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		execReq.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		execReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	execReq.Header.Set("Content-Type", "application/json")
 	execResp, err := client.HTTPClient.Do(execReq)
 	if err != nil {
@@ -102,7 +108,13 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 	}
 	startReqBody, _ := json.Marshal(startBody)
 	startReq, _ := http.NewRequest("POST", startURL, bytes.NewBuffer(startReqBody))
-	startReq.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		startReq.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		startReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	startReq.Header.Set("Content-Type", "application/json")
 	startResp, err := client.HTTPClient.Do(startReq)
 	if err != nil {
@@ -163,7 +175,13 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 	execReqBody, _ := json.Marshal(execBody)
 	execURL := fmt.Sprintf("%s/endpoints/%d/docker/containers/%s/exec", client.Endpoint, endpointID, containerID)
 	execReq, _ := http.NewRequest("POST", execURL, bytes.NewBuffer(execReqBody))
-	execReq.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		execReq.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		execReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	execReq.Header.Set("X-PortainerAgent-Target", hostname)
 	execReq.Header.Set("Content-Type", "application/json")
 	execResp, err := client.HTTPClient.Do(execReq)
@@ -184,7 +202,13 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 	}
 	startReqBody, _ := json.Marshal(startBody)
 	startReq, _ := http.NewRequest("POST", startURL, bytes.NewBuffer(startReqBody))
-	startReq.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		startReq.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		startReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	startReq.Header.Set("X-PortainerAgent-Target", hostname)
 	startReq.Header.Set("Content-Type", "application/json")
 	startResp, err := client.HTTPClient.Do(startReq)
@@ -209,7 +233,13 @@ func resourceContainerExecDelete(d *schema.ResourceData, meta interface{}) error
 
 func apiGET(url string, apiKey string, client *APIClient) ([]byte, error) {
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("X-API-Key", apiKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return nil, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return nil, err

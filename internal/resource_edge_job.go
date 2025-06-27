@@ -66,7 +66,13 @@ func findExistingEdgeJobByName(client *APIClient, name string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return 0, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -130,7 +136,13 @@ func resourceEdgeJobCreate(d *schema.ResourceData, meta interface{}) error {
 		if err != nil {
 			return err
 		}
-		req.Header.Set("X-API-Key", client.APIKey)
+		if client.APIKey != "" {
+			req.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.HTTPClient.Do(req)
@@ -182,7 +194,13 @@ func resourceEdgeJobCreate(d *schema.ResourceData, meta interface{}) error {
 		if err != nil {
 			return err
 		}
-		req.Header.Set("X-API-Key", client.APIKey)
+		if client.APIKey != "" {
+			req.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 
 		resp, err := client.HTTPClient.Do(req)
@@ -217,7 +235,13 @@ func resourceEdgeJobRead(d *schema.ResourceData, meta interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed to build edge job read request: %w", err)
 	}
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -284,7 +308,13 @@ func resourceEdgeJobUpdate(d *schema.ResourceData, meta interface{}) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
@@ -305,7 +335,13 @@ func resourceEdgeJobDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
 	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/edge_jobs/%s", client.Endpoint, d.Id()), nil)
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {

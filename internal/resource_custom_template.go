@@ -57,7 +57,13 @@ func findExistingCustomTemplateByTitle(client *APIClient, title string) (int, er
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return 0, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -165,7 +171,13 @@ func createTemplateFromRepository(d *schema.ResourceData, client *APIClient, rep
 func postTemplateJSON(d *schema.ResourceData, client *APIClient, payload map[string]interface{}, endpoint string) error {
 	jsonBody, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", client.Endpoint+endpoint, bytes.NewBuffer(jsonBody))
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
@@ -198,7 +210,13 @@ func resourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) error 
 	client := meta.(*APIClient)
 
 	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/custom_templates/%s", client.Endpoint, d.Id()), nil)
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -278,7 +296,13 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 	if err != nil {
 		return err
 	}
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
@@ -298,7 +322,13 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 		if err != nil {
 			return err
 		}
-		req.Header.Set("X-API-Key", client.APIKey)
+		if client.APIKey != "" {
+			req.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
@@ -318,7 +348,13 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 func resourceCustomTemplateDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/custom_templates/%s", client.Endpoint, d.Id()), nil)
-	req.Header.Set("X-API-Key", client.APIKey)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
