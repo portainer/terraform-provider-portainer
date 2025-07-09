@@ -90,6 +90,12 @@ variable "enable_edge_compute_features" {
   default     = true
 }
 
+variable "enforce_edge_id" {
+  type        = bool
+  description = "Enforce use of Portainer generated Edge ID"
+  default     = true
+}
+
 variable "portainer_skip_ssl_verify" {
   description = "Set to true to skip TLS certificate verification (useful for self-signed certs)"
   type        = bool
