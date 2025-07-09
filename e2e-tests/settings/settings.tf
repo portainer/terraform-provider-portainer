@@ -5,6 +5,7 @@ resource "portainer_settings" "example" {
   snapshot_interval            = var.snapshot_interval
   user_session_timeout         = var.user_session_timeout
   enable_edge_compute_features = var.enable_edge_compute_features
+  enforce_edge_id              = var.enforce_edge_id
 
   internal_auth_settings {
     required_password_length = var.required_password_length

@@ -85,3 +85,12 @@ terraform apply
 | `edge_key` | Edge key/token for Edge Agent registration |
 | `edge_id`  | Unique Edge Agent identifier (EdgeID)      |
 > `edge_key` and `edge_id` are only populated for environments of type `4` (Edge Agent).
+
+> `edge_id` will only be available **immediately after creation** if the Portainer setting  
+**Enforce use of Portainer generated Edge ID** is enabled:
+```hcl
+resource "portainer_settings" "portainer_settings" {
+   enforce_edge_id = true
+}
+```
+> Otherwise, `edge_id` is assigned only after the Edge Agent connects to Portainer for the first time.
