@@ -53,6 +53,9 @@ resource "portainer_stack" "standalone_repo" {
   repository_reference_name = "refs/heads/main"
   file_path_in_repository   = "docker-compose.yml"
   tlsskip_verify            = false
+  additional_files            = [
+    "some-other-docker-compose.yml"
+  ]
   
   # Optional GitOps enhancements:
   stack_webhook             = true                      # Enables GitOps webhook
@@ -117,6 +120,9 @@ resource "portainer_stack" "swarm_repo" {
   repository_password       = "secure"
   repository_reference_name = "refs/heads/main"
   file_path_in_repository   = "docker-compose.yml"
+  additional_files            = [
+    "some-other-docker-compose.yml"
+  ]
 }
 ```
 ### Deploy Kubernetes Stack from String
@@ -153,6 +159,9 @@ resource "portainer_stack" "k8s_repo" {
   file_path_in_repository   = "kube.yaml"
   namespace                 = "default"
   compose_format            = true
+  additional_files            = [
+    "some-other-file.yaml"
+  ]
 }
 ```
 ### Deploy Kubernetes Stack from URL
@@ -214,7 +223,7 @@ terraform apply
 | `repository_reference_name`     | string | ✅ yes      | Git reference (default: `refs/heads/main`)           |
 | `file_path_in_repository`       | string | ✅ yes      | Path to Compose file (default: `docker-compose.yml`) |
 | `tlsskip_verify`                | bool   | 🚫 optional | Skip TLS verification (default: `false`)             |
-| `git_repository_authentication`| bool   | 🚫 optional | Enable auth for Git repo (default: `false`)          |
+| `git_repository_authentication` | bool   | 🚫 optional | Enable auth for Git repo (default: `false`)          |
 | `repository_username`           | string | 🚫 optional | Git username (if auth is enabled)                    |
 | `repository_password`           | string | 🚫 optional | Git password/token (if auth is enabled)              |
 | `stack_webhook`                 | bool   | 🚫 optional | Enable GitOps webhook (default: `false`)             |
@@ -222,6 +231,7 @@ terraform apply
 | `force_update`                  | bool   | 🚫 optional | Whether to force redeploy (default: `false`)         |
 | `support_relative_path`         | bool   | 🚫 optional | Enable resolving of relative paths (default: `false`)|
 | `filesystem_path`               | string | 🚫 optional | Base path on disk to resolve relative paths from     |
+| `additional_files`              | string | 🚫 optional | List of additional yaml files paths                  |
 
 #### Extra for `swarm`
 | Name       | Type   | Required    | Description                  |
@@ -253,6 +263,7 @@ terraform apply
 | `update_interval`               | string | 🚫 optional | Polling interval (e.g. `30m`, `1h`)              |
 | `force_update`                  | bool   | 🚫 optional | Whether to force redeploy (default: `false`)     |
 | `compose_format`                | bool   | 🚫 optional | Compose format support (default: `false`)        |
+| `additional_files`              | string | 🚫 optional | List of additional yaml files paths              |
 
 #### Method: `url`
 | Name             | Type   | Required    | Description                |

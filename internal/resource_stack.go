@@ -42,6 +42,13 @@ func resourcePortainerStack() *schema.Resource {
 			"namespace":          {Type: schema.TypeString, Optional: true, ForceNew: true},
 			"stack_file_content": {Type: schema.TypeString, Optional: true},
 			"stack_file_path":    {Type: schema.TypeString, Optional: true},
+			"additional_files": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				ForceNew:    true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Description: "List of additional Compose file paths to use when deploying from Git repository.",
+			},
 			"git_repository_authentication": {
 				Type:     schema.TypeBool,
 				Optional: true,
@@ -115,6 +122,14 @@ func resourcePortainerStack() *schema.Resource {
 			},
 		},
 	}
+}
+
+func expandStringList(rawList []interface{}) []string {
+	result := make([]string, len(rawList))
+	for i, v := range rawList {
+		result[i] = v.(string)
+	}
+	return result
 }
 
 func findExistingStackByName(client *APIClient, name string, endpointID int) (int, error) {
@@ -456,6 +471,7 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			"repositoryReferenceName":   d.Get("repository_reference_name").(string),
 			"repositoryGitCredentialID": 0,
 			"tlsskipVerify":             d.Get("tlsskip_verify").(bool),
+			"additionalFiles":           expandStringList(d.Get("additional_files").([]interface{})),
 		}
 
 		if v, ok := d.GetOk("filesystem_path"); ok {
@@ -517,6 +533,7 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			"repositoryPassword":       d.Get("repository_password").(string),
 			"repositoryReferenceName":  d.Get("repository_reference_name").(string),
 			"stackName":                d.Get("name").(string),
+			"additionalFiles":          expandStringList(d.Get("additional_files").([]interface{})),
 		}
 
 		redeployBody, err := json.Marshal(redeployPayload)
@@ -708,6 +725,7 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 		"env":                      flattenEnvList(d.Get("env").([]interface{})),
 		"fromAppTemplate":          false,
 		"tlsskipVerify":            d.Get("tlsskip_verify").(bool),
+		"additionalFiles":          expandStringList(d.Get("additional_files").([]interface{})),
 	}
 
 	if v, ok := d.GetOk("filesystem_path"); ok {
@@ -818,6 +836,7 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 		"fromAppTemplate":          false,
 		"tlsskipVerify":            d.Get("tlsskip_verify").(bool),
 		"swarmID":                  d.Get("swarm_id").(string),
+		"additionalFiles":          expandStringList(d.Get("additional_files").([]interface{})),
 	}
 
 	if v, ok := d.GetOk("filesystem_path"); ok {
@@ -927,6 +946,7 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 		"repositoryAuthentication": d.Get("git_repository_authentication").(bool),
 		"tlsskipVerify":            d.Get("tlsskip_verify").(bool),
 		"fromAppTemplate":          false,
+		"additionalFiles":          expandStringList(d.Get("additional_files").([]interface{})),
 	}
 
 	stackWebhook := d.Get("stack_webhook").(bool)
