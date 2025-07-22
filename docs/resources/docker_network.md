@@ -60,34 +60,38 @@ terraform apply
 ```
 
 ## Arguments Reference
-| Name           | Type        | Required    | Description                                                    |
-| -------------- | ----------- | ----------- | -------------------------------------------------------------- |
-| `endpoint_id`  | int         | ✅ yes       | ID of the environment where the network will be created        |
-| `name`         | string      | ✅ yes       | Name of the Docker network                                     |
-| `driver`       | string      | ✅ yes       | Network driver (`bridge`, `overlay`, `macvlan`, etc.)          |
-| `internal`     | bool        | 🚫 optional | Whether the network is internal (default: `false`)             |
-| `attachable`   | bool        | 🚫 optional | Whether containers can be attached manually (default: `false`) |
-| `ingress`      | bool        | 🚫 optional | Whether it's an ingress network (default: `false`)             |
-| `config_only`  | bool        | 🚫 optional | If this network is only configuration (default: `false`)       |
-| `config_from`  | string      | 🚫 optional | Name of another config-only network to inherit from            |
-| `enable_ipv4`  | bool        | 🚫 optional | Enable IPv4 networking (default: `true`)                       |
-| `enable_ipv6`  | bool        | 🚫 optional | Enable IPv6 networking (default: `false`)                      |
-| `options`      | map(string) | 🚫 optional | Driver-specific options                                        |
-| `labels`       | map(string) | 🚫 optional | Labels to apply to the network                                 |
-| `ipam_driver`  | string      | 🚫 optional | IPAM driver name (default: `default`)                          |
-| `ipam_options` | map(string) | 🚫 optional | IPAM driver-specific options                                   |
-| `ipam_config`  | block       | 🚫 optional | IPAM configuration block (can be repeated)                     |
+
+| Name            | Type        | Required    | Description                                                    |
+|-----------------|-------------|-------------|----------------------------------------------------------------|
+| `endpoint_id`   | int         | ✅ yes       | ID of the environment where the network will be created       |
+| `name`          | string      | ✅ yes       | Name of the Docker network                                    |
+| `driver`        | string      | 🚫 optional | Network driver (`bridge`, `overlay`, `macvlan`, etc.), default: `bridge` |
+| `scope`         | string      | 🚫 optional | Network scope (`local`, `swarm`), default: `local`             |
+| `internal`      | bool        | 🚫 optional | Whether the network is internal (default: `false`)             |
+| `attachable`    | bool        | 🚫 optional | Whether containers can be attached manually (default: `false`) |
+| `ingress`       | bool        | 🚫 optional | Whether it's an ingress network (default: `false`)             |
+| `config_only`   | bool        | 🚫 optional | If this network is only configuration (default: `false`)       |
+| `config_from`   | string      | 🚫 optional | Name of another config-only network to inherit from            |
+| `enable_ipv4`   | bool        | 🚫 optional | Enable IPv4 networking (default: `true`)                       |
+| `enable_ipv6`   | bool        | 🚫 optional | Enable IPv6 networking (default: `false`)                      |
+| `options`       | map(string) | 🚫 optional | Driver-specific options                                        |
+| `labels`        | map(string) | 🚫 optional | Labels to apply to the network                                 |
+| `swarm_node_id` | string      | 🚫 optional | Name of the swarm node to target when creating config-only networks |
+| `ipam_driver`   | string      | 🚫 optional | IPAM driver name (default: `default`)                          |
+| `ipam_options`  | map(string) | 🚫 optional | IPAM driver-specific options                                   |
+| `ipam_config`   | block       | 🚫 optional | IPAM configuration block (can be repeated)                     |
 
 ### `ipam_config` Block
+
 | Name                  | Type        | Required | Description                                       |
-| --------------------- | ----------- | -------- | ------------------------------------------------- |
+|-----------------------|-------------|----------|---------------------------------------------------|
 | `subnet`              | string      | ✅ yes    | The subnet in CIDR format (e.g. `192.168.0.0/24`) |
-| `ip_range`            | string      | 🚫 no    | Optional IP range within the subnet               |
-| `gateway`             | string      | 🚫 no    | Gateway IP for the subnet                         |
-| `auxiliary_addresses` | map(string) | 🚫 no    | Optional key-value pairs of reserved addresses    |
+| `ip_range`            | string      | 🚫 no     | Optional IP range within the subnet               |
+| `gateway`             | string      | 🚫 no     | Gateway IP for the subnet                         |
+| `auxiliary_addresses` | map(string) | 🚫 no     | Optional key-value pairs of reserved addresses    |
 
 ## Attributes Reference
 
-| Name | Description              |
-|------|--------------------------|
-| `id` | ID of the created Docker network (as returned by Portainer) |
+| Name | Description                                                   |
+|------|---------------------------------------------------------------|
+| `id` | ID of the created Docker network (as returned by Portainer)  |

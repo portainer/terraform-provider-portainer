@@ -29,6 +29,11 @@ func resourceDockerNetwork() *schema.Resource {
 			"enable_ipv6": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
 			"options":     {Type: schema.TypeMap, Optional: true, Elem: &schema.Schema{Type: schema.TypeString}, ForceNew: true},
 			"labels":      {Type: schema.TypeMap, Optional: true, Elem: &schema.Schema{Type: schema.TypeString}, ForceNew: true},
+			"swarm_node_id": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
 			"ipam_driver": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -132,8 +137,13 @@ func resourceDockerNetworkCreate(d *schema.ResourceData, meta interface{}) error
 		ID string `json:"Id"`
 	}
 
+	headers := map[string]string{}
+	if nodeID, ok := d.GetOk("swarm_node_id"); ok && nodeID.(string) != "" {
+		headers["X-PortainerAgent-Target"] = nodeID.(string)
+	}
+
 	path := fmt.Sprintf("/endpoints/%d/docker/networks/create", endpointID)
-	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
+	resp, err := client.DoRequest(http.MethodPost, path, headers, payload)
 	if err != nil {
 		return fmt.Errorf("failed to create docker network: %w", err)
 	}
