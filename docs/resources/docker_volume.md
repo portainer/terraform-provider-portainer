@@ -33,6 +33,56 @@ resource "portainer_docker_volume" "example" {
 }
 ```
 
+### Advanced: Create a Volume with ClusterVolumeSpec
+```hcl
+resource "portainer_docker_volume" "clustered" {
+  endpoint_id = 1
+  name        = "shared-data"
+  driver      = "custom"
+
+  cluster_volume_spec {
+    group = "analytics"
+
+    access_mode {
+      scope   = "single"
+      sharing = "none"
+      mount_volume = {
+        path = "/mnt/data"
+      }
+    }
+
+    secrets = [
+      {
+        key    = "vol-cred"
+        secret = "secret-ref"
+      }
+    ]
+
+    accessibility_requirements {
+      requisite = [
+        {
+          property1 = "ssd"
+          property2 = "zone-a"
+        }
+      ]
+      preferred = [
+        {
+          property1 = "nvme"
+          property2 = "zone-b"
+        }
+      ]
+    }
+
+    capacity_range {
+      required_bytes = 1000000000
+      limit_bytes    = 5000000000
+    }
+
+    availability = "active"
+  }
+}
+```
+
 ## Lifecycle & Behavior
 Creating a volume sends a POST request to the Docker API via Portainer.
 
@@ -48,13 +98,50 @@ terraform destroy
 ```
 
 ## Arguments Reference
-| Name         | Type         | Required | Description                                                       |
-|--------------|--------------|----------|-------------------------------------------------------------------|
-| `endpoint_id`| int          | ✅ yes   | ID of the Portainer environment (endpoint)                        |
-| `name`       | string       | ✅ yes   | Name of the Docker volume                                         |
-| `driver`     | string       | ✅ yes   | Volume driver to use (e.g., `local`, `custom`)                    |
-| `driver_opts`| map(string)  | 🚫 optional | Driver-specific options (e.g., `device`, `type`, `o`)           |
-| `labels`     | map(string)  | 🚫 optional | Key-value metadata to apply to the volume                        |
+| Name                  | Type          | Required    | Description                                                            |
+| --------------------- | ------------- | ----------- | ---------------------------------------------------------------------- |
+| `endpoint_id`         | `int`         | ✅ yes       | ID of the Portainer environment (endpoint)                             |
+| `name`                | `string`      | ✅ yes       | Name of the Docker volume                                              |
+| `driver`              | `string`      | ✅ yes       | Volume driver to use (e.g., `local`, `custom`)                         |
+| `driver_opts`         | `map(string)` | 🚫 optional | Driver-specific options (e.g., `device`, `type`, `o`)                  |
+| `labels`              | `map(string)` | 🚫 optional | Key-value metadata applied to the volume                               |
+| `cluster_volume_spec` | `block`       | 🚫 optional | Cluster-level volume configuration for scheduling, secrets, and access |
+
+### `cluster_volume_spec` block
+| Attribute                    | Type           | Required    | Description                          |
+| ---------------------------- | -------------- | ----------- | ------------------------------------ |
+| `group`                      | `string`       | 🚫 optional | Logical volume group name            |
+| `access_mode`                | `block`        | 🚫 optional | Access mode configuration            |
+| `secrets`                    | `list(object)` | 🚫 optional | List of secrets to be attached       |
+| `accessibility_requirements` | `block`        | 🚫 optional | Node preference/restriction settings |
+| `capacity_range`             | `block`        | 🚫 optional | Volume capacity constraints          |
+| `availability`               | `string`       | 🚫 optional | Availability state (`active`, etc.)  |
+
+#### `access_mode` block
+| Attribute      | Type          | Description                           |
+| -------------- | ------------- | ------------------------------------- |
+| `scope`        | `string`      | e.g., `single`, `multi`               |
+| `sharing`      | `string`      | e.g., `none`, `readonly`, `readwrite` |
+| `mount_volume` | `map(string)` | Arbitrary key-value mount options     |
+
+#### `secrets` block
+| Attribute | Type     | Description                   |
+| --------- | -------- | ----------------------------- |
+| `key`     | `string` | Key used within the volume    |
+| `secret`  | `string` | Name of the referenced secret |
+
+#### `accessibility_requirements` block
+| Attribute   | Type                | Description                       |
+| ----------- | ------------------- | --------------------------------- |
+| `requisite` | `list(map(string))` | List of required node properties  |
+| `preferred` | `list(map(string))` | List of preferred node properties |
+
+#### `capacity_range` block
+| Attribute        | Type | Description                       |
+| ---------------- | ---- | --------------------------------- |
+| `required_bytes` | int  | Minimum storage required in bytes |
+| `limit_bytes`    | int  | Maximum storage allowed in bytes  |
+
 
 ## Attributes Reference
 

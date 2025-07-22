@@ -5,7 +5,7 @@
 
 | Name | Version |
 |------|---------|
-| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | n/a |
+| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | 1.6.0 |
 
 ## Resources
 
@@ -23,4 +23,11 @@
 | <a name="input_portainer_environment_type"></a> [portainer\_environment\_type](#input\_portainer\_environment\_type) | Portainer environment type | `number` | `2` | no |
 | <a name="input_portainer_skip_ssl_verify"></a> [portainer\_skip\_ssl\_verify](#input\_portainer\_skip\_ssl\_verify) | Set to true to skip TLS certificate verification (useful for self-signed certs) | `bool` | `true` | no |
 | <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"https://localhost:9443"` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| <a name="output_edge_id"></a> [edge\_id](#output\_edge\_id) | n/a |
+| <a name="output_edge_key"></a> [edge\_key](#output\_edge\_key) | n/a |
 <!-- END_TF_DOCS -->

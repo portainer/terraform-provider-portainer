@@ -91,6 +91,7 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_docker_config`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_docker_image`                       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_docker_network`                     | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_docker_plugin`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_docker_node`                        | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_docker_secret`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_docker_volume`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
