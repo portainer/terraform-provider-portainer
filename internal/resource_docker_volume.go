@@ -11,20 +11,20 @@ import (
 )
 
 type DockerVolumeSpec struct {
-	Name              string              `json:"Name"`
-	Driver            string              `json:"Driver,omitempty"`
-	DriverOpts        map[string]string   `json:"DriverOpts,omitempty"`
-	Labels            map[string]string   `json:"Labels,omitempty"`
-	ClusterVolumeSpec *ClusterVolumeSpec  `json:"ClusterVolumeSpec,omitempty"`
+	Name              string             `json:"Name"`
+	Driver            string             `json:"Driver,omitempty"`
+	DriverOpts        map[string]string  `json:"DriverOpts,omitempty"`
+	Labels            map[string]string  `json:"Labels,omitempty"`
+	ClusterVolumeSpec *ClusterVolumeSpec `json:"ClusterVolumeSpec,omitempty"`
 }
 
 type ClusterVolumeSpec struct {
-	Group                     string                      `json:"Group,omitempty"`
-	AccessMode                *AccessMode                 `json:"AccessMode,omitempty"`
-	Secrets                   []ClusterVolumeSecret       `json:"Secrets,omitempty"`
-	AccessibilityRequirements *AccessibilityRequirements  `json:"AccessibilityRequirements,omitempty"`
-	CapacityRange             *CapacityRange              `json:"CapacityRange,omitempty"`
-	Availability              string                      `json:"Availability,omitempty"`
+	Group                     string                     `json:"Group,omitempty"`
+	AccessMode                *AccessMode                `json:"AccessMode,omitempty"`
+	Secrets                   []ClusterVolumeSecret      `json:"Secrets,omitempty"`
+	AccessibilityRequirements *AccessibilityRequirements `json:"AccessibilityRequirements,omitempty"`
+	CapacityRange             *CapacityRange             `json:"CapacityRange,omitempty"`
+	Availability              string                     `json:"Availability,omitempty"`
 }
 
 type AccessMode struct {
@@ -96,9 +96,9 @@ func resourceDockerVolume() *schema.Resource {
 							MaxItems: 1,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
-									"scope":         {Type: schema.TypeString, Optional: true},
-									"sharing":       {Type: schema.TypeString, Optional: true},
-									"mount_volume":  {Type: schema.TypeMap, Optional: true, Elem: &schema.Schema{Type: schema.TypeString}},
+									"scope":        {Type: schema.TypeString, Optional: true},
+									"sharing":      {Type: schema.TypeString, Optional: true},
+									"mount_volume": {Type: schema.TypeMap, Optional: true, Elem: &schema.Schema{Type: schema.TypeString}},
 								},
 							},
 						},
@@ -246,7 +246,7 @@ func convertMapString(in map[string]interface{}) map[string]string {
 
 func expandClusterVolumeSpec(m map[string]interface{}) *ClusterVolumeSpec {
 	return &ClusterVolumeSpec{
-		Group: m["group"].(string),
+		Group:        m["group"].(string),
 		Availability: m["availability"].(string),
 	}
 }
