@@ -17,6 +17,9 @@ func resourcePortainerSupportDebugLog() *schema.Resource {
 		Read:   resourcePortainerSupportDebugLogRead,
 		Update: resourcePortainerSupportDebugLogApply,
 		Delete: resourcePortainerSupportDebugLogDisable,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"enabled": {
 				Type:        schema.TypeBool,

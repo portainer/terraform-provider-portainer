@@ -41,6 +41,9 @@ func resourcePortainerEdgeUpdateSchedules() *schema.Resource {
 		Read:   resourcePortainerEdgeUpdateSchedulesRead,
 		Update: schema.Noop,
 		Delete: schema.RemoveFromState,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"name":           {Type: schema.TypeString, Required: true},
 			"agent_image":    {Type: schema.TypeString, Required: true},

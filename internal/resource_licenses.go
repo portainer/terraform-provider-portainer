@@ -21,6 +21,9 @@ func resourceLicenses() *schema.Resource {
 		Create: resourceLicensesCreate,
 		Read:   resourceLicensesRead,
 		Delete: resourceLicensesDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"key": {
 				Type:        schema.TypeString,

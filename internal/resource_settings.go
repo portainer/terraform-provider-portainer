@@ -11,25 +11,31 @@ import (
 )
 
 type SettingsPayload struct {
-	EdgePortainerURL          string                `json:"EdgePortainerURL,omitempty"`
-	AuthenticationMethod      int                   `json:"authenticationMethod,omitempty"`
-	EnableTelemetry           bool                  `json:"enableTelemetry,omitempty"`
-	LogoURL                   string                `json:"logoURL,omitempty"`
-	SnapshotInterval          string                `json:"snapshotInterval,omitempty"`
-	TemplatesURL              string                `json:"templatesURL,omitempty"`
-	EnableEdgeComputeFeatures bool                  `json:"enableEdgeComputeFeatures,omitempty"`
-	EnforceEdgeID             bool                  `json:"enforceEdgeID,omitempty"`
-	UserSessionTimeout        string                `json:"userSessionTimeout,omitempty"`
-	KubeconfigExpiry          string                `json:"kubeconfigExpiry,omitempty"`
-	KubectlShellImage         string                `json:"kubectlShellImage,omitempty"`
-	HelmRepositoryURL         string                `json:"helmRepositoryURL,omitempty"`
-	TrustOnFirstConnect       bool                  `json:"trustOnFirstConnect,omitempty"`
-	EdgeAgentCheckinInterval  int                   `json:"edgeAgentCheckinInterval,omitempty"`
-	BlackListedLabels         []LabelPair           `json:"blackListedLabels,omitempty"`
-	GlobalDeploymentOptions   *GlobalDeploymentOpts `json:"globalDeploymentOptions,omitempty"`
-	InternalAuthSettings      *InternalAuthSettings `json:"internalAuthSettings,omitempty"`
-	OAuthSettings             *OAuthSettings        `json:"oauthSettings,omitempty"`
-	LDAPSettings              *LDAPSettings         `json:"ldapsettings,omitempty"`
+	EdgePortainerURL            string                `json:"EdgePortainerURL,omitempty"`
+	AuthenticationMethod        int                   `json:"authenticationMethod,omitempty"`
+	EnableTelemetry             bool                  `json:"enableTelemetry,omitempty"`
+	LogoURL                     string                `json:"logoURL,omitempty"`
+	SnapshotInterval            string                `json:"snapshotInterval,omitempty"`
+	TemplatesURL                string                `json:"templatesURL,omitempty"`
+	EnableEdgeComputeFeatures   bool                  `json:"enableEdgeComputeFeatures,omitempty"`
+	EnforceEdgeID               bool                  `json:"enforceEdgeID,omitempty"`
+	UserSessionTimeout          string                `json:"userSessionTimeout,omitempty"`
+	KubeconfigExpiry            string                `json:"kubeconfigExpiry,omitempty"`
+	KubectlShellImage           string                `json:"kubectlShellImage,omitempty"`
+	HelmRepositoryURL           string                `json:"helmRepositoryURL,omitempty"`
+	TrustOnFirstConnect         bool                  `json:"trustOnFirstConnect,omitempty"`
+	EdgeAgentCheckinInterval    int                   `json:"edgeAgentCheckinInterval,omitempty"`
+	BlackListedLabels           []LabelPair           `json:"blackListedLabels,omitempty"`
+	GlobalDeploymentOptions     *GlobalDeploymentOpts `json:"globalDeploymentOptions,omitempty"`
+	InternalAuthSettings        *InternalAuthSettings `json:"internalAuthSettings,omitempty"`
+	OAuthSettings               *OAuthSettings        `json:"oauthSettings,omitempty"`
+	LDAPSettings                *LDAPSettings         `json:"ldapsettings,omitempty"`
+	DisableKubeRolesSync        bool                  `json:"DisableKubeRolesSync,omitempty"`
+	DisableKubeShell            bool                  `json:"DisableKubeShell,omitempty"`
+	DisableKubeconfigDownload   bool                  `json:"DisableKubeconfigDownload,omitempty"`
+	DisplayDonationHeader       bool                  `json:"DisplayDonationHeader,omitempty"`
+	DisplayExternalContributors bool                  `json:"DisplayExternalContributors,omitempty"`
+	IsDockerDesktopExtension    bool                  `json:"IsDockerDesktopExtension,omitempty"`
 }
 
 type LabelPair struct {
@@ -100,6 +106,9 @@ func resourceSettings() *schema.Resource {
 		Read:   resourceSettingsRead,
 		Update: resourceSettingsApply,
 		Delete: resourceSettingsDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"edge_portainer_url":           {Type: schema.TypeString, Optional: true},
 			"authentication_method":        {Type: schema.TypeInt, Optional: true},
@@ -113,8 +122,32 @@ func resourceSettings() *schema.Resource {
 			"kubeconfig_expiry":            {Type: schema.TypeString, Optional: true},
 			"kubectl_shell_image":          {Type: schema.TypeString, Optional: true},
 			"helm_repository_url":          {Type: schema.TypeString, Optional: true},
-			"trust_on_first_connect":       {Type: schema.TypeBool, Optional: true},
-			"edge_agent_checkin_interval":  {Type: schema.TypeInt, Optional: true},
+			"disable_kube_roles_sync": {
+				Type:     schema.TypeBool,
+				Optional: true,
+			},
+			"disable_kube_shell": {
+				Type:     schema.TypeBool,
+				Optional: true,
+			},
+			"disable_kubeconfig_download": {
+				Type:     schema.TypeBool,
+				Optional: true,
+			},
+			"display_donation_header": {
+				Type:     schema.TypeBool,
+				Optional: true,
+			},
+			"display_external_contributors": {
+				Type:     schema.TypeBool,
+				Optional: true,
+			},
+			"is_docker_desktop_extension": {
+				Type:     schema.TypeBool,
+				Optional: true,
+			},
+			"trust_on_first_connect":      {Type: schema.TypeBool, Optional: true},
+			"edge_agent_checkin_interval": {Type: schema.TypeInt, Optional: true},
 			"black_listed_labels": {
 				Type:     schema.TypeList,
 				Optional: true,
@@ -404,6 +437,149 @@ func resourceSettingsApply(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/settings", client.Endpoint), nil)
+	if err != nil {
+		return err
+	}
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to read settings, status: %d", resp.StatusCode)
+	}
+
+	var result SettingsPayload
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+
+	d.SetId("portainer-settings")
+	_ = d.Set("edge_portainer_url", result.EdgePortainerURL)
+	_ = d.Set("authentication_method", result.AuthenticationMethod)
+	_ = d.Set("enable_telemetry", result.EnableTelemetry)
+	_ = d.Set("logo_url", result.LogoURL)
+	_ = d.Set("snapshot_interval", result.SnapshotInterval)
+	_ = d.Set("templates_url", result.TemplatesURL)
+	_ = d.Set("enable_edge_compute_features", result.EnableEdgeComputeFeatures)
+	_ = d.Set("enforce_edge_id", result.EnforceEdgeID)
+	_ = d.Set("user_session_timeout", result.UserSessionTimeout)
+	_ = d.Set("kubeconfig_expiry", result.KubeconfigExpiry)
+	_ = d.Set("kubectl_shell_image", result.KubectlShellImage)
+	_ = d.Set("helm_repository_url", result.HelmRepositoryURL)
+	_ = d.Set("trust_on_first_connect", result.TrustOnFirstConnect)
+	_ = d.Set("edge_agent_checkin_interval", result.EdgeAgentCheckinInterval)
+	_ = d.Set("disable_kube_roles_sync", result.DisableKubeRolesSync)
+	_ = d.Set("disable_kube_shell", result.DisableKubeShell)
+	_ = d.Set("disable_kubeconfig_download", result.DisableKubeconfigDownload)
+	_ = d.Set("display_donation_header", result.DisplayDonationHeader)
+	_ = d.Set("display_external_contributors", result.DisplayExternalContributors)
+	_ = d.Set("is_docker_desktop_extension", result.IsDockerDesktopExtension)
+
+	// black_listed_labels
+	labels := make([]map[string]interface{}, 0, len(result.BlackListedLabels))
+	for _, label := range result.BlackListedLabels {
+		labels = append(labels, map[string]interface{}{
+			"name":  label.Name,
+			"value": label.Value,
+		})
+	}
+	_ = d.Set("black_listed_labels", labels)
+
+	// internal_auth_settings
+	if result.InternalAuthSettings != nil {
+		d.Set("internal_auth_settings", []interface{}{map[string]interface{}{
+			"required_password_length": result.InternalAuthSettings.RequiredPasswordLength,
+		}})
+	}
+
+	// global_deployment_options
+	if result.GlobalDeploymentOptions != nil {
+		d.Set("global_deployment_options", []interface{}{map[string]interface{}{
+			"hide_stacks_functionality": result.GlobalDeploymentOptions.HideStacksFunctionality,
+		}})
+	}
+
+	// oauth_settings
+	if result.OAuthSettings != nil {
+		oauth := map[string]interface{}{
+			"access_token_uri":        result.OAuthSettings.AccessTokenURI,
+			"auth_style":              result.OAuthSettings.AuthStyle,
+			"authorization_uri":       result.OAuthSettings.AuthorizationURI,
+			"client_id":               result.OAuthSettings.ClientID,
+			"client_secret":           result.OAuthSettings.ClientSecret,
+			"default_team_id":         result.OAuthSettings.DefaultTeamID,
+			"logout_uri":              result.OAuthSettings.LogoutURI,
+			"oauth_auto_create_users": result.OAuthSettings.OAuthAutoCreateUsers,
+			"redirect_uri":            result.OAuthSettings.RedirectURI,
+			"resource_uri":            result.OAuthSettings.ResourceURI,
+			"sso":                     result.OAuthSettings.SSO,
+			"scopes":                  result.OAuthSettings.Scopes,
+			"user_identifier":         result.OAuthSettings.UserIdentifier,
+			"kube_secret_key":         result.OAuthSettings.KubeSecretKey,
+		}
+		d.Set("oauth_settings", []interface{}{oauth})
+	}
+
+	// ldap_settings
+	if result.LDAPSettings != nil {
+		ldap := map[string]interface{}{
+			"anonymous_mode":    result.LDAPSettings.AnonymousMode,
+			"auto_create_users": result.LDAPSettings.AutoCreateUsers,
+			"password":          result.LDAPSettings.Password,
+			"reader_dn":         result.LDAPSettings.ReaderDN,
+			"start_tls":         result.LDAPSettings.StartTLS,
+			"url":               result.LDAPSettings.URL,
+		}
+
+		// search_settings
+		search := make([]interface{}, 0, len(result.LDAPSettings.SearchSettings))
+		for _, s := range result.LDAPSettings.SearchSettings {
+			search = append(search, map[string]interface{}{
+				"base_dn":             s.BaseDN,
+				"filter":              s.Filter,
+				"user_name_attribute": s.UserNameAttribute,
+			})
+		}
+		ldap["search_settings"] = search
+
+		// group_search_settings
+		groupSearch := make([]interface{}, 0, len(result.LDAPSettings.GroupSearchSettings))
+		for _, s := range result.LDAPSettings.GroupSearchSettings {
+			groupSearch = append(groupSearch, map[string]interface{}{
+				"group_attribute": s.GroupAttribute,
+				"group_base_dn":   s.GroupBaseDN,
+				"group_filter":    s.GroupFilter,
+			})
+		}
+		ldap["group_search_settings"] = groupSearch
+
+		// tls_config
+		if result.LDAPSettings.TLSConfig != nil {
+			ldap["tls_config"] = []interface{}{map[string]interface{}{
+				"tls":             result.LDAPSettings.TLSConfig.TLS,
+				"tls_ca_cert":     result.LDAPSettings.TLSConfig.TLSCACert,
+				"tls_cert":        result.LDAPSettings.TLSConfig.TLSCert,
+				"tls_key":         result.LDAPSettings.TLSConfig.TLSKey,
+				"tls_skip_verify": result.LDAPSettings.TLSConfig.TLSSkipVerify,
+			}}
+		}
+
+		d.Set("ldap_settings", []interface{}{ldap})
+	}
+
 	return nil
 }
 

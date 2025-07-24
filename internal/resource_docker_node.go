@@ -24,7 +24,6 @@ func resourceDockerNode() *schema.Resource {
 		Read:   resourceDockerNodeRead,
 		Update: resourceDockerNodeUpdate,
 		Delete: resourceDockerNodeDelete,
-
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:     schema.TypeInt,

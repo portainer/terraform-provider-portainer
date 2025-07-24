@@ -21,6 +21,9 @@ func resourceSSLSettings() *schema.Resource {
 		Read:   resourceSSLSettingsRead,
 		Update: resourceSSLSettingsUpdate,
 		Delete: resourceSSLSettingsDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"cert": {
 				Type:        schema.TypeString,

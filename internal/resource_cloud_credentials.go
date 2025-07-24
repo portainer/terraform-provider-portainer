@@ -21,6 +21,9 @@ func resourceCloudCredentials() *schema.Resource {
 		Update: resourceCloudCredentialsUpdate,
 		Delete: resourceCloudCredentialsDelete,
 		Read:   resourceCloudCredentialsRead,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"cloud_provider": {
 				Type:        schema.TypeString,
