@@ -1,12 +1,12 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"strconv"
-	"encoding/json"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -203,7 +203,7 @@ func resourceDockerPluginRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	var plugin struct {
-		Enabled bool `json:"Enabled"`
+		Enabled  bool `json:"Enabled"`
 		Settings struct {
 			Args []string `json:"Args"`
 		} `json:"Settings"`
