@@ -13,23 +13,23 @@ variable "portainer_api_key" {
 
 variable "edge_config_name" {
   type        = string
-  default     = "nginx-deploy"
   description = "Name of the Edge configuration"
+  default     = "Test Edge Config"
 }
 
 variable "edge_config_type" {
   type    = string
-  default = "file"
+  default = "general"
 }
 
 variable "edge_config_category" {
   type    = string
-  default = "infrastructure"
+  default = "configuration"
 }
 
 variable "edge_config_base_dir" {
   type    = string
-  default = "/opt/nginx"
+  default = "/etc/some/path/of/edge/config"
 }
 
 variable "edge_group_ids" {
@@ -39,12 +39,5 @@ variable "edge_group_ids" {
 
 variable "edge_config_file_path" {
   type    = string
-  default = "nginx.yaml"
+  default = "config.zip"
 }
-
-variable "edge_config_state" {
-  type        = number
-  default     = 2
-  description = "Desired state to set via /edge_configurations/{id}/{state}"
-}
-

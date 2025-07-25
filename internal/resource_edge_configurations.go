@@ -26,7 +26,6 @@ type EdgeConfiguration struct {
 	Updated      int64  `json:"updated"`
 	UpdatedBy    int    `json:"updatedBy"`
 	Prev         string `json:"prev"`
-	State        int    `json:"state"`
 }
 
 func resourcePortainerEdgeConfigurations() *schema.Resource {
@@ -39,15 +38,22 @@ func resourcePortainerEdgeConfigurations() *schema.Resource {
 			State: schema.ImportStatePassthrough,
 		},
 		Schema: map[string]*schema.Schema{
-			"name":           {Type: schema.TypeString, Required: true},
+			"name":           {Type: schema.TypeString, Required: true, ForceNew: true},
 			"type":           {Type: schema.TypeString, Required: true},
-			"category":       {Type: schema.TypeString, Optional: true, Default: ""},
+			"category":       {Type: schema.TypeString, Optional: true, Default: "", ForceNew: true},
 			"base_dir":       {Type: schema.TypeString, Optional: true, Default: ""},
 			"edge_group_ids": {Type: schema.TypeList, Required: true, Elem: &schema.Schema{Type: schema.TypeInt}},
 			"file_path":      {Type: schema.TypeString, Required: true},
-			"state":          {Type: schema.TypeInt, Optional: true, Description: "Edge configuration state to set after creation or update"},
 		},
 	}
+}
+
+func convertToIntSlice(input []interface{}) []int {
+	result := make([]int, len(input))
+	for i, v := range input {
+		result[i] = v.(int)
+	}
+	return result
 }
 
 func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta interface{}) error {
@@ -63,16 +69,21 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	_ = writer.WriteField("name", d.Get("name").(string))
-	_ = writer.WriteField("type", d.Get("type").(string))
-	_ = writer.WriteField("category", d.Get("category").(string))
-	_ = writer.WriteField("baseDir", d.Get("base_dir").(string))
-
-	for _, id := range d.Get("edge_group_ids").([]interface{}) {
-		_ = writer.WriteField("edgeGroupIDs", strconv.Itoa(id.(int)))
+	payload := map[string]interface{}{
+		"name":         d.Get("name").(string),
+		"type":         d.Get("type").(string),
+		"category":     d.Get("category").(string),
+		"baseDir":      d.Get("base_dir").(string),
+		"edgeGroupIDs": convertToIntSlice(d.Get("edge_group_ids").([]interface{})),
 	}
 
-	part, err := writer.CreateFormFile("File", filepath.Base(filePath))
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal edgeConfiguration payload: %w", err)
+	}
+	_ = writer.WriteField("edgeConfiguration", string(payloadBytes))
+
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
 		return fmt.Errorf("failed to create form file: %w", err)
 	}
@@ -87,54 +98,49 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 	if err != nil {
 		return err
 	}
-
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
 	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to create edge configuration: %s", string(respBody))
 	}
 
-	configID := filepath.Base(filePath)
-	d.SetId(fmt.Sprintf("edge-config-%s", configID))
+	filterBytes, _ := json.Marshal(payload)
+	getReq, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_configurations", client.Endpoint), bytes.NewReader(filterBytes))
+	if err != nil {
+		return fmt.Errorf("failed to build GET request for lookup: %w", err)
+	}
+	getReq.Header.Set("Content-Type", "application/json")
+	if client.APIKey != "" {
+		getReq.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		getReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	}
+	getResp, err := client.HTTPClient.Do(getReq)
+	if err != nil {
+		return fmt.Errorf("failed to send GET lookup request: %w", err)
+	}
+	defer getResp.Body.Close()
 
-	if v, ok := d.GetOk("state"); ok {
-		stateInt := v.(int)
-		stateReq, err := http.NewRequest("PUT", fmt.Sprintf("%s/edge_configurations/%s/%d", client.Endpoint, configID, stateInt), nil)
-		if err != nil {
-			return fmt.Errorf("failed to build state update request: %w", err)
-		}
-		if client.APIKey != "" {
-			stateReq.Header.Set("X-API-Key", client.APIKey)
-		} else if client.JWTToken != "" {
-			stateReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
-		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-		}
-		stateResp, err := client.HTTPClient.Do(stateReq)
-		if err != nil {
-			return fmt.Errorf("failed to send state update request: %w", err)
-		}
-		defer stateResp.Body.Close()
-		if stateResp.StatusCode >= 400 {
-			msg, _ := io.ReadAll(stateResp.Body)
-			return fmt.Errorf("failed to update state: %s", string(msg))
-		}
+	var configs []EdgeConfiguration
+	if err := json.NewDecoder(getResp.Body).Decode(&configs); err != nil {
+		return fmt.Errorf("failed to decode GET response: %w", err)
+	}
+	if len(configs) == 0 {
+		return fmt.Errorf("no edge configuration found after creation")
 	}
 
+	d.SetId(strconv.Itoa(configs[0].ID))
 	return nil
 }
 
@@ -238,30 +244,6 @@ func resourcePortainerEdgeConfigurationsUpdate(d *schema.ResourceData, meta inte
 	if resp.StatusCode >= 400 {
 		responseBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to update edge configuration: %s", string(responseBody))
-	}
-
-	if v, ok := d.GetOk("state"); ok {
-		stateInt := v.(int)
-		stateReq, err := http.NewRequest("PUT", fmt.Sprintf("%s/edge_configurations/%s/%d", client.Endpoint, rawID, stateInt), nil)
-		if err != nil {
-			return fmt.Errorf("failed to build state update request: %w", err)
-		}
-		if client.APIKey != "" {
-			stateReq.Header.Set("X-API-Key", client.APIKey)
-		} else if client.JWTToken != "" {
-			stateReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
-		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-		}
-		stateResp, err := client.HTTPClient.Do(stateReq)
-		if err != nil {
-			return fmt.Errorf("failed to send state update request: %w", err)
-		}
-		defer stateResp.Body.Close()
-		if stateResp.StatusCode >= 400 {
-			msg, _ := io.ReadAll(stateResp.Body)
-			return fmt.Errorf("failed to update state: %s", string(msg))
-		}
 	}
 
 	return nil

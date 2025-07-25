@@ -4,6 +4,5 @@ resource "portainer_edge_configurations" "example" {
   category       = var.edge_config_category
   base_dir       = var.edge_config_base_dir
   edge_group_ids = var.edge_group_ids
-  file_path      = var.edge_config_file_path
-  state          = var.edge_config_state
+  file_path      = "${path.module}/${var.edge_config_file_path}"
 }

@@ -5,7 +5,7 @@
 
 | Name | Version |
 |------|---------|
-| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | 1.6.0 |
+| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | 0.1.0 |
 
 ## Resources
 

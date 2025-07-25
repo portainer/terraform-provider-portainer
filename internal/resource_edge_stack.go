@@ -139,8 +139,35 @@ func resourceEdgeStack() *schema.Resource {
 				Computed:    true,
 				Description: "Full URL of the webhook trigger",
 			},
+			"environment": {
+				Type:        schema.TypeMap,
+				Optional:    true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Description: "Environment variables for the Edge Stack",
+			},
 		},
 	}
+}
+
+func setAuthHeaders(client *APIClient, req *http.Request) {
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	}
+}
+
+func buildEnvVars(d *schema.ResourceData) []map[string]string {
+	envVars := []map[string]string{}
+	if envMap, ok := d.GetOk("environment"); ok {
+		for k, v := range envMap.(map[string]interface{}) {
+			envVars = append(envVars, map[string]string{
+				"name":  k,
+				"value": v.(string),
+			})
+		}
+	}
+	return envVars
 }
 
 func findExistingEdgeStackByName(client *APIClient, name string) (int, error) {
@@ -205,6 +232,16 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 			"stackFileContent":      content.(string),
 			"useManifestNamespaces": useManifest,
 			"registries":            registries,
+		}
+		if envMap, ok := d.GetOk("environment"); ok {
+			envVars := []map[string]string{}
+			for k, v := range envMap.(map[string]interface{}) {
+				envVars = append(envVars, map[string]string{
+					"name":  k,
+					"value": v.(string),
+				})
+			}
+			payload["envVars"] = envVars
 		}
 		return createEdgeStackFromJSON(client, d, payload, "/edge_stacks/create/string")
 	}
@@ -291,6 +328,16 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 			"useManifestNamespaces":    useManifest,
 			"registries":               registries,
 		}
+		if envMap, ok := d.GetOk("environment"); ok {
+			envVars := []map[string]string{}
+			for k, v := range envMap.(map[string]interface{}) {
+				envVars = append(envVars, map[string]string{
+					"name":  k,
+					"value": v.(string),
+				})
+			}
+			payload["envVars"] = envVars
+		}
 		stackWebhook := d.Get("stack_webhook").(bool)
 		if stackWebhook {
 			webhookID := uuid.New().String()
@@ -314,64 +361,115 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 
 func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	deploymentType := d.Get("deployment_type").(int)
 
-	payload := map[string]interface{}{
-		"name":                  d.Get("name").(string),
-		"deploymentType":        d.Get("deployment_type").(int),
-		"edgeGroups":            toIntSlice(d.Get("edge_groups").([]interface{})),
-		"updateVersion":         true,
-		"useManifestNamespaces": d.Get("use_manifest_namespaces").(bool),
-	}
-
-	if d.Get("stack_webhook").(bool) && d.Get("repository_url").(string) != "" {
-		webhookID := uuid.New().String()
-		autoUpdate := map[string]interface{}{
-			"forcePullImage": d.Get("pull_image").(bool),
-			"forceUpdate":    d.Get("force_update").(bool),
-			"interval":       d.Get("update_interval").(string),
-			"webhook":        webhookID,
+	if _, hasFile := d.GetOk("stack_file_content"); hasFile || d.Get("stack_file_path").(string) != "" {
+		payload := map[string]interface{}{
+			"name":                  d.Get("name").(string),
+			"deploymentType":        deploymentType,
+			"edgeGroups":            toIntSlice(d.Get("edge_groups").([]interface{})),
+			"updateVersion":         true,
+			"useManifestNamespaces": d.Get("use_manifest_namespaces").(bool),
+			"envVars":               buildEnvVars(d),
+			"prePullImage":          d.Get("pre_pull_image").(bool),
+			"rePullImage":           d.Get("pull_image").(bool),
+			"registries":            toIntSlice(d.Get("registries").([]interface{})),
 		}
-		payload["autoUpdate"] = autoUpdate
-		d.Set("webhook_id", webhookID)
-		baseURL := strings.TrimSuffix(client.Endpoint, "/api")
-		webhookURL := fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, webhookID)
-		d.Set("webhook_url", webhookURL)
+
+		if v, ok := d.GetOk("stack_file_content"); ok {
+			payload["stackFileContent"] = v.(string)
+		}
+
+		jsonBody, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+
+		req, err := http.NewRequest("PUT", fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
+		if err != nil {
+			return err
+		}
+		setAuthHeaders(client, req)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.HTTPClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			data, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("failed to update edge stack: %s", string(data))
+		}
+
+		return resourceEdgeStackRead(d, meta)
 	}
 
-	if v, ok := d.GetOk("stack_file_content"); ok {
-		payload["stackFileContent"] = v.(string)
+	// Repository-based update via /git
+	if repoURL, ok := d.GetOk("repository_url"); ok && repoURL.(string) != "" {
+		payload := map[string]interface{}{
+			"deploymentType": deploymentType,
+			"groupIds":       toIntSlice(d.Get("edge_groups").([]interface{})),
+			"refName":        d.Get("repository_reference_name").(string),
+			"envVars":        buildEnvVars(d),
+			"updateVersion":  true,
+			"prePullImage":   d.Get("pre_pull_image").(bool),
+			"rePullImage":    d.Get("pull_image").(bool),
+			"registries":     toIntSlice(d.Get("registries").([]interface{})),
+			"retryDeploy":    d.Get("retry_deploy").(bool),
+		}
+
+		if d.Get("git_repository_authentication").(bool) {
+			payload["authentication"] = map[string]string{
+				"username": d.Get("repository_username").(string),
+				"password": d.Get("repository_password").(string),
+			}
+		}
+
+		if d.Get("stack_webhook").(bool) {
+			webhookID := uuid.New().String()
+			autoUpdate := map[string]interface{}{
+				"forcePullImage": d.Get("pull_image").(bool),
+				"forceUpdate":    d.Get("force_update").(bool),
+				"interval":       d.Get("update_interval").(string),
+				"webhook":        webhookID,
+			}
+			payload["autoUpdate"] = autoUpdate
+
+			d.Set("webhook_id", webhookID)
+			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+			webhookURL := fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, webhookID)
+			d.Set("webhook_url", webhookURL)
+		}
+
+		jsonBody, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+
+		req, err := http.NewRequest("PUT", fmt.Sprintf("%s/edge_stacks/%s/git", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
+		if err != nil {
+			return err
+		}
+		setAuthHeaders(client, req)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.HTTPClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			data, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("failed to update repository-based edge stack: %s", string(data))
+		}
+
+		return resourceEdgeStackRead(d, meta)
 	}
 
-	jsonBody, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return err
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update edge stack: %s", string(data))
-	}
-
-	return resourceEdgeStackRead(d, meta)
+	return fmt.Errorf("one of 'stack_file_content', 'stack_file_path', or 'repository_url' must be provided for update")
 }
 
 func createEdgeStackFromJSON(client *APIClient, d *schema.ResourceData, payload map[string]interface{}, endpoint string) error {
@@ -452,12 +550,26 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	var stack struct {
-		Name string `json:"Name"`
+		Name    string `json:"Name"`
+		EnvVars []struct {
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		} `json:"envVars"`
 	}
+
 	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
 		return err
 	}
+
 	d.Set("name", stack.Name)
+	envMap := make(map[string]string)
+	for _, env := range stack.EnvVars {
+		envMap[env.Name] = env.Value
+	}
+	if len(envMap) > 0 {
+		d.Set("environment", envMap)
+	}
+
 	return nil
 }
 
