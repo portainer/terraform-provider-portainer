@@ -27,6 +27,7 @@
 | <a name="input_edge_stack_name"></a> [edge\_stack\_name](#input\_edge\_stack\_name) | Name of the Portainer Edge Stack | `string` | `"example-edge-stack"` | no |
 | <a name="input_edge_stack_registries"></a> [edge\_stack\_registries](#input\_edge\_stack\_registries) | List of registry IDs | `list(number)` | `[]` | no |
 | <a name="input_edge_stack_repository_url"></a> [edge\_stack\_repository\_url](#input\_edge\_stack\_repository\_url) | Inline stack file content for the Edge Stack | `string` | `"https://github.com/portainer/terraform-provider-portainer"` | no |
+| <a name="input_environment"></a> [environment](#input\_environment) | Map of environment variables. | `map(string)` | <pre>{<br/>  "FOO": "BAR",<br/>  "FOO2": "test"<br/>}</pre> | no |
 | <a name="input_portainer_api_key"></a> [portainer\_api\_key](#input\_portainer\_api\_key) | Default Portainer Admin API Key | `string` | `"ptr_xrP7XWqfZEOoaCJRu5c8qKaWuDtVc2Zb07Q5g22YpS8="` | no |
 | <a name="input_portainer_skip_ssl_verify"></a> [portainer\_skip\_ssl\_verify](#input\_portainer\_skip\_ssl\_verify) | Set to true to skip TLS certificate verification (useful for self-signed certs) | `bool` | `true` | no |
 | <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"https://localhost:9443"` | no |

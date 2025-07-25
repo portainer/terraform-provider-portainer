@@ -25,6 +25,10 @@ resource "portainer_edge_stack" "example_string" {
       web:
         image: nginx
   EOT
+  environment = {
+    FOO  = "BAR"
+    FOO2 = "test"
+  }
 }
 ```
 
@@ -36,6 +40,10 @@ resource "portainer_edge_stack" "example_file" {
   deployment_type    = 0
   edge_groups        = [1]
   stack_file_path    = "./templates/nginx.yml"
+  environment = {
+    FOO  = "BAR"
+    FOO2 = "test"
+  }
 }
 ```
 
@@ -51,6 +59,10 @@ resource "portainer_edge_stack" "example_git" {
   repository_password      = "supersecret"
   repository_reference_name = "refs/heads/main"
   file_path_in_repository  = "docker-compose.yml"
+  environment = {
+    FOO  = "BAR"
+    FOO2 = "test"
+  }
 }
 ```
 
@@ -78,9 +90,10 @@ terraform apply
 ### Common Arguments
 | Name                      | Type         | Required    | Description                                                                 |
 | ------------------------- | ------------ | ----------- | --------------------------------------------------------------------------- |
-| `name`                    | string       | ✅ yes       | Name of the Edge Stack                                                     |
-| `deployment_type`         | int          | ✅ yes       | Deployment type: `0` = Docker Compose, `1` = Kubernetes                    |
-| `edge_groups`             | list(number) | ✅ yes       | List of Edge Group IDs where the stack will be deployed                    |
+| `name`                    | string       | ✅ yes      | Name of the Edge Stack                                                      |
+| `deployment_type`         | int          | ✅ yes      | Deployment type: `0` = Docker Compose, `1` = Kubernetes                     |
+| `edge_groups`             | list(number) | ✅ yes      | List of Edge Group IDs where the stack will be deployed                     |
+| `environment`             | map(string)  | 🚫 optional | Environment variables (key-value pairs) passed to the stack at deployment time |
 | `registries`              | list(number) | 🚫 optional | List of registry IDs (for pulling images)                                   |
 | `use_manifest_namespaces` | bool         | 🚫 optional | For Kubernetes only – respect namespaces in the manifest (default: `false`) |
 

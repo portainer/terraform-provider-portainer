@@ -11,4 +11,5 @@ resource "portainer_edge_stack" "file_example" {
   deployment_type = var.edge_stack_deployment_type
   edge_groups     = [portainer_edge_group.example_static.id]
   registries      = var.edge_stack_registries
+  environment     = var.environment
 }

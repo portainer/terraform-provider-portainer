@@ -70,3 +70,12 @@ variable "portainer_skip_ssl_verify" {
   type        = bool
   default     = true
 }
+
+variable "environment" {
+  type        = map(string)
+  description = "Map of environment variables."
+  default = {
+    FOO  = "BAR"
+    FOO2 = "test"
+  }
+}
