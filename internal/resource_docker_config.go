@@ -15,6 +15,22 @@ func resourceDockerConfig() *schema.Resource {
 		Read:   resourceDockerConfigRead,
 		Update: resourceDockerConfigUpdate,
 		Delete: resourceDockerConfigDelete,
+		Importer: &schema.ResourceImporter{
+			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+				importID := d.Id()
+				var endpointID int
+				var configID string
+				n, err := fmt.Sscanf(importID, "%d-%s", &endpointID, &configID)
+				if err != nil || n != 2 {
+					return nil, fmt.Errorf("invalid import ID format. Expected '<endpoint_id>-<config_id>'")
+				}
+				if err := d.Set("endpoint_id", endpointID); err != nil {
+					return nil, err
+				}
+				d.SetId(configID)
+				return []*schema.ResourceData{d}, nil
+			},
+		},
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:     schema.TypeInt,

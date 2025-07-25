@@ -20,6 +20,9 @@ func resourceExperimentalSettings() *schema.Resource {
 		Read:   resourceExperimentalSettingsRead,
 		Update: resourceExperimentalSettingsApply,
 		Delete: resourceExperimentalSettingsDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"openai_integration": {
 				Type:        schema.TypeBool,

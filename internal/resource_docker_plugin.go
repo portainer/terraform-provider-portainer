@@ -1,9 +1,12 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -13,6 +16,23 @@ func resourceDockerPlugin() *schema.Resource {
 		Create: resourceDockerPluginCreate,
 		Delete: resourceDockerPluginDelete,
 		Read:   resourceDockerPluginRead,
+		Importer: &schema.ResourceImporter{
+			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+				parts := strings.SplitN(d.Id(), ":", 2)
+				if len(parts) != 2 {
+					return nil, fmt.Errorf("unexpected ID format (%s), expected endpoint_id:plugin_name", d.Id())
+				}
+				endpointID, err := strconv.Atoi(parts[0])
+				if err != nil {
+					return nil, fmt.Errorf("invalid endpoint ID in ID: %w", err)
+				}
+				if err := d.Set("endpoint_id", endpointID); err != nil {
+					return nil, err
+				}
+				d.SetId(parts[1])
+				return []*schema.ResourceData{d}, nil
+			},
+		},
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:     schema.TypeInt,
@@ -153,6 +173,79 @@ func resourceDockerPluginDelete(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceDockerPluginRead(d *schema.ResourceData, meta interface{}) error {
-	// optional: could query /plugins/{name}/json if needed
+	client := meta.(*APIClient)
+	endpointID := d.Get("endpoint_id").(int)
+	pluginName := d.Id()
+	url := fmt.Sprintf("%s/endpoints/%d/docker/plugins/%s/json", client.Endpoint, endpointID, pluginName)
+	req, _ := http.NewRequest("GET", url, nil)
+
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to fetch docker plugin: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		d.SetId("")
+		return nil
+	}
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read docker plugin, status: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var plugin struct {
+		Enabled  bool `json:"Enabled"`
+		Settings struct {
+			Args []string `json:"Args"`
+		} `json:"Settings"`
+		Config struct {
+			Remote      string `json:"Remote"`
+			Description string `json:"Description"`
+			Interface   struct {
+				Types json.RawMessage `json:"Types"`
+			} `json:"Interface"`
+			Settings struct {
+				Env []string `json:"Env"`
+			} `json:"Settings"`
+		} `json:"Config"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&plugin); err != nil {
+		return fmt.Errorf("failed to decode plugin data: %w", err)
+	}
+
+	d.Set("enable", plugin.Enabled)
+	d.Set("remote", plugin.Config.Remote)
+
+	// settings reconstruction (limited to env-based ones)
+	var settings []map[string]interface{}
+	for _, env := range plugin.Config.Settings.Env {
+		// env is of form "KEY=value"
+		var name, value string
+		n := strings.Index(env, "=")
+		if n >= 0 {
+			name = env[:n]
+			value = env[n+1:]
+		} else {
+			name = env
+			value = ""
+		}
+		settings = append(settings, map[string]interface{}{
+			"name":  name,
+			"value": []interface{}{value},
+		})
+	}
+	if len(settings) > 0 {
+		d.Set("settings", settings)
+	}
+
 	return nil
 }

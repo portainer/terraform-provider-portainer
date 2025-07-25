@@ -15,7 +15,9 @@ func resourceRegistry() *schema.Resource {
 		Read:   resourceRegistryRead,
 		Delete: resourceRegistryDelete,
 		Update: resourceRegistryUpdate,
-
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"name":           {Type: schema.TypeString, Required: true},
 			"url":            {Type: schema.TypeString, Required: true},

@@ -15,11 +15,9 @@ func resourceTag() *schema.Resource {
 		Read:   resourceTagRead,
 		Delete: resourceTagDelete,
 		Update: nil,
-
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
-
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:     schema.TypeString,

@@ -21,7 +21,19 @@ func resourcePortainerStack() *schema.Resource {
 		Delete: resourcePortainerStackDelete,
 		Update: resourcePortainerStackUpdate,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+				// "<endpoint_id>-<stack_id>-<deployment_type>"
+				var endpointID, stackID int
+				var deploymentType string
+				_, err := fmt.Sscanf(d.Id(), "%d-%d-%s", &endpointID, &stackID, &deploymentType)
+				if err != nil {
+					return nil, fmt.Errorf("invalid ID format. Use '<endpoint_id>-<stack_id>-<deployment_type>'")
+				}
+				d.Set("endpoint_id", endpointID)
+				d.Set("deployment_type", deploymentType)
+				d.SetId(fmt.Sprintf("%d", stackID))
+				return []*schema.ResourceData{d}, nil
+			},
 		},
 		Schema: map[string]*schema.Schema{
 			"deployment_type": {
@@ -319,6 +331,11 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 		Namespace  string `json:"namespace"`
 		ComposeFmt bool   `json:"composeFormat"`
 		Webhook    string `json:"webhook"`
+		EndpointID int    `json:"EndpointId"`
+		Env        []struct {
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		} `json:"Env"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
 		return fmt.Errorf("failed to decode stack response: %w", err)
@@ -330,19 +347,6 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	d.Set("compose_format", stack.ComposeFmt)
 	if d.Get("stack_webhook").(bool) && d.Get("method").(string) != "repository" {
 		d.Set("webhook_id", stack.Webhook)
-	}
-
-	if v, ok := d.GetOk("deployment_type"); !ok || v == "" {
-		switch stack.Type {
-		case 1:
-			d.Set("deployment_type", "standalone")
-		case 2:
-			d.Set("deployment_type", "swarm")
-		case 3:
-			d.Set("deployment_type", "kubernetes")
-		default:
-			return fmt.Errorf("unknown stack type: %d", stack.Type)
-		}
 	}
 
 	method := d.Get("method").(string)
@@ -377,6 +381,22 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 
 		d.Set("stack_file_content", fileContent.StackFileContent)
 	}
+	// Convert stack.Env to []map[string]string for Terraform
+	var tfEnvs []map[string]interface{}
+	for _, env := range stack.Env {
+		tfEnvs = append(tfEnvs, map[string]interface{}{
+			"name":  env.Name,
+			"value": env.Value,
+		})
+	}
+	d.Set("env", tfEnvs)
+	_ = d.Set("method", "string")
+	_ = d.Set("endpoint_id", client.Endpoint)
+	_ = d.Set("stack_webhook", stack.Webhook != "")
+	_ = d.Set("prune", false)
+	_ = d.Set("pull_image", false)
+	_ = d.Set("support_relative_path", false)
+	_ = d.Set("tlsskip_verify", false)
 
 	return nil
 }

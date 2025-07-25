@@ -21,7 +21,9 @@ func resourceEdgeJob() *schema.Resource {
 		Read:   resourceEdgeJobRead,
 		Update: resourceEdgeJobUpdate,
 		Delete: resourceEdgeJobDelete,
-
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:     schema.TypeString,

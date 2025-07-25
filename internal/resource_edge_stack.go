@@ -22,7 +22,9 @@ func resourceEdgeStack() *schema.Resource {
 		Read:   resourceEdgeStackRead,
 		Delete: resourceEdgeStackDelete,
 		Update: resourceEdgeStackUpdate,
-
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:     schema.TypeString,

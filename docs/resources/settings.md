@@ -35,21 +35,27 @@ trraform apply
 
 ## Arguments Reference
 ### Main Attributes
-| Name                          | Type     | Required | Description                                                                  |
-|-------------------------------|----------|----------|------------------------------------------------------------------------------|
-| `authentication_method`       | number   | ✅ yes   | Type of authentication (e.g., `1` = internal, `2` = LDAP, `3` = OAuth)       |
-| `enable_telemetry`            | bool     | 🚫 no    | Enable Portainer telemetry                                                   |
-| `logo_url`                    | string   | 🚫 no    | URL to custom logo                                                           |
-| `snapshot_interval`           | string   | 🚫 no    | How often to run container snapshots (e.g., `"15m"`)                         |
-| `templates_url`               | string   | 🚫 no    | URL to the template list JSON                                                |
-| `user_session_timeout`        | string   | 🚫 no    | Session expiration time (e.g., `"8h"`)                                       |
-| `kubeconfig_expiry`           | string   | 🚫 no    | Expiration time for downloaded Kubeconfigs                                   |
-| `kubectl_shell_image`         | string   | 🚫 no    | Image to be used for the kubectl shell UI                                   |
-| `helm_repository_url`         | string   | 🚫 no    | Default Helm repository URL                                                  |
-| `enable_edge_compute_features`| bool     | 🚫 no    | Enable Edge compute management support                                       |
-| `enforce_edge_id`             | bool     | 🚫 no    | Enforce the use of Portainer Edge ID                                         |
-| `trust_on_first_connect`      | bool   | 🚫 no    | Automatically trust TLS fingerprint on first connection |
-| `edge_agent_checkin_interval` | number | 🚫 no    | Interval (in seconds) for Edge Agent check-ins          |
+| Name                           | Type     | Required | Description                                                                  |
+|--------------------------------|----------|----------|------------------------------------------------------------------------------|
+| `authentication_method`        | number   | ✅ yes   | Type of authentication (e.g., `1` = internal, `2` = LDAP, `3` = OAuth)       |
+| `enable_telemetry`             | bool     | 🚫 no    | Enable Portainer telemetry                                                   |
+| `logo_url`                     | string   | 🚫 no    | URL to custom logo                                                           |
+| `snapshot_interval`            | string   | 🚫 no    | How often to run container snapshots (e.g., `"15m"`)                         |
+| `templates_url`                | string   | 🚫 no    | URL to the template list JSON                                                |
+| `user_session_timeout`         | string   | 🚫 no    | Session expiration time (e.g., `"8h"`)                                       |
+| `kubeconfig_expiry`            | string   | 🚫 no    | Expiration time for downloaded Kubeconfigs                                   |
+| `kubectl_shell_image`          | string   | 🚫 no    | Image to be used for the kubectl shell UI                                    |
+| `helm_repository_url`          | string   | 🚫 no    | Default Helm repository URL                                                  |
+| `enable_edge_compute_features` | bool     | 🚫 no    | Enable Edge compute management support                                       |
+| `enforce_edge_id`              | bool     | 🚫 no    | Enforce the use of Portainer Edge ID                                         |
+| `trust_on_first_connect`       | bool     | 🚫 no    | Automatically trust TLS fingerprint on first connection                      |
+| `edge_agent_checkin_interval`  | number   | 🚫 no    | Interval (in seconds) for Edge Agent check-ins                               |
+| `disable_kube_roles_sync`      | bool     | ❌ no    | Disable Kubernetes role sync from RBAC                                       |
+| `disable_kube_shell`           | bool     | ❌ no    | Disable the Kubectl Shell feature                                            |
+| `disable_kubeconfig_download`  | bool     | ❌ no    | Disable downloading of Kubeconfig files                                      |
+| `display_donation_header`      | bool     | ❌ no    | Show the donation header in UI                                               |
+| `display_external_contributors`| bool     | ❌ no    | Show the list of external contributors in the UI                             |
+| `is_docker_desktop_extension`  | bool     | ❌ no    | Whether Portainer is running as Docker Desktop extension                     |
 
 ### `global_deployment_options` Block
 | Name                        | Type | Required | Description                     |

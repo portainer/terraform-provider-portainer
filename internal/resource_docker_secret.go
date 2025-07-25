@@ -15,6 +15,22 @@ func resourceDockerSecret() *schema.Resource {
 		Read:   resourceDockerSecretRead,
 		Delete: resourceDockerSecretDelete,
 		Update: resourceDockerSecretUpdate,
+		Importer: &schema.ResourceImporter{
+			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+				importID := d.Id()
+				var endpointID int
+				var secretID string
+				n, err := fmt.Sscanf(importID, "%d-%s", &endpointID, &secretID)
+				if err != nil || n != 2 {
+					return nil, fmt.Errorf("invalid import ID format. Expected '<endpoint_id>-<secret_id>'")
+				}
+				if err := d.Set("endpoint_id", endpointID); err != nil {
+					return nil, err
+				}
+				d.SetId(secretID)
+				return []*schema.ResourceData{d}, nil
+			},
+		},
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {Type: schema.TypeInt, Required: true},
 			"name":        {Type: schema.TypeString, Required: true},

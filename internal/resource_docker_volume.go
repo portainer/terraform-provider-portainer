@@ -54,6 +54,26 @@ func resourceDockerVolume() *schema.Resource {
 		Read:   resourceDockerVolumeRead,
 		Delete: resourceDockerVolumeDelete,
 		Update: nil,
+		Importer: &schema.ResourceImporter{
+			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+				// ID in format: <endpoint_id>-<volume_name>
+				id := d.Id()
+				var endpointID int
+				var name string
+				n, err := fmt.Sscanf(id, "%d-%s", &endpointID, &name)
+				if err != nil || n != 2 {
+					return nil, fmt.Errorf("invalid import ID format. Expected '<endpoint_id>-<volume_name>'")
+				}
+				if err := d.Set("endpoint_id", endpointID); err != nil {
+					return nil, err
+				}
+				if err := d.Set("name", name); err != nil {
+					return nil, err
+				}
+				d.SetId(fmt.Sprintf("%d-%s", endpointID, name))
+				return []*schema.ResourceData{d}, nil
+			},
+		},
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:     schema.TypeInt,

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -15,11 +17,27 @@ func resourceDockerNetwork() *schema.Resource {
 		Read:   resourceDockerNetworkRead,
 		Delete: resourceDockerNetworkDelete,
 		Update: nil,
+		Importer: &schema.ResourceImporter{
+			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+				// Expect ID in format "<endpoint_id>:<network_id>"
+				parts := strings.SplitN(d.Id(), ":", 2)
+				if len(parts) != 2 {
+					return nil, fmt.Errorf("unexpected format of ID (%q), expected <endpoint_id>:<network_id>", d.Id())
+				}
+				endpointID, err := strconv.Atoi(parts[0])
+				if err != nil {
+					return nil, fmt.Errorf("invalid endpoint ID: %w", err)
+				}
+				d.Set("endpoint_id", endpointID)
+				d.SetId(parts[1])
+				return []*schema.ResourceData{d}, nil
+			},
+		},
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {Type: schema.TypeInt, Required: true, ForceNew: true},
 			"name":        {Type: schema.TypeString, Required: true, ForceNew: true},
 			"driver":      {Type: schema.TypeString, Optional: true, Default: "bridge", ForceNew: true},
-			"scope":       {Type: schema.TypeString, Optional: true, ForceNew: true},
+			"scope":       {Type: schema.TypeString, Optional: true, Default: "local", ForceNew: true},
 			"internal":    {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
 			"attachable":  {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
 			"ingress":     {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
@@ -163,111 +181,78 @@ func resourceDockerNetworkCreate(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceDockerNetworkRead(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+	endpointID := d.Get("endpoint_id").(int)
+	networkID := d.Id()
+	path := fmt.Sprintf("/endpoints/%d/docker/networks/%s", endpointID, networkID)
+	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to read docker network: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		d.SetId("")
+		return nil
+	}
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read docker network: %s", string(body))
+	}
+
+	var result struct {
+		Name       string                 `json:"Name"`
+		Driver     string                 `json:"Driver"`
+		Scope      string                 `json:"Scope"`
+		Internal   bool                   `json:"Internal"`
+		Attachable bool                   `json:"Attachable"`
+		Ingress    bool                   `json:"Ingress"`
+		ConfigOnly bool                   `json:"ConfigOnly"`
+		EnableIPv4 bool                   `json:"EnableIPv4"`
+		EnableIPv6 bool                   `json:"EnableIPv6"`
+		Options    map[string]interface{} `json:"Options"`
+		Labels     map[string]string      `json:"Labels"`
+		IPAM       struct {
+			Driver  string                   `json:"Driver"`
+			Options map[string]string        `json:"Options"`
+			Config  []map[string]interface{} `json:"Config"`
+		} `json:"IPAM"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode docker network response: %w", err)
+	}
+
+	_ = d.Set("name", result.Name)
+	_ = d.Set("driver", result.Driver)
+	_ = d.Set("scope", result.Scope)
+	_ = d.Set("internal", result.Internal)
+	_ = d.Set("attachable", result.Attachable)
+	_ = d.Set("ingress", result.Ingress)
+	_ = d.Set("config_only", result.ConfigOnly)
+	_ = d.Set("enable_ipv4", result.EnableIPv4)
+	_ = d.Set("enable_ipv6", result.EnableIPv6)
+	_ = d.Set("options", result.Options)
+
+	labels := make(map[string]interface{}, len(result.Labels))
+	for k, v := range result.Labels {
+		labels[k] = v
+	}
+	_ = d.Set("labels", labels)
+
+	// IPAM config
+	_ = d.Set("ipam_driver", result.IPAM.Driver)
+
+	ipamOpts := make(map[string]interface{}, len(result.IPAM.Options))
+	for k, v := range result.IPAM.Options {
+		ipamOpts[k] = v
+	}
+	_ = d.Set("ipam_options", ipamOpts)
+
+	_ = d.Set("ipam_config", result.IPAM.Config)
+
 	return nil
 }
-
-// Use if will be exists PUT (update) methods for Docker Netwerks over API
-///func resourceDockerNetworkRead(d *schema.ResourceData, meta interface{}) error {
-///	client := meta.(*APIClient)
-///	endpointID := d.Get("endpoint_id").(int)
-///	networkID := d.Id()
-///
-///	path := fmt.Sprintf("/endpoints/%d/docker/networks/%s", endpointID, networkID)
-///	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-///	if err != nil {
-///		return fmt.Errorf("failed to read docker network: %w", err)
-///	}
-///	defer resp.Body.Close()
-///
-///	if resp.StatusCode == 404 {
-///		d.SetId("")
-///		return nil
-///	} else if resp.StatusCode != 200 {
-///		body, _ := io.ReadAll(resp.Body)
-///		return fmt.Errorf("failed to read docker network: %s", string(body))
-///	}
-///
-///	var network struct {
-///		ID         string            `json:"Id"`
-///		Name       string            `json:"Name"`
-///		Driver     string            `json:"Driver"`
-///		Scope      string            `json:"Scope"`
-///		Internal   bool              `json:"Internal"`
-///		Attachable bool              `json:"Attachable"`
-///		Ingress    bool              `json:"Ingress"`
-///		ConfigOnly bool              `json:"ConfigOnly"`
-///		ConfigFrom map[string]string `json:"ConfigFrom"`
-///		EnableIPv4 *bool             `json:"EnableIPv4,omitempty"`
-///		EnableIPv6 *bool             `json:"EnableIPv6,omitempty"`
-///		IPAM       struct {
-///			Driver  string                   `json:"Driver"`
-///			Options map[string]string        `json:"Options"`
-///			Config  []map[string]interface{} `json:"Config"`
-///		} `json:"IPAM"`
-///		Options map[string]string `json:"Options"`
-///		Labels  map[string]string `json:"Labels"`
-///	}
-///
-///	if err := json.NewDecoder(resp.Body).Decode(&network); err != nil {
-///		return err
-///	}
-///
-///	d.Set("name", network.Name)
-///	d.Set("driver", network.Driver)
-///	d.Set("scope", network.Scope)
-///	d.Set("internal", network.Internal)
-///	d.Set("attachable", network.Attachable)
-///	d.Set("ingress", network.Ingress)
-///	d.Set("config_only", network.ConfigOnly)
-///
-///	if network.EnableIPv4 != nil {
-///		d.Set("enable_ipv4", *network.EnableIPv4)
-///	}
-///	if network.EnableIPv6 != nil {
-///		d.Set("enable_ipv6", *network.EnableIPv6)
-///	}
-///
-///	if v, ok := network.ConfigFrom["Network"]; ok {
-///		d.Set("config_from", v)
-///	}
-///
-///	d.Set("ipam_driver", network.IPAM.Driver)
-///
-///	if network.IPAM.Options != nil {
-///		d.Set("ipam_options", network.IPAM.Options)
-///	} else {
-///		d.Set("ipam_options", map[string]string{})
-///	}
-///
-///	var ipamConfigList []map[string]interface{}
-///	for _, c := range network.IPAM.Config {
-///		entry := map[string]interface{}{}
-///		if subnet, ok := c["Subnet"]; ok {
-///			entry["subnet"] = subnet
-///		}
-///		if ipRange, ok := c["IPRange"]; ok {
-///			entry["ip_range"] = ipRange
-///		}
-///		if gateway, ok := c["Gateway"]; ok {
-///			entry["gateway"] = gateway
-///		}
-///		if aux, ok := c["AuxiliaryAddresses"]; ok {
-///			entry["auxiliary_addresses"] = aux
-///		}
-///		ipamConfigList = append(ipamConfigList, entry)
-///	}
-///
-///	if ipamConfigList != nil {
-///		d.Set("ipam_config", ipamConfigList)
-///	} else {
-///		d.Set("ipam_config", []interface{}{})
-///	}
-///
-///	d.Set("options", network.Options)
-///	d.Set("labels", network.Labels)
-///
-///	return nil
-///
 
 func resourceDockerNetworkDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)

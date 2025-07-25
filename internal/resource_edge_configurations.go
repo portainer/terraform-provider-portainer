@@ -35,6 +35,9 @@ func resourcePortainerEdgeConfigurations() *schema.Resource {
 		Read:   resourcePortainerEdgeConfigurationsRead,
 		Update: schema.Noop,
 		Delete: resourcePortainerEdgeConfigurationsDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 		Schema: map[string]*schema.Schema{
 			"name":           {Type: schema.TypeString, Required: true},
 			"type":           {Type: schema.TypeString, Required: true},
