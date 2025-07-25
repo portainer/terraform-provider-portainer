@@ -211,9 +211,7 @@ func resourceDockerPluginRead(d *schema.ResourceData, meta interface{}) error {
 			Remote      string `json:"Remote"`
 			Description string `json:"Description"`
 			Interface   struct {
-				Types []struct {
-					Capability string `json:"Capability"`
-				} `json:"Types"`
+				Types json.RawMessage `json:"Types"`
 			} `json:"Interface"`
 			Settings struct {
 				Env []string `json:"Env"`
