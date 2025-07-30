@@ -390,7 +390,7 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 		})
 	}
 	d.Set("env", tfEnvs)
-	_ = d.Set("method", "string")
+	_ = d.Set("method", method)
 	_ = d.Set("endpoint_id", client.Endpoint)
 	_ = d.Set("stack_webhook", stack.Webhook != "")
 	_ = d.Set("prune", false)
