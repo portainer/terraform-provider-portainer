@@ -145,6 +145,13 @@ func resourceEdgeStack() *schema.Resource {
 				Elem:        &schema.Schema{Type: schema.TypeString},
 				Description: "Environment variables for the Edge Stack",
 			},
+			"relative_path": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Enable relative path volumes – also used as value for 'filesystemPath'.",
+				Default:     "",
+				ForceNew:    true,
+			},
 		},
 	}
 }
@@ -328,6 +335,12 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 			"useManifestNamespaces":    useManifest,
 			"registries":               registries,
 		}
+
+		if relPath, ok := d.GetOk("relative_path"); ok && relPath.(string) != "" {
+			payload["supportRelativePath"] = true
+			payload["filesystemPath"] = relPath.(string)
+		}
+
 		if envMap, ok := d.GetOk("environment"); ok {
 			envVars := []map[string]string{}
 			for k, v := range envMap.(map[string]interface{}) {
@@ -338,6 +351,7 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 			}
 			payload["envVars"] = envVars
 		}
+
 		stackWebhook := d.Get("stack_webhook").(bool)
 		if stackWebhook {
 			webhookID := uuid.New().String()
@@ -418,6 +432,11 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 			"rePullImage":    d.Get("pull_image").(bool),
 			"registries":     toIntSlice(d.Get("registries").([]interface{})),
 			"retryDeploy":    d.Get("retry_deploy").(bool),
+		}
+
+		if relPath, ok := d.GetOk("relative_path"); ok && relPath.(string) != "" {
+			payload["supportRelativePath"] = true
+			payload["filesystemPath"] = relPath.(string)
 		}
 
 		if d.Get("git_repository_authentication").(bool) {
@@ -508,14 +527,6 @@ func createEdgeStackFromJSON(client *APIClient, d *schema.ResourceData, payload 
 	_ = json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
 	return resourceEdgeStackRead(d, client)
-}
-
-func toIntSlice(input []interface{}) []int {
-	out := make([]int, len(input))
-	for i, v := range input {
-		out[i] = v.(int)
-	}
-	return out
 }
 
 func toJSONString(input interface{}) string {

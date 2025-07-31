@@ -5,7 +5,7 @@
 
 | Name | Version |
 |------|---------|
-| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | n/a |
+| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | 0.1.0 |
 
 ## Resources
 
@@ -26,6 +26,7 @@
 | <a name="input_edge_stack_file_path_in_repository"></a> [edge\_stack\_file\_path\_in\_repository](#input\_edge\_stack\_file\_path\_in\_repository) | Inline file content for the template (YAML/Compose) | `string` | `"docker-compose.agent.yml"` | no |
 | <a name="input_edge_stack_name"></a> [edge\_stack\_name](#input\_edge\_stack\_name) | Name of the Portainer Edge Stack | `string` | `"example-edge-stack"` | no |
 | <a name="input_edge_stack_registries"></a> [edge\_stack\_registries](#input\_edge\_stack\_registries) | List of registry IDs | `list(number)` | `[]` | no |
+| <a name="input_edge_stack_relative_path"></a> [edge\_stack\_relative\_path](#input\_edge\_stack\_relative\_path) | For relative path volumes use with Docker Swarm, you must have a network filesystem which all of your nodes can access. | `string` | `"/mnt/configs"` | no |
 | <a name="input_edge_stack_repository_url"></a> [edge\_stack\_repository\_url](#input\_edge\_stack\_repository\_url) | Inline stack file content for the Edge Stack | `string` | `"https://github.com/portainer/terraform-provider-portainer"` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Map of environment variables. | `map(string)` | <pre>{<br/>  "FOO": "BAR",<br/>  "FOO2": "test"<br/>}</pre> | no |
 | <a name="input_portainer_api_key"></a> [portainer\_api\_key](#input\_portainer\_api\_key) | Default Portainer Admin API Key | `string` | `"ptr_xrP7XWqfZEOoaCJRu5c8qKaWuDtVc2Zb07Q5g22YpS8="` | no |

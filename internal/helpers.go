@@ -22,3 +22,11 @@ func parseManifest(manifest string) (map[string]interface{}, error) {
 
 	return nil, fmt.Errorf("manifest is neither valid JSON nor YAML")
 }
+
+func toIntSlice(raw []interface{}) []int {
+	res := make([]int, len(raw))
+	for i, v := range raw {
+		res[i] = v.(int)
+	}
+	return res
+}

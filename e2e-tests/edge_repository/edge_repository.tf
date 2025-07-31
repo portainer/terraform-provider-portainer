@@ -13,4 +13,5 @@ resource "portainer_edge_stack" "repository_example" {
   edge_groups             = [portainer_edge_group.example_static.id]
   registries              = var.edge_stack_registries
   environment             = var.environment
+  relative_path           = var.edge_stack_relative_path
 }

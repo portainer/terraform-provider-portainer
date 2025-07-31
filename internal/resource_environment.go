@@ -77,6 +77,22 @@ func resourceEnvironment() *schema.Resource {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
+			"user_access_policies": {
+				Type:     schema.TypeMap,
+				Optional: true,
+				Elem: &schema.Schema{
+					Type: schema.TypeInt,
+				},
+				Description: "Map of user IDs to role IDs (e.g. userID -> roleID)",
+			},
+			"team_access_policies": {
+				Type:     schema.TypeMap,
+				Optional: true,
+				Elem: &schema.Schema{
+					Type: schema.TypeInt,
+				},
+				Description: "Map of team IDs to role IDs (e.g. teamID -> roleID)",
+			},
 		},
 	}
 }
@@ -233,6 +249,22 @@ func resourceEnvironmentUpdate(d *schema.ResourceData, meta interface{}) error {
 		"publicURL": d.Get("environment_address").(string),
 		"groupID":   d.Get("group_id").(int),
 		"tagIDs":    d.Get("tag_ids").([]interface{}),
+	}
+
+	if v, ok := d.GetOk("user_access_policies"); ok {
+		policies := map[string]map[string]int{}
+		for userID, role := range v.(map[string]interface{}) {
+			policies[userID] = map[string]int{"RoleId": role.(int)}
+		}
+		payload["userAccessPolicies"] = policies
+	}
+
+	if v, ok := d.GetOk("team_access_policies"); ok {
+		policies := map[string]map[string]int{}
+		for teamID, role := range v.(map[string]interface{}) {
+			policies[teamID] = map[string]int{"RoleId": role.(int)}
+		}
+		payload["teamAccessPolicies"] = policies
 	}
 
 	jsonBody, err := json.Marshal(payload)

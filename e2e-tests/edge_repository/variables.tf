@@ -79,3 +79,9 @@ variable "environment" {
     FOO2 = "test"
   }
 }
+
+variable "edge_stack_relative_path" {
+  description = "For relative path volumes use with Docker Swarm, you must have a network filesystem which all of your nodes can access."
+  type        = string
+  default     = "/mnt/configs"
+}
