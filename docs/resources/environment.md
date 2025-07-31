@@ -28,6 +28,14 @@ resource "portainer_environment" "your-host" {
   type                = 2
   group_id            = 1
   tag_ids             = [portainer_tag.your-group.id]
+
+  user_access_policies = {
+    "3" = 1  # userID 3 -> roleID 1
+  }
+
+  team_access_policies = {
+    "2" = 2  # teamID 2 -> roleID 2
+  }
 }
 ```
 ### Register Edge Agent environment
@@ -71,12 +79,14 @@ terraform apply
 |-----------------------|------------|------------------------------|--------------------------------------------------------------------------------------------------|
 | `name`                | string     | ✅ yes                       | Display name of the environment in Portainer.                                                    |
 | `environment_address` | string     | ✅ yes                       | Target environment address (e.g. `tcp://host:9001`).                                             |
-| `type`                | int        | ✅ yes                       | Environment type: `1` = Docker, `2` = Agent, `3` = Azure, `4` = Edge Agent, `5` = Kubernetes.     |
-| `group_id`            | int        | 🚫 optional (default `1`)   | ID of the Portainer endpoint group. Default is `1` (Unassigned).                                 |
-| `tag_ids`             | list(int)  | 🚫 optional                 | List of Portainer tag IDs to assign to the environment. Only used during creation.              |
-| `tls_enabled`          | bool       | 🚫 optional (default `true`)| Enable TLS for connection to the agent. Must be `true` for agent-based environments.            |
-| `tls_skip_verify`      | bool       | 🚫 optional (default `true`)| Skip server certificate verification. Useful for self-signed certificates.                      |
-| `tls_skip_client_verify` | bool     | 🚫 optional (default `true`)| Skip client certificate verification. Used when mutual TLS is not required.                     |
+| `type`                | int        | ✅ yes                       | Environment type: `1` = Docker, `2` = Agent, `3` = Azure, `4` = Edge Agent, `5` = Kubernetes.    |
+| `group_id`            | int        | 🚫 optional (default `1`)   | ID of the Portainer endpoint group. Default is `1` (Unassigned).                                  |
+| `tag_ids`             | list(int)  | 🚫 optional                 | List of Portainer tag IDs to assign to the environment. Only used during creation.                |
+| `tls_enabled`          | bool       | 🚫 optional (default `true`)| Enable TLS for connection to the agent. Must be `true` for agent-based environments.             |
+| `tls_skip_verify`      | bool       | 🚫 optional (default `true`)| Skip server certificate verification. Useful for self-signed certificates.                       |
+| `tls_skip_client_verify` | bool     | 🚫 optional (default `true`)| Skip client certificate verification. Used when mutual TLS is not required.                      |
+| `user_access_policies`   | map(object({ RoleId = int }))| 🚫 optional | Access control for users (applies to environments only)                                      |
+| `team_access_policies`   | map(object({ RoleId = int }))| 🚫 optional | Access control for teams (applies to environments only)                                      |
 
 ## Attributes Reference
 | Name       | Description                                |

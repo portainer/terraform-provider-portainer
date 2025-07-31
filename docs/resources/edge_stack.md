@@ -125,6 +125,8 @@ terraform apply
 | `update_interval`           | string | 🚫 optional | Polling interval (e.g. `30m`, `1h`)                                  |
 | `force_update`              | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                         |
 | `pull_image`                | bool   | 🚫 optional | Pull latest image during update (default: `false`)                   |
+| `relative_path`             | string | 🚫 optional | Enables relative path volumes (from Compose) and sets the `filesystemPath` |
+
 
 ## 🧮 Computed Outputs
 | Name          | Description                     |

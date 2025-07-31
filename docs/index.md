@@ -77,8 +77,8 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `skip_ssl_verify` | boolean | ❌ no    | Skip TLS certificate verification (useful for self-signed certs). Default: `false`.                |
 
 ## 🧩 Supported Resources
-| Resource                                       | Status                                                                 |
-|------------------------------------------------|------------------------------------------------------------------------|
+| Resource                                       | Status                                                                |
+|------------------------------------------------|-----------------------------------------------------------------------|
 | `portainer_auth`                               | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_backup`                             | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_backup_s3`                          | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
@@ -119,7 +119,8 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_kubernetes_ingresscontrollers`      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_job`                     | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_namespace`               | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
-| `portainer_kubernetes_namespace_ingresscontrollers` | ![Done](https://img.shields.io/badge/status-done-brightgreen)     |
+| `portainer_kubernetes_namespace_access`        | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_kubernetes_namespace_ingresscontrollers` | ![Done](https://img.shields.io/badge/status-done-brightgreen)    |
 | `portainer_kubernetes_namespace_system`        | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_role`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_rolebinding`             | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |

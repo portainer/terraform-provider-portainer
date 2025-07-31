@@ -124,6 +124,7 @@ func Provider() *schema.Provider {
 			"portainer_support_debug_log":                       resourcePortainerSupportDebugLog(),
 			"portainer_sshkeygen":                               resourcePortainerSSHKeygen(),
 			"portainer_cloud_provider_provision":                resourcePortainerCloudProvision(),
+			"portainer_kubernetes_namespace_access":             resourceKubernetesNamespaceAccess(),
 		},
 		ConfigureContextFunc: configureProvider,
 	}
