@@ -4,7 +4,7 @@
   </a>
   &nbsp;&nbsp;&nbsp;
   <a href="https://github.com/portainer/terraform-provider-portainer">
-    <img src="https://www.portainer.io/hubfs/portainer-logo-black.svg" alt="portainer-provider-terraform" width="200">
+    <img src="https://raw.githubusercontent.com/portainer/portainer/refs/heads/develop/app/assets/images/portainer-github-banner.png" alt="portainer-provider-terraform" width="200">
   </a>
   &nbsp;&nbsp;&nbsp;
   <a href="https://search.opentofu.org/provider/portainer/portainer/latest">
