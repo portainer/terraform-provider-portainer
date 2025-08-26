@@ -18,7 +18,7 @@ resource "portainer_endpoints_snapshot" "specific" {
 ## Lifecycle & Behavior
 Snapshot is executed during:
 ```hcl
-trraform apply
+terraform apply
 ```
 
 ## Arguments Reference
