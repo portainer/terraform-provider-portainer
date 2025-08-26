@@ -22,7 +22,7 @@ func resourceKubernetesNamespaceAccess() *schema.Resource {
 				Required: true,
 			},
 			"namespace_id": {
-				Type:     schema.TypeInt,
+				Type:     schema.TypeString,
 				Required: true,
 			},
 			"users_to_add": {
@@ -49,17 +49,76 @@ func resourceKubernetesNamespaceAccess() *schema.Resource {
 	}
 }
 
+func toIntSlices(raw []interface{}) []int {
+	result := []int{}
+	for _, v := range raw {
+		result = append(result, v.(int))
+	}
+	return result
+}
+
+func getNamespaceRPN(client *APIClient, environmentID int, namespaceName string) (string, error) {
+	url := fmt.Sprintf("%s/kubernetes/%d/namespaces", client.Endpoint, environmentID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		data, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to list namespaces: %s", string(data))
+	}
+
+	var namespaces []struct {
+		Name string `json:"Name"`
+		Id   string `json:"Id"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&namespaces); err != nil {
+		return "", err
+	}
+
+	for _, ns := range namespaces {
+		if ns.Name == namespaceName {
+			return ns.Id, nil
+		}
+	}
+
+	return "", fmt.Errorf("namespace %s not found", namespaceName)
+}
+
 func resourceK8sAccessUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
 	endpointID := d.Get("endpoint_id").(int)
-	namespaceID := d.Get("namespace_id").(int)
+	namespaceID := d.Get("namespace_id").(string)
+
+	if !containsColon(namespaceID) {
+		nsID, err := getNamespaceRPN(client, endpointID, namespaceID)
+		if err != nil {
+			return err
+		}
+		namespaceID = nsID
+	}
 
 	body := map[string]interface{}{
-		"usersToAdd":    toIntSlice(d.Get("users_to_add").([]interface{})),
-		"usersToRemove": toIntSlice(d.Get("users_to_remove").([]interface{})),
-		"teamsToAdd":    toIntSlice(d.Get("teams_to_add").([]interface{})),
-		"teamsToRemove": toIntSlice(d.Get("teams_to_remove").([]interface{})),
+		"usersToAdd":    toIntSlices(d.Get("users_to_add").([]interface{})),
+		"usersToRemove": toIntSlices(d.Get("users_to_remove").([]interface{})),
+		"teamsToAdd":    toIntSlices(d.Get("teams_to_add").([]interface{})),
+		"teamsToRemove": toIntSlices(d.Get("teams_to_remove").([]interface{})),
 	}
 
 	jsonBody, err := json.Marshal(body)
@@ -67,18 +126,18 @@ func resourceK8sAccessUpdate(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 
-	url := fmt.Sprintf("%s/endpoints/%d/pools/%d/access", client.Endpoint, endpointID, namespaceID)
+	url := fmt.Sprintf("%s/endpoints/%d/pools/%s/access", client.Endpoint, endpointID, namespaceID)
 	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
+
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
 	}
+
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
@@ -92,16 +151,23 @@ func resourceK8sAccessUpdate(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("failed to update namespace access: %s", string(data))
 	}
 
-	d.SetId(fmt.Sprintf("%d/%d", endpointID, namespaceID))
+	d.SetId(fmt.Sprintf("%d/%s", endpointID, namespaceID))
 	return nil
 }
 
 func resourceK8sAccessReadNoop(d *schema.ResourceData, meta interface{}) error {
-	// No reliable read endpoint exists for this resource
 	return nil
 }
 
 func resourceK8sAccessDeleteNoop(d *schema.ResourceData, meta interface{}) error {
-	// No delete behavior – access must be manually revoked or redefined
 	return nil
+}
+
+func containsColon(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] == ':' {
+			return true
+		}
+	}
+	return false
 }
