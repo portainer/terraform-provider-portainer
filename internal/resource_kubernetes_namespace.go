@@ -51,6 +51,11 @@ func resourceKubernetesNamespaceCreate(d *schema.ResourceData, meta interface{})
 	client := meta.(*APIClient)
 	id := d.Get("environment_id").(int)
 
+	licensed, err := hasLicense(client)
+	if err != nil {
+		return err
+	}
+
 	annotations := map[string]string{}
 	if raw, ok := d.GetOk("annotations"); ok {
 		for k, v := range raw.(map[string]interface{}) {
@@ -65,15 +70,28 @@ func resourceKubernetesNamespaceCreate(d *schema.ResourceData, meta interface{})
 		}
 	}
 
-	body := map[string]interface{}{
-		"Name":        d.Get("name").(string),
-		"Owner":       d.Get("owner").(string),
-		"Annotations": annotations,
-		"ResourceQuota": map[string]interface{}{
+	var rq map[string]interface{}
+	if licensed {
+		rq = map[string]interface{}{
+			"enabled":       true,
+			"cpuRequest":    quota["cpu_request"],
+			"cpuLimit":      quota["cpu_limit"],
+			"memoryRequest": quota["memory_request"],
+			"memoryLimit":   quota["memory_limit"],
+		}
+	} else {
+		rq = map[string]interface{}{
 			"enabled": true,
 			"cpu":     quota["cpu"],
 			"memory":  quota["memory"],
-		},
+		}
+	}
+
+	body := map[string]interface{}{
+		"Name":          d.Get("name").(string),
+		"Owner":         d.Get("owner").(string),
+		"Annotations":   annotations,
+		"ResourceQuota": rq,
 	}
 
 	jsonBody, _ := json.Marshal(body)
@@ -115,6 +133,11 @@ func resourceKubernetesNamespaceRead(d *schema.ResourceData, meta interface{}) e
 func resourceKubernetesNamespaceUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
+	licensed, err := hasLicense(client)
+	if err != nil {
+		return err
+	}
+
 	idParts := strings.SplitN(d.Id(), ":", 2)
 	if len(idParts) != 2 {
 		return fmt.Errorf("invalid ID format, expected 'envID:name': %s", d.Id())
@@ -137,15 +160,28 @@ func resourceKubernetesNamespaceUpdate(d *schema.ResourceData, meta interface{})
 		}
 	}
 
-	body := map[string]interface{}{
-		"Name":        newName,
-		"Owner":       d.Get("owner").(string),
-		"Annotations": annotations,
-		"ResourceQuota": map[string]interface{}{
+	var rq map[string]interface{}
+	if licensed {
+		rq = map[string]interface{}{
+			"enabled":       true,
+			"cpuRequest":    quota["cpu_request"],
+			"cpuLimit":      quota["cpu_limit"],
+			"memoryRequest": quota["memory_request"],
+			"memoryLimit":   quota["memory_limit"],
+		}
+	} else {
+		rq = map[string]interface{}{
 			"enabled": true,
 			"cpu":     quota["cpu"],
 			"memory":  quota["memory"],
-		},
+		}
+	}
+
+	body := map[string]interface{}{
+		"Name":          newName,
+		"Owner":         d.Get("owner").(string),
+		"Annotations":   annotations,
+		"ResourceQuota": rq,
 	}
 
 	jsonBody, _ := json.Marshal(body)
@@ -223,4 +259,37 @@ func resourceKubernetesNamespaceDelete(d *schema.ResourceData, meta interface{})
 
 	d.SetId("")
 	return nil
+}
+
+func hasLicense(client *APIClient) (bool, error) {
+	url := fmt.Sprintf("%s/licenses", client.Endpoint)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, err
+	}
+
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return false, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return false, nil
+	}
+
+	var licenses []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&licenses); err != nil {
+		return false, err
+	}
+
+	return len(licenses) > 0, nil
 }
