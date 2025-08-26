@@ -18,7 +18,7 @@ resource "portainer_endpoint_service_update" "force_update_some_service" {
 - If pull_image is set to true, Portainer will pull the latest image before updating.
 Update service run by:
 ```hcl
-trraform apply
+terraform apply
 ```
 > Note: This resource does not persist – it's meant for imperative actions like force-pulling & restarting a service.
 

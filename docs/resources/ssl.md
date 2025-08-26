@@ -19,7 +19,7 @@ resource "portainer_ssl" "cert_update" {
 ## Lifecycle & Behavior
 SSL of Portainer are modify if any of the arguments/files change by run:
 ```hcl
-trraform apply
+terraform apply
 ```
 
 ## Example make SSL ceert

@@ -14,7 +14,7 @@ resource "portainer_endpoint_association" "example" {
 ## Lifecycle & Behavior
 For de-association of the Edge environment run:
 ```hcl
-trraform apply
+terraform apply
 ```
 
 ## Arguments Reference

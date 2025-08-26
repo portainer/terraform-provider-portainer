@@ -33,7 +33,7 @@ resource "portainer_endpoint_settings" "example" {
 ## Lifecycle & Behavior
 Settings of Endpoints in Portainer are modify if any of the arguments change by run:
 ```hcl
-trraform apply
+terraform apply
 ```
 
 ## Arguments Reference

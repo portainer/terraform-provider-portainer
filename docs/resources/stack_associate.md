@@ -20,7 +20,7 @@ resource "portainer_stack_associate" "example" {
 ## Lifecycle & Behavior
 For de-association of the Stack in docker swarm run:
 ```hcl
-trraform apply
+terraform apply
 ```
 
 ## Arguments Reference
