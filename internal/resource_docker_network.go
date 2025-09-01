@@ -38,13 +38,13 @@ func resourceDockerNetwork() *schema.Resource {
 			"name":        {Type: schema.TypeString, Required: true, ForceNew: true},
 			"driver":      {Type: schema.TypeString, Optional: true, Default: "bridge", ForceNew: true},
 			"scope":       {Type: schema.TypeString, Optional: true, Default: "local", ForceNew: true},
-			"internal":    {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
-			"attachable":  {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
-			"ingress":     {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
-			"config_only": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
+			"internal":    {Type: schema.TypeBool, Optional: true, ForceNew: true},
+			"attachable":  {Type: schema.TypeBool, Optional: true, ForceNew: true},
+			"ingress":     {Type: schema.TypeBool, Optional: true, ForceNew: true},
+			"config_only": {Type: schema.TypeBool, Optional: true, ForceNew: true},
 			"config_from": {Type: schema.TypeString, Optional: true, ForceNew: true},
-			"enable_ipv4": {Type: schema.TypeBool, Optional: true, Default: true, ForceNew: true},
-			"enable_ipv6": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
+			"enable_ipv4": {Type: schema.TypeBool, Optional: true, ForceNew: true},
+			"enable_ipv6": {Type: schema.TypeBool, Optional: true, ForceNew: true},
 			"options":     {Type: schema.TypeMap, Optional: true, Elem: &schema.Schema{Type: schema.TypeString}, ForceNew: true},
 			"labels":      {Type: schema.TypeMap, Optional: true, Elem: &schema.Schema{Type: schema.TypeString}, ForceNew: true},
 			"swarm_node_id": {
@@ -101,18 +101,37 @@ func resourceDockerNetworkCreate(d *schema.ResourceData, meta interface{}) error
 	payload := map[string]interface{}{
 		"Name":       d.Get("name").(string),
 		"Driver":     d.Get("driver").(string),
-		"Internal":   d.Get("internal").(bool),
-		"Attachable": d.Get("attachable").(bool),
-		"Ingress":    d.Get("ingress").(bool),
 		"ConfigOnly": d.Get("config_only").(bool),
-		"EnableIPv4": d.Get("enable_ipv4").(bool),
-		"EnableIPv6": d.Get("enable_ipv6").(bool),
-		"Options":    d.Get("options").(map[string]interface{}),
-		"Labels":     d.Get("labels").(map[string]interface{}),
 	}
 
-	if v, ok := d.GetOk("scope"); ok {
-		payload["Scope"] = v.(string)
+	configOnly := d.Get("config_only").(bool)
+
+	if !configOnly {
+		if v, ok := d.GetOk("internal"); ok {
+			payload["Internal"] = v.(bool)
+		}
+		if v, ok := d.GetOk("attachable"); ok {
+			payload["Attachable"] = v.(bool)
+		}
+		if v, ok := d.GetOk("ingress"); ok {
+			payload["Ingress"] = v.(bool)
+		}
+		if v, ok := d.GetOk("enable_ipv4"); ok {
+			payload["EnableIPv4"] = v.(bool)
+		}
+		if v, ok := d.GetOk("enable_ipv6"); ok {
+			payload["EnableIPv6"] = v.(bool)
+		}
+		if v, ok := d.GetOk("scope"); ok {
+			payload["Scope"] = v.(string)
+		}
+	}
+
+	if v, ok := d.GetOk("options"); ok {
+		payload["Options"] = v.(map[string]interface{})
+	}
+	if v, ok := d.GetOk("labels"); ok {
+		payload["Labels"] = v.(map[string]interface{})
 	}
 	if v, ok := d.GetOk("config_from"); ok {
 		payload["ConfigFrom"] = map[string]string{"Network": v.(string)}
@@ -122,11 +141,9 @@ func resourceDockerNetworkCreate(d *schema.ResourceData, meta interface{}) error
 	ipam := map[string]interface{}{
 		"Driver": d.Get("ipam_driver").(string),
 	}
-
 	if v, ok := d.GetOk("ipam_options"); ok {
 		ipam["Options"] = v.(map[string]interface{})
 	}
-
 	if v, ok := d.GetOk("ipam_config"); ok {
 		configList := v.([]interface{})
 		var ipamConfigs []map[string]interface{}
@@ -148,7 +165,6 @@ func resourceDockerNetworkCreate(d *schema.ResourceData, meta interface{}) error
 		}
 		ipam["Config"] = ipamConfigs
 	}
-
 	payload["IPAM"] = ipam
 
 	var response struct {
@@ -223,31 +239,71 @@ func resourceDockerNetworkRead(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("failed to decode docker network response: %w", err)
 	}
 
-	_ = d.Set("name", result.Name)
-	_ = d.Set("driver", result.Driver)
-	_ = d.Set("scope", result.Scope)
-	_ = d.Set("internal", result.Internal)
-	_ = d.Set("attachable", result.Attachable)
-	_ = d.Set("ingress", result.Ingress)
-	_ = d.Set("config_only", result.ConfigOnly)
-	_ = d.Set("enable_ipv4", result.EnableIPv4)
-	_ = d.Set("enable_ipv6", result.EnableIPv6)
-	_ = d.Set("options", result.Options)
+	configOnly := result.ConfigOnly
 
-	labels := make(map[string]interface{}, len(result.Labels))
-	for k, v := range result.Labels {
-		labels[k] = v
+	driver := result.Driver
+	scope := result.Scope
+	if configOnly {
+		driver = d.Get("driver").(string)
+		scope = d.Get("scope").(string)
 	}
-	_ = d.Set("labels", labels)
+	_ = d.Set("driver", driver)
+	_ = d.Set("scope", scope)
 
-	// IPAM config
+	// name a config_only
+	_ = d.Set("name", result.Name)
+	_ = d.Set("config_only", configOnly)
+
+	if !configOnly {
+		_ = d.Set("internal", result.Internal)
+		_ = d.Set("attachable", result.Attachable)
+		_ = d.Set("ingress", result.Ingress)
+		_ = d.Set("enable_ipv4", result.EnableIPv4)
+		_ = d.Set("enable_ipv6", result.EnableIPv6)
+	} else {
+		_ = d.Set("internal", d.Get("internal").(bool))
+		_ = d.Set("attachable", d.Get("attachable").(bool))
+		_ = d.Set("ingress", d.Get("ingress").(bool))
+		_ = d.Set("enable_ipv4", d.Get("enable_ipv4").(bool))
+		_ = d.Set("enable_ipv6", d.Get("enable_ipv6").(bool))
+	}
+
+	// options
+	if len(result.Options) == 0 {
+		if v, ok := d.GetOk("options"); ok {
+			_ = d.Set("options", v)
+		}
+	} else {
+		_ = d.Set("options", result.Options)
+	}
+
+	// labels
+	if len(result.Labels) == 0 {
+		if v, ok := d.GetOk("labels"); ok {
+			_ = d.Set("labels", v)
+		}
+	} else {
+		labels := make(map[string]interface{}, len(result.Labels))
+		for k, v := range result.Labels {
+			labels[k] = v
+		}
+		_ = d.Set("labels", labels)
+	}
+
+	// IPAM
 	_ = d.Set("ipam_driver", result.IPAM.Driver)
 
-	ipamOpts := make(map[string]interface{}, len(result.IPAM.Options))
-	for k, v := range result.IPAM.Options {
-		ipamOpts[k] = v
+	if len(result.IPAM.Options) == 0 {
+		if v, ok := d.GetOk("ipam_options"); ok {
+			_ = d.Set("ipam_options", v)
+		}
+	} else {
+		ipamOpts := make(map[string]interface{}, len(result.IPAM.Options))
+		for k, v := range result.IPAM.Options {
+			ipamOpts[k] = v
+		}
+		_ = d.Set("ipam_options", ipamOpts)
 	}
-	_ = d.Set("ipam_options", ipamOpts)
 
 	_ = d.Set("ipam_config", result.IPAM.Config)
 

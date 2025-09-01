@@ -30,7 +30,7 @@ resource "portainer_settings" "example" {
 ## Lifecycle & Behavior
 Settings of Portainer are modify if any of the arguments change by run:
 ```hcl
-trraform apply
+terraform apply
 ```
 
 ## Arguments Reference
