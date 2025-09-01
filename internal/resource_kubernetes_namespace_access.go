@@ -57,6 +57,9 @@ func toIntSlices(raw []interface{}) []int {
 	return result
 }
 
+// getNamespaceRPN resolves namespace name against the Portainer API.
+// Even though API objects have an Id, the /pools/{rpn}/access endpoint
+// only works with the namespace name, so we must return Name.
 func getNamespaceRPN(client *APIClient, environmentID int, namespaceName string) (string, error) {
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces", client.Endpoint, environmentID)
 
@@ -93,7 +96,7 @@ func getNamespaceRPN(client *APIClient, environmentID int, namespaceName string)
 
 	for _, ns := range namespaces {
 		if ns.Name == namespaceName {
-			return ns.Id, nil
+			return ns.Name, nil
 		}
 	}
 
@@ -107,11 +110,11 @@ func resourceK8sAccessUpdate(d *schema.ResourceData, meta interface{}) error {
 	namespaceID := d.Get("namespace_id").(string)
 
 	if !containsColon(namespaceID) {
-		nsID, err := getNamespaceRPN(client, endpointID, namespaceID)
+		nsName, err := getNamespaceRPN(client, endpointID, namespaceID)
 		if err != nil {
 			return err
 		}
-		namespaceID = nsID
+		namespaceID = nsName
 	}
 
 	body := map[string]interface{}{

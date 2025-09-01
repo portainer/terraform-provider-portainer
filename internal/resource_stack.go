@@ -325,14 +325,18 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	}
 
 	var stack struct {
-		Name       string `json:"Name"`
-		Type       int    `json:"Type"`
-		SwarmID    string `json:"SwarmId"`
-		Namespace  string `json:"namespace"`
-		ComposeFmt bool   `json:"composeFormat"`
-		Webhook    string `json:"webhook"`
-		EndpointID int    `json:"EndpointId"`
-		Env        []struct {
+		Name                string `json:"Name"`
+		Type                int    `json:"Type"`
+		SwarmID             string `json:"SwarmId"`
+		Namespace           string `json:"namespace"`
+		ComposeFmt          bool   `json:"composeFormat"`
+		Webhook             string `json:"webhook"`
+		EndpointID          int    `json:"EndpointId"`
+		SupportRelativePath bool   `json:"supportRelativePath"`
+		AutoUpdate          *struct {
+			Webhook string `json:"webhook"`
+		} `json:"AutoUpdate,omitempty"`
+		Env []struct {
 			Name  string `json:"name"`
 			Value string `json:"value"`
 		} `json:"Env"`
@@ -345,9 +349,6 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	d.Set("swarm_id", stack.SwarmID)
 	d.Set("namespace", stack.Namespace)
 	d.Set("compose_format", stack.ComposeFmt)
-	if d.Get("stack_webhook").(bool) && d.Get("method").(string) != "repository" {
-		d.Set("webhook_id", stack.Webhook)
-	}
 
 	method := d.Get("method").(string)
 	if method != "repository" {
@@ -392,10 +393,10 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	d.Set("env", tfEnvs)
 	_ = d.Set("method", method)
 	_ = d.Set("endpoint_id", client.Endpoint)
-	_ = d.Set("stack_webhook", stack.Webhook != "")
+	_ = d.Set("stack_webhook", stack.AutoUpdate != nil && stack.AutoUpdate.Webhook != "")
+	_ = d.Set("support_relative_path", stack.SupportRelativePath)
 	_ = d.Set("prune", false)
 	_ = d.Set("pull_image", false)
-	_ = d.Set("support_relative_path", false)
 	_ = d.Set("tlsskip_verify", false)
 
 	return nil
