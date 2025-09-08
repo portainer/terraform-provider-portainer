@@ -172,6 +172,17 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 		_ = d.Set("edge_id", result.EdgeID)
 	}
 
+	if _, ok := d.GetOk("user_access_policies"); ok {
+		if err := resourceEnvironmentUpdate(d, meta); err != nil {
+			return fmt.Errorf("failed to apply user access policies after creation: %w", err)
+		}
+	}
+	if _, ok := d.GetOk("team_access_policies"); ok {
+		if err := resourceEnvironmentUpdate(d, meta); err != nil {
+			return fmt.Errorf("failed to apply team access policies after creation: %w", err)
+		}
+	}
+
 	return resourceEnvironmentRead(d, meta)
 }
 
