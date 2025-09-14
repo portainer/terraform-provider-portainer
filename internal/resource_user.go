@@ -57,9 +57,8 @@ func resourceUser() *schema.Resource {
 				Default:  "terraform-generated-api-key",
 			},
 			"api_key_raw": {
-				Type:      schema.TypeString,
-				Computed:  true,
-				Sensitive: true,
+				Type:     schema.TypeString,
+				Computed: true,
 			},
 		},
 	}
@@ -161,12 +160,41 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 		if password == "" {
 			return fmt.Errorf("password must be set to generate API key")
 		}
+
+		loginPayload := map[string]interface{}{
+			"Username": username,
+			"Password": password,
+		}
+		loginResp, err := client.DoRequest("POST", "/auth", nil, loginPayload)
+		if err != nil {
+			return fmt.Errorf("failed to authenticate as new user: %w", err)
+		}
+		defer loginResp.Body.Close()
+
+		if loginResp.StatusCode != 200 {
+			data, _ := io.ReadAll(loginResp.Body)
+			return fmt.Errorf("failed to authenticate as new user: %s", string(data))
+		}
+
+		var loginResult struct {
+			JWT string `json:"jwt"`
+		}
+		if err := json.NewDecoder(loginResp.Body).Decode(&loginResult); err != nil {
+			return fmt.Errorf("failed to decode login response: %w", err)
+		}
+
+		userClient := &APIClient{
+			Endpoint:   client.Endpoint,
+			APIKey:     "",
+			JWTToken:   loginResult.JWT,
+			HTTPClient: client.HTTPClient,
+		}
+
 		apiPayload := map[string]interface{}{
 			"description": description,
 			"password":    password,
 		}
-
-		apiResp, err := client.DoRequest("POST", fmt.Sprintf("/users/%d/tokens", result.ID), nil, apiPayload)
+		apiResp, err := userClient.DoRequest("POST", fmt.Sprintf("/users/%d/tokens", result.ID), nil, apiPayload)
 		if err != nil {
 			return fmt.Errorf("failed to generate API key: %w", err)
 		}

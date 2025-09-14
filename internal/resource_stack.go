@@ -23,11 +23,27 @@ func resourcePortainerStack() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 				// "<endpoint_id>-<stack_id>-<deployment_type>"
-				var endpointID, stackID int
-				var deploymentType string
-				_, err := fmt.Sscanf(d.Id(), "%d-%d-%s", &endpointID, &stackID, &deploymentType)
+				// "<endpoint_id>-<stack_id>-<deployment_type>-<method>"
+
+				parts := strings.Split(d.Id(), "-")
+				if len(parts) < 3 {
+					return nil, fmt.Errorf("invalid ID format. Use '<endpoint_id>-<stack_id>-<deployment_type>[-<method>]'")
+				}
+
+				endpointID, err := strconv.Atoi(parts[0])
 				if err != nil {
-					return nil, fmt.Errorf("invalid ID format. Use '<endpoint_id>-<stack_id>-<deployment_type>'")
+					return nil, fmt.Errorf("invalid endpoint_id in import ID: %s", parts[0])
+				}
+
+				stackID, err := strconv.Atoi(parts[1])
+				if err != nil {
+					return nil, fmt.Errorf("invalid stack_id in import ID: %s", parts[1])
+				}
+
+				deploymentType := parts[2]
+
+				if len(parts) > 3 {
+					d.Set("method", parts[3])
 				}
 				d.Set("endpoint_id", endpointID)
 				d.Set("deployment_type", deploymentType)
@@ -125,7 +141,7 @@ func resourcePortainerStack() *schema.Resource {
 					},
 				},
 			},
-			"tlsskip_verify": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
+			"tlsskip_verify": {Type: schema.TypeBool, Optional: true, Computed: true, ForceNew: true},
 			"prune": {
 				Type:        schema.TypeBool,
 				Optional:    true,
@@ -334,12 +350,21 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 		EndpointID          int    `json:"EndpointId"`
 		SupportRelativePath bool   `json:"supportRelativePath"`
 		AutoUpdate          *struct {
-			Webhook string `json:"webhook"`
+			Webhook        string `json:"webhook"`
+			ForcePullImage bool   `json:"forcePullImage"`
 		} `json:"AutoUpdate,omitempty"`
 		Env []struct {
 			Name  string `json:"name"`
 			Value string `json:"value"`
 		} `json:"Env"`
+
+		Option struct {
+			Prune bool `json:"prune"`
+		} `json:"Option"`
+
+		GitConfig *struct {
+			TLSSkipVerify bool `json:"tlsskipVerify"`
+		} `json:"gitConfig,omitempty"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
 		return fmt.Errorf("failed to decode stack response: %w", err)
@@ -392,12 +417,15 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	}
 	d.Set("env", tfEnvs)
 	_ = d.Set("method", method)
-	_ = d.Set("endpoint_id", client.Endpoint)
+	_ = d.Set("endpoint_id", stack.EndpointID)
 	_ = d.Set("stack_webhook", stack.AutoUpdate != nil && stack.AutoUpdate.Webhook != "")
 	_ = d.Set("support_relative_path", stack.SupportRelativePath)
-	_ = d.Set("prune", false)
-	_ = d.Set("pull_image", false)
-	_ = d.Set("tlsskip_verify", false)
+	if method == "repository" && stack.GitConfig != nil {
+		_ = d.Set("tlsskip_verify", stack.GitConfig.TLSSkipVerify)
+	}
+	if stack.AutoUpdate != nil {
+		_ = d.Set("pull_image", stack.AutoUpdate.ForcePullImage)
+	}
 
 	return nil
 }
