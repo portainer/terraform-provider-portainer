@@ -222,7 +222,7 @@ terraform apply
 | `repository_url`                | string | ✅ yes      | Git repository URL                                   |
 | `repository_reference_name`     | string | ✅ yes      | Git reference (default: `refs/heads/main`)           |
 | `file_path_in_repository`       | string | ✅ yes      | Path to Compose file (default: `docker-compose.yml`) |
-| `tlsskip_verify`                | bool   | 🚫 optional | Skip TLS verification (default: `false`)             |
+| `tlsskip_verify`                | bool   | 🚫 optional | Skip TLS verification                                |
 | `git_repository_authentication` | bool   | 🚫 optional | Enable auth for Git repo (default: `false`)          |
 | `repository_username`           | string | 🚫 optional | Git username (if auth is enabled)                    |
 | `repository_password`           | string | 🚫 optional | Git password/token (if auth is enabled)              |
