@@ -22,16 +22,11 @@ func resourceResourceControl() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 			},
-			"sub_resource_ids": {
-				Type:     schema.TypeList,
-				Optional: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
-				ForceNew: true,
-			},
 			"type": {
 				Type:     schema.TypeInt,
-				Required: true,
+				Optional: true,
 				ForceNew: true,
+				Default:  6,
 			},
 			"administrators_only": {
 				Type:     schema.TypeBool,
@@ -57,47 +52,95 @@ func resourceResourceControl() *schema.Resource {
 	}
 }
 
-func resourceResourceControlCreate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*APIClient)
+func lookupResourceControlID(client *APIClient, resourceType int, resourceId string) (string, map[string]interface{}, error) {
+	switch resourceType {
+	case 6: // stack
+		resp, err := client.DoRequest("GET", fmt.Sprintf("/stacks/%s", resourceId), nil, nil)
+		if err != nil {
+			return "", nil, err
+		}
+		defer resp.Body.Close()
 
-	body := map[string]interface{}{
-		"resourceID":         d.Get("resource_id").(string),
-		"subResourceIDs":     d.Get("sub_resource_ids"),
-		"type":               d.Get("type").(int),
-		"administratorsOnly": d.Get("administrators_only").(bool),
-		"public":             d.Get("public").(bool),
-		"teams":              d.Get("teams"),
-		"users":              d.Get("users"),
+		if resp.StatusCode >= 400 {
+			data, _ := io.ReadAll(resp.Body)
+			return "", nil, fmt.Errorf("failed to lookup stack: %s", string(data))
+		}
+
+		var result struct {
+			ResourceControl map[string]interface{} `json:"ResourceControl"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return "", nil, err
+		}
+		if result.ResourceControl == nil || result.ResourceControl["Id"] == nil {
+			return "", nil, fmt.Errorf("no resource control found for stack %s", resourceId)
+		}
+
+		id := int(result.ResourceControl["Id"].(float64))
+		return strconv.Itoa(id), result.ResourceControl, nil
+
+	default:
+		return "", nil, fmt.Errorf("unsupported resource type: %d", resourceType)
 	}
-
-	resp, err := client.DoRequest("POST", "/resource_controls", nil, body)
-	if err != nil {
-		return fmt.Errorf("failed to create resource control: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create resource control: %s", string(data))
-	}
-
-	var result struct {
-		ID int `json:"Id"`
-	}
-	_ = json.NewDecoder(resp.Body).Decode(&result)
-
-	d.SetId(strconv.Itoa(result.ID))
-	return resourceResourceControlRead(d, meta)
 }
 
 func resourceResourceControlRead(d *schema.ResourceData, meta interface{}) error {
-	// Optional: implement GET if supported
+	client := meta.(*APIClient)
+	resourceType := d.Get("type").(int)
+	resourceId := d.Get("resource_id").(string)
+
+	rcId, rcData, err := lookupResourceControlID(client, resourceType, resourceId)
+	if err != nil {
+		d.SetId("")
+		return nil
+	}
+
+	d.SetId(rcId)
+	if v, ok := rcData["AdministratorsOnly"].(bool); ok {
+		_ = d.Set("administrators_only", v)
+	}
+	if v, ok := rcData["Public"].(bool); ok {
+		_ = d.Set("public", v)
+	}
+	if v, ok := rcData["TeamAccesses"].([]interface{}); ok {
+		teams := []int{}
+		for _, t := range v {
+			if m, ok := t.(map[string]interface{}); ok {
+				if tid, ok := m["TeamId"].(float64); ok {
+					teams = append(teams, int(tid))
+				}
+			}
+		}
+		_ = d.Set("teams", teams)
+	}
+	if v, ok := rcData["UserAccesses"].([]interface{}); ok {
+		users := []int{}
+		for _, u := range v {
+			if m, ok := u.(map[string]interface{}); ok {
+				if uid, ok := m["UserId"].(float64); ok {
+					users = append(users, int(uid))
+				}
+			}
+		}
+		_ = d.Set("users", users)
+	}
+
 	return nil
+}
+
+func resourceResourceControlCreate(d *schema.ResourceData, meta interface{}) error {
+	return resourceResourceControlUpdate(d, meta)
 }
 
 func resourceResourceControlUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	id := d.Id()
+	resourceType := d.Get("type").(int)
+	resourceId := d.Get("resource_id").(string)
+
+	rcId, _, err := lookupResourceControlID(client, resourceType, resourceId)
+	if err != nil {
+		return err
+	}
 
 	body := map[string]interface{}{
 		"administratorsOnly": d.Get("administrators_only").(bool),
@@ -106,7 +149,7 @@ func resourceResourceControlUpdate(d *schema.ResourceData, meta interface{}) err
 		"users":              d.Get("users"),
 	}
 
-	resp, err := client.DoRequest("PUT", fmt.Sprintf("/resource_controls/%s", id), nil, body)
+	resp, err := client.DoRequest("PUT", fmt.Sprintf("/resource_controls/%s", rcId), nil, body)
 	if err != nil {
 		return fmt.Errorf("failed to update resource control: %w", err)
 	}
@@ -122,9 +165,16 @@ func resourceResourceControlUpdate(d *schema.ResourceData, meta interface{}) err
 
 func resourceResourceControlDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	id := d.Id()
+	resourceType := d.Get("type").(int)
+	resourceId := d.Get("resource_id").(string)
 
-	resp, err := client.DoRequest("DELETE", fmt.Sprintf("/resource_controls/%s", id), nil, nil)
+	rcId, _, err := lookupResourceControlID(client, resourceType, resourceId)
+	if err != nil {
+		d.SetId("")
+		return nil
+	}
+
+	resp, err := client.DoRequest("DELETE", fmt.Sprintf("/resource_controls/%s", rcId), nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to delete resource control: %w", err)
 	}

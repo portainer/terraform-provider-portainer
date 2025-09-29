@@ -1,48 +1,64 @@
 # 🔐 **Resource Documentation: `portainer_resource_control`**
 
-# portainer_resource_control
-The `portainer_resource_control` resource allows you to manage access control for Docker resources within Portainer.
-You can assign access permissions to specific users or teams, or make the resource public or admin-only.
+## portainer_resource_control
+
+The `portainer_resource_control` resource allows you to **update** access control (AccessPolicy) for existing Docker stacks within Portainer.
+You can assign access permissions to specific users or teams, or make the stack public or admin-only.
+
+⚠️ **Important limitations:**
+
+* `create` does not create a new AccessPolicy. It internally calls `update` and **assumes that the AccessPolicy already exists** (Portainer automatically creates it when you create a stack).
+* Currently, only **stacks** (`type = 6`) are supported. Other resource types (images, networks, Helm releases, etc.) are not yet implemented.
+
+---
 
 ## Example Usage
+
 ```hcl
-resource "portainer_resource_control" "example" {
-  resource_id          = "617c5f22bb9b023d6daab7cba43a57576f83492867bc767d1c59416b065e5f08"
-  type                 = 1
-  administrators_only  = true
+resource "portainer_stack" "standalone_file" {
+  name            = "my-stack"
+  deployment_type = "standalone"
+  method          = "file"
+  endpoint_id     = 3
+
+  stack_file_path = "${path.module}/docker-compose.yml"
+}
+
+resource "portainer_resource_control" "stack_access" {
+  resource_id          = portainer_stack.standalone_file.id
+  type                 = 6
+  administrators_only  = false
   public               = false
-  sub_resource_ids     = []
-  teams                = [7]
-  users                = [4]
+  teams                = [8]
+  users                = []
 }
 ```
+---
 
 ## Lifecycle & Behavior
-- If any permission fields (teams, users, administrators_only, or public) are changed, the resource is updated in place by re-run:
-```hcl
-terraform apply
-```
-- Changes to resource_id, sub_resource_ids, or type require recreation of the resource.
-- For destroy some resource_control run:
-```hcl
-terraform destroy
-```
+
+* **Create**: does not create a new AccessPolicy. Instead, it calls update on the existing AccessPolicy that Portainer created automatically with the stack.
+* **Update**: if you change permission fields (`teams`, `users`, `administrators_only`, or `public`), Terraform applies the changes to the existing AccessPolicy.
+* **Delete**: removes the AccessPolicy associated with the stack.
+* Changes to `resource_id` or `type` force a new resource.
+
+---
 
 ### Arguments Reference
-| Name               | Type           | Required | Description                                                                 |
-|--------------------|----------------|----------|-----------------------------------------------------------------------------|
-| `resource_id`      | string         | ✅ yes   | Unique ID of the resource to control (e.g., container or service ID).       |
-| `type`             | number         | ✅ yes   | Type of the resource (`1` = container, `2` = service, `3` = volume, etc.).  |
-| `administrators_only` | bool        | 🚫 no    | Restrict access to administrators only. Default: `false`.                   |
-| `public`           | bool           | 🚫 no    | Make resource public to all users. Default: `false`.                        |
-| `sub_resource_ids` | list(string)   | 🚫 no    | List of sub-resource IDs, e.g. container IDs within a stack.                |
-| `teams`            | list(number)   | 🚫 no    | List of team IDs with access.                                               |
-| `users`            | list(number)   | 🚫 no    | List of user IDs with access.                                               |
+
+| Name                  | Type         | Required | Description                                                      |
+| --------------------- | ------------ | -------- | ---------------------------------------------------------------- |
+| `resource_id`         | string       | ✅ yes    | ID of the stack in Portainer (e.g. `46`).                       |
+| `type`                | number       | ✅ yes    | Type of the resource. Currently only `6` (= stack) is supported.|
+| `administrators_only` | bool         | 🚫 no    | Restrict access to administrators only. Default: `false`.        |
+| `public`              | bool         | 🚫 no    | Make resource public to all users. Default: `false`.             |
+| `teams`               | list(number) | 🚫 no    | List of team IDs with access.                                    |
+| `users`               | list(number) | 🚫 no    | List of user IDs with access.                                    |
 
 ---
 
 ### Attributes Reference
 
-| Name | Description                               |
-|------|-------------------------------------------|
-| `id` | ID of the resource control in Portainer   |
+| Name | Description                                             |
+| ---- | ------------------------------------------------------- |
+| `id` | ID of the access policy (resource control) in Portainer |
