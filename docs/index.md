@@ -231,7 +231,7 @@ This module is 100% Open Source and is distributed under the MIT License.
 See the [LICENSE](https://github.com/portainer/terraform-provider-portainer/blob/main/LICENSE) file for more information.
 
 ## 🌐 Acknowledgements
-- [HashiCorp Terraform](https://www.hashicorp.com/products/terraform)
+- HashiCorp Terraform
 - [Portainer](https://portainer.io)
 - [OpenTofu](https://opentofu.org/)
 - [Docker](https://www.docker.com/)
