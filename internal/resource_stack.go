@@ -64,12 +64,30 @@ func resourcePortainerStack() *schema.Resource {
 				Description: "Creation method: 'string', 'file', 'repository', or 'url'",
 				ForceNew:    true,
 			},
-			"name":               {Type: schema.TypeString, Required: true, ForceNew: true},
-			"endpoint_id":        {Type: schema.TypeInt, Required: true, ForceNew: true},
-			"swarm_id":           {Type: schema.TypeString, Optional: true, ForceNew: true, Computed: true},
-			"namespace":          {Type: schema.TypeString, Optional: true, ForceNew: true},
-			"stack_file_content": {Type: schema.TypeString, Optional: true},
-			"stack_file_path":    {Type: schema.TypeString, Optional: true},
+			"name":        {Type: schema.TypeString, Required: true, ForceNew: true},
+			"endpoint_id": {Type: schema.TypeInt, Required: true, ForceNew: true},
+			"swarm_id":    {Type: schema.TypeString, Optional: true, ForceNew: true, Computed: true},
+			"namespace":   {Type: schema.TypeString, Optional: true, ForceNew: true},
+			"stack_file_content": {
+				Type:     schema.TypeString,
+				Optional: true,
+				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+					if d.Get("method").(string) != "file" {
+						return false
+					}
+					path, ok := d.GetOk("stack_file_path")
+					if !ok {
+						return false
+					}
+					content, err := os.ReadFile(path.(string))
+					if err != nil {
+						return false
+					}
+					current := string(content)
+					return strings.TrimSpace(old) == strings.TrimSpace(current)
+				},
+			},
+			"stack_file_path": {Type: schema.TypeString, Optional: true},
 			"additional_files": {
 				Type:        schema.TypeList,
 				Optional:    true,

@@ -258,8 +258,18 @@ func resourceDockerNetworkRead(d *schema.ResourceData, meta interface{}) error {
 		_ = d.Set("internal", result.Internal)
 		_ = d.Set("attachable", result.Attachable)
 		_ = d.Set("ingress", result.Ingress)
-		_ = d.Set("enable_ipv4", result.EnableIPv4)
-		_ = d.Set("enable_ipv6", result.EnableIPv6)
+		enableIPv4 := result.EnableIPv4
+		enableIPv6 := result.EnableIPv6
+		if !enableIPv4 && !enableIPv6 {
+			if d.Get("enable_ipv4").(bool) {
+				enableIPv4 = true
+			}
+			if d.Get("enable_ipv6").(bool) {
+				enableIPv6 = true
+			}
+		}
+		_ = d.Set("enable_ipv4", enableIPv4)
+		_ = d.Set("enable_ipv6", enableIPv6)
 	} else {
 		_ = d.Set("internal", d.Get("internal").(bool))
 		_ = d.Set("attachable", d.Get("attachable").(bool))
