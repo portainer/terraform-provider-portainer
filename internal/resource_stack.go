@@ -955,6 +955,16 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 	}
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
+
+	if d.Get("prune").(bool) {
+		fmt.Println("[INFO] Performing immediate redeploy with prune=true after stack creation")
+		if err := resourcePortainerStackUpdate(d, client); err != nil {
+			fmt.Printf("[WARN] prune redeploy failed: %v\n", err)
+		} else {
+			fmt.Println("[INFO] prune redeploy succeeded")
+		}
+	}
+
 	return nil
 }
 
