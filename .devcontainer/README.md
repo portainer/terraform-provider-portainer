@@ -1,6 +1,6 @@
 # 🚀 Terraform Provider for Portainer
 
-This repository contains a custom [Terraform](https://www.terraform.io/) provider for managing [Portainer](https://www.portainer.io/). It includes a full development environment using [VS Code Dev Containers](https://code.visualstudio.com/docs/devcontainers/containers) for easy local development and testing.
+This repository contains a custom Terraform provider for managing [Portainer](https://www.portainer.io/). It includes a full development environment using [VS Code Dev Containers](https://code.visualstudio.com/docs/devcontainers/containers) for easy local development and testing.
 
 ---
 

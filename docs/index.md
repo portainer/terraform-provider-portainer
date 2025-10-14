@@ -1,6 +1,6 @@
 # Portainer Provider
 
-A [Terraform](https://www.terraform.io) provider to manage [Portainer](https://www.portainer.io/) resources via its REST API using Terraform.
+A Terraform provider to manage [Portainer](https://www.portainer.io/) resources via its REST API using Terraform.
 
 It supports provisioning and configuration of Portainer users and will be extended to support other objects such as teams, compose/stacks, endpoints, and access control.
 

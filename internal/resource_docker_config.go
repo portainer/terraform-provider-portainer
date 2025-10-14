@@ -13,7 +13,7 @@ func resourceDockerConfig() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDockerConfigCreate,
 		Read:   resourceDockerConfigRead,
-		Update: resourceDockerConfigUpdate,
+		Update: nil, // resourceDockerConfigUpdate,
 		Delete: resourceDockerConfigDelete,
 		Importer: &schema.ResourceImporter{
 			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
@@ -35,25 +35,30 @@ func resourceDockerConfig() *schema.Resource {
 			"endpoint_id": {
 				Type:     schema.TypeInt,
 				Required: true,
+				ForceNew: true,
 			},
 			"name": {
 				Type:     schema.TypeString,
 				Required: true,
+				ForceNew: true,
 			},
 			"data": {
 				Type:      schema.TypeString,
 				Required:  true,
 				Sensitive: true,
+				ForceNew:  true,
 			},
 			"labels": {
 				Type:     schema.TypeMap,
 				Optional: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
+				ForceNew: true,
 			},
 			"templating": {
 				Type:     schema.TypeMap,
 				Optional: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
+				ForceNew: true,
 			},
 		},
 	}
@@ -156,16 +161,15 @@ func resourceDockerConfigRead(d *schema.ResourceData, meta interface{}) error {
 	if resp.StatusCode == 404 {
 		d.SetId("")
 		return nil
-	} else if resp.StatusCode != 200 {
+	}
+	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to read docker config: %s", string(body))
 	}
 
 	var result struct {
-		ID        string `json:"ID"`
-		CreatedAt string `json:"CreatedAt"`
-		UpdatedAt string `json:"UpdatedAt"`
-		Spec      struct {
+		ID   string `json:"ID"`
+		Spec struct {
 			Name       string                 `json:"Name"`
 			Labels     map[string]string      `json:"Labels"`
 			Templating map[string]interface{} `json:"Templating"`
@@ -176,10 +180,21 @@ func resourceDockerConfigRead(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("failed to decode docker config: %w", err)
 	}
 
-	d.Set("name", result.Spec.Name)
-	d.Set("labels", result.Spec.Labels)
-	d.Set("templating", result.Spec.Templating)
+	_ = d.Set("name", result.Spec.Name)
+	_ = d.Set("labels", result.Spec.Labels)
 
+	templ := make(map[string]interface{})
+	if t := result.Spec.Templating; t != nil {
+		if name, ok := t["Name"]; ok {
+			templ["name"] = name
+		}
+		if opts, ok := t["Options"].(map[string]interface{}); ok {
+			for k, v := range opts {
+				templ[k] = v
+			}
+		}
+	}
+	_ = d.Set("templating", templ)
 	return nil
 }
 
