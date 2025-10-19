@@ -52,7 +52,10 @@ install-plugin:
 .PHONY: init
 init:
 	@for project in $$(find examples -type d -mindepth 1 -maxdepth 1); do \
-		$(MAKE) _terraform TDIR=$$project TCMD=init ; \
+		$(MAKE) _terraform TDIR=$$project TCMD="init -upgrade" ; \
+	done
+	@for project in $$(find e2e-tests -type d -mindepth 1 -maxdepth 1); do \
+		$(MAKE) _terraform TDIR=$$project TCMD="init -upgrade" ; \
 	done
 
 .PHONY: validate
@@ -60,10 +63,16 @@ validate:
 	@for project in $$(find examples -type d -mindepth 1 -maxdepth 1); do \
 		$(MAKE) _terraform TDIR=$$project TCMD=validate ; \
 	done
+	@for project in $$(find e2e-tests -type d -mindepth 1 -maxdepth 1); do \
+		$(MAKE) _terraform TDIR=$$project TCMD="validate" ; \
+	done
 
 .PHONY: fmt-check
 fmt-check:
 	@for project in $$(find examples -type d -mindepth 1 -maxdepth 1); do \
+		$(MAKE) _terraform TDIR=$$project TCMD="fmt -check" ; \
+	done
+	@for project in $$(find e2e-tests -type d -mindepth 1 -maxdepth 1); do \
 		$(MAKE) _terraform TDIR=$$project TCMD="fmt -check" ; \
 	done
 

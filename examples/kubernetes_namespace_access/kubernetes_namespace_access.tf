@@ -1,4 +1,4 @@
-resource "kubernetes_namespace_access" "test" {
+resource "portainer_kubernetes_namespace_access" "test" {
   environment_id = var.environment_id
   name           = var.namespace_name
 

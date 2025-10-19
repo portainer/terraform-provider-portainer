@@ -5,13 +5,13 @@
 
 | Name | Version |
 |------|---------|
-| <a name="provider_kubernetes"></a> [kubernetes](#provider\_kubernetes) | n/a |
+| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | 1.13.2 |
 
 ## Resources
 
 | Name | Type |
 |------|------|
-| [kubernetes_namespace_access.test](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/namespace_access) | resource |
+| [portainer_kubernetes_namespace_access.test](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/kubernetes_namespace_access) | resource |
 
 ## Inputs
 
