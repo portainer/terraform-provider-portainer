@@ -19,15 +19,19 @@ func resourceRegistry() *schema.Resource {
 			State: schema.ImportStatePassthrough,
 		},
 		Schema: map[string]*schema.Schema{
-			"name":           {Type: schema.TypeString, Required: true},
-			"url":            {Type: schema.TypeString, Required: true},
-			"base_url":       {Type: schema.TypeString, Optional: true},
-			"type":           {Type: schema.TypeInt, Required: true, ForceNew: true},
-			"authentication": {Type: schema.TypeBool, Optional: true, Default: false},
-			"username":       {Type: schema.TypeString, Optional: true},
-			"password":       {Type: schema.TypeString, Optional: true, Sensitive: true},
-			"instance_url":   {Type: schema.TypeString, Optional: true},
-			"aws_region":     {Type: schema.TypeString, Optional: true},
+			"name":                     {Type: schema.TypeString, Required: true},
+			"url":                      {Type: schema.TypeString, Required: true},
+			"base_url":                 {Type: schema.TypeString, Optional: true},
+			"type":                     {Type: schema.TypeInt, Required: true, ForceNew: true},
+			"authentication":           {Type: schema.TypeBool, Optional: true, Default: false},
+			"username":                 {Type: schema.TypeString, Optional: true},
+			"password":                 {Type: schema.TypeString, Optional: true, Sensitive: true},
+			"instance_url":             {Type: schema.TypeString, Optional: true},
+			"aws_region":               {Type: schema.TypeString, Optional: true},
+			"github_use_organisation":  {Type: schema.TypeBool, Optional: true, Default: false},
+			"github_organisation_name": {Type: schema.TypeString, Optional: true},
+			"quay_use_organisation":    {Type: schema.TypeBool, Optional: true, Default: false},
+			"quay_organisation_name":   {Type: schema.TypeString, Optional: true},
 		},
 	}
 }
@@ -61,6 +65,10 @@ func resourceRegistryCreate(d *schema.ResourceData, meta interface{}) error {
 		body["authentication"] = true
 		body["username"] = d.Get("username").(string)
 		body["password"] = d.Get("password").(string)
+		body["quay"] = map[string]interface{}{
+			"useOrganisation":  d.Get("quay_use_organisation").(bool),
+			"organisationName": d.Get("quay_organisation_name").(string),
+		}
 	case 2: // Azure
 		body["url"] = url
 		body["baseURL"] = baseURL
@@ -105,6 +113,15 @@ func resourceRegistryCreate(d *schema.ResourceData, meta interface{}) error {
 		if auth {
 			body["username"] = d.Get("username").(string)
 			body["password"] = d.Get("password").(string)
+		}
+	case 8: // GitHub
+		body["url"] = url
+		body["authentication"] = true
+		body["username"] = d.Get("username").(string)
+		body["password"] = d.Get("password").(string)
+		body["github"] = map[string]interface{}{
+			"useOrganisation":  d.Get("github_use_organisation").(bool),
+			"organisationName": d.Get("github_organisation_name").(string),
 		}
 	default:
 		return fmt.Errorf("unsupported registry type: %d", registryType)
@@ -184,7 +201,16 @@ func resourceRegistryRead(d *schema.ResourceData, meta interface{}) error {
 		Type           int    `json:"Type"`
 		Authentication bool   `json:"Authentication"`
 		Username       string `json:"Username"`
+		Github         *struct {
+			UseOrganisation  bool   `json:"UseOrganisation"`
+			OrganisationName string `json:"OrganisationName"`
+		} `json:"Github,omitempty"`
+		Quay *struct {
+			UseOrganisation  bool   `json:"UseOrganisation"`
+			OrganisationName string `json:"OrganisationName"`
+		} `json:"Quay,omitempty"`
 	}
+
 	if err := json.NewDecoder(resp.Body).Decode(&registry); err != nil {
 		return err
 	}
@@ -195,6 +221,14 @@ func resourceRegistryRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("type", registry.Type)
 	d.Set("authentication", registry.Authentication)
 	d.Set("username", registry.Username)
+	if registry.Github != nil {
+		d.Set("github_use_organisation", registry.Github.UseOrganisation)
+		d.Set("github_organisation_name", registry.Github.OrganisationName)
+	}
+	if registry.Quay != nil {
+		d.Set("quay_use_organisation", registry.Quay.UseOrganisation)
+		d.Set("quay_organisation_name", registry.Quay.OrganisationName)
+	}
 
 	return nil
 }
@@ -212,14 +246,29 @@ func resourceRegistryUpdate(d *schema.ResourceData, meta interface{}) error {
 		"password":       d.Get("password").(string),
 	}
 
+	if d.Get("type").(int) == 1 {
+		body["quay"] = map[string]interface{}{
+			"useOrganisation":  d.Get("quay_use_organisation").(bool),
+			"organisationName": d.Get("quay_organisation_name").(string),
+		}
+	}
+
 	if d.Get("type").(int) == 4 {
 		body["gitlab"] = map[string]interface{}{
 			"InstanceURL": d.Get("instance_url").(string),
 		}
 	}
+
 	if d.Get("type").(int) == 7 {
 		body["ecr"] = map[string]interface{}{
 			"Region": d.Get("aws_region").(string),
+		}
+	}
+
+	if d.Get("type").(int) == 8 {
+		body["github"] = map[string]interface{}{
+			"useOrganisation":  d.Get("github_use_organisation").(bool),
+			"organisationName": d.Get("github_organisation_name").(string),
 		}
 	}
 

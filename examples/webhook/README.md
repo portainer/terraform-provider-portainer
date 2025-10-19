@@ -1,6 +1,18 @@
 <!-- BEGIN_TF_DOCS -->
 
 
+## Providers
+
+| Name | Version |
+|------|---------|
+| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | 1.13.2 |
+
+## Resources
+
+| Name | Type |
+|------|------|
+| [portainer_webhook.stack](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/webhook) | resource |
+
 ## Inputs
 
 | Name | Description | Type | Default | Required |
