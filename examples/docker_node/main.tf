@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     portainer = {
-      source = "localdomain/local/portainer"
+      source = "portainer/portainer"
     }
   }
 }

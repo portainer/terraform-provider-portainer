@@ -13,7 +13,7 @@ import (
 type SettingsPayload struct {
 	EdgePortainerURL            string                `json:"EdgePortainerURL,omitempty"`
 	AuthenticationMethod        int                   `json:"authenticationMethod,omitempty"`
-	EnableTelemetry             bool                  `json:"enableTelemetry,omitempty"`
+	EnableTelemetry             bool                  `json:"EnableTelemetry,omitempty"`
 	LogoURL                     string                `json:"logoURL,omitempty"`
 	SnapshotInterval            string                `json:"snapshotInterval,omitempty"`
 	TemplatesURL                string                `json:"templatesURL,omitempty"`
@@ -110,47 +110,54 @@ func resourceSettings() *schema.Resource {
 			State: schema.ImportStatePassthrough,
 		},
 		Schema: map[string]*schema.Schema{
-			"edge_portainer_url":           {Type: schema.TypeString, Optional: true},
-			"authentication_method":        {Type: schema.TypeInt, Optional: true},
-			"enable_telemetry":             {Type: schema.TypeBool, Optional: true},
-			"logo_url":                     {Type: schema.TypeString, Optional: true},
-			"snapshot_interval":            {Type: schema.TypeString, Optional: true},
-			"templates_url":                {Type: schema.TypeString, Optional: true},
-			"enable_edge_compute_features": {Type: schema.TypeBool, Optional: true},
-			"enforce_edge_id":              {Type: schema.TypeBool, Optional: true},
-			"user_session_timeout":         {Type: schema.TypeString, Optional: true},
-			"kubeconfig_expiry":            {Type: schema.TypeString, Optional: true},
-			"kubectl_shell_image":          {Type: schema.TypeString, Optional: true},
-			"helm_repository_url":          {Type: schema.TypeString, Optional: true},
+			"edge_portainer_url":           {Type: schema.TypeString, Optional: true, Computed: true},
+			"authentication_method":        {Type: schema.TypeInt, Optional: true, Computed: true},
+			"enable_telemetry":             {Type: schema.TypeBool, Optional: true, Computed: true},
+			"logo_url":                     {Type: schema.TypeString, Optional: true, Computed: true},
+			"snapshot_interval":            {Type: schema.TypeString, Optional: true, Computed: true},
+			"templates_url":                {Type: schema.TypeString, Optional: true, Computed: true},
+			"enable_edge_compute_features": {Type: schema.TypeBool, Optional: true, Computed: true},
+			"enforce_edge_id":              {Type: schema.TypeBool, Optional: true, Computed: true},
+			"user_session_timeout":         {Type: schema.TypeString, Optional: true, Computed: true},
+			"kubeconfig_expiry":            {Type: schema.TypeString, Optional: true, Computed: true},
+			"kubectl_shell_image":          {Type: schema.TypeString, Optional: true, Computed: true},
+			"helm_repository_url":          {Type: schema.TypeString, Optional: true, Computed: true},
 			"disable_kube_roles_sync": {
 				Type:     schema.TypeBool,
 				Optional: true,
+				Computed: true,
 			},
 			"disable_kube_shell": {
 				Type:     schema.TypeBool,
 				Optional: true,
+				Computed: true,
 			},
 			"disable_kubeconfig_download": {
 				Type:     schema.TypeBool,
 				Optional: true,
+				Computed: true,
 			},
 			"display_donation_header": {
 				Type:     schema.TypeBool,
 				Optional: true,
+				Computed: true,
 			},
 			"display_external_contributors": {
 				Type:     schema.TypeBool,
 				Optional: true,
+				Computed: true,
 			},
 			"is_docker_desktop_extension": {
 				Type:     schema.TypeBool,
 				Optional: true,
+				Computed: true,
 			},
-			"trust_on_first_connect":      {Type: schema.TypeBool, Optional: true},
-			"edge_agent_checkin_interval": {Type: schema.TypeInt, Optional: true},
+			"trust_on_first_connect":      {Type: schema.TypeBool, Optional: true, Computed: true},
+			"edge_agent_checkin_interval": {Type: schema.TypeInt, Optional: true, Computed: true},
 			"black_listed_labels": {
 				Type:     schema.TypeList,
 				Optional: true,
+				Computed: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"name":  {Type: schema.TypeString, Required: true},
@@ -161,45 +168,57 @@ func resourceSettings() *schema.Resource {
 			"global_deployment_options": {
 				Type:     schema.TypeList,
 				Optional: true,
+				Computed: true,
 				MaxItems: 1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"hide_stacks_functionality": {Type: schema.TypeBool, Optional: true},
+						"hide_stacks_functionality": {Type: schema.TypeBool, Optional: true, Computed: true},
 					},
 				},
 			},
 			"internal_auth_settings": {
 				Type:     schema.TypeList,
 				Optional: true,
+				Computed: true,
 				MaxItems: 1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"required_password_length": {Type: schema.TypeInt, Optional: true},
+						"required_password_length": {Type: schema.TypeInt, Optional: true, Computed: true},
 					},
 				},
 			},
 			"oauth_settings": {
 				Type:     schema.TypeList,
 				Optional: true,
+				Computed: true,
 				MaxItems: 1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"access_token_uri":        {Type: schema.TypeString, Optional: true},
-						"auth_style":              {Type: schema.TypeInt, Optional: true},
-						"authorization_uri":       {Type: schema.TypeString, Optional: true},
-						"client_id":               {Type: schema.TypeString, Optional: true},
-						"client_secret":           {Type: schema.TypeString, Optional: true, Sensitive: true},
-						"default_team_id":         {Type: schema.TypeInt, Optional: true},
-						"logout_uri":              {Type: schema.TypeString, Optional: true},
-						"oauth_auto_create_users": {Type: schema.TypeBool, Optional: true},
-						"redirect_uri":            {Type: schema.TypeString, Optional: true},
-						"resource_uri":            {Type: schema.TypeString, Optional: true},
-						"sso":                     {Type: schema.TypeBool, Optional: true},
-						"scopes":                  {Type: schema.TypeString, Optional: true},
-						"user_identifier":         {Type: schema.TypeString, Optional: true},
+						"access_token_uri":  {Type: schema.TypeString, Optional: true, Computed: true},
+						"auth_style":        {Type: schema.TypeInt, Optional: true, Computed: true},
+						"authorization_uri": {Type: schema.TypeString, Optional: true, Computed: true},
+						"client_id":         {Type: schema.TypeString, Optional: true, Computed: true},
+						"client_secret": {
+							Type:      schema.TypeString,
+							Optional:  true,
+							Computed:  true,
+							Sensitive: true,
+							DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+								return old == "" || new == ""
+							},
+						},
+						"default_team_id":         {Type: schema.TypeInt, Optional: true, Computed: true},
+						"logout_uri":              {Type: schema.TypeString, Optional: true, Computed: true},
+						"oauth_auto_create_users": {Type: schema.TypeBool, Optional: true, Computed: true},
+						"redirect_uri":            {Type: schema.TypeString, Optional: true, Computed: true},
+						"resource_uri":            {Type: schema.TypeString, Optional: true, Computed: true},
+						"sso":                     {Type: schema.TypeBool, Optional: true, Computed: true},
+						"scopes":                  {Type: schema.TypeString, Optional: true, Computed: true},
+						"user_identifier":         {Type: schema.TypeString, Optional: true, Computed: true},
 						"kube_secret_key": {
 							Type:     schema.TypeList,
 							Optional: true,
+							Computed: true,
 							Elem:     &schema.Schema{Type: schema.TypeInt},
 						},
 					},
@@ -208,48 +227,60 @@ func resourceSettings() *schema.Resource {
 			"ldap_settings": {
 				Type:     schema.TypeList,
 				Optional: true,
+				Computed: true,
 				MaxItems: 1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"anonymous_mode":    {Type: schema.TypeBool, Optional: true},
-						"auto_create_users": {Type: schema.TypeBool, Optional: true},
-						"password":          {Type: schema.TypeString, Optional: true, Sensitive: true},
-						"reader_dn":         {Type: schema.TypeString, Optional: true},
-						"start_tls":         {Type: schema.TypeBool, Optional: true},
-						"url":               {Type: schema.TypeString, Optional: true},
+						"anonymous_mode":    {Type: schema.TypeBool, Optional: true, Computed: true},
+						"auto_create_users": {Type: schema.TypeBool, Optional: true, Computed: true},
+						"password": {
+							Type:      schema.TypeString,
+							Optional:  true,
+							Computed:  true,
+							Sensitive: true,
+							DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+								return old == "" || new == ""
+							},
+						},
+						"reader_dn": {Type: schema.TypeString, Optional: true, Computed: true},
+						"start_tls": {Type: schema.TypeBool, Optional: true, Computed: true},
+						"url":       {Type: schema.TypeString, Optional: true, Computed: true},
 						"search_settings": {
 							Type:     schema.TypeList,
 							Optional: true,
+							Computed: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
-									"base_dn":             {Type: schema.TypeString, Optional: true},
-									"filter":              {Type: schema.TypeString, Optional: true},
-									"user_name_attribute": {Type: schema.TypeString, Optional: true},
+									"base_dn":             {Type: schema.TypeString, Optional: true, Computed: true},
+									"filter":              {Type: schema.TypeString, Optional: true, Computed: true},
+									"user_name_attribute": {Type: schema.TypeString, Optional: true, Computed: true},
 								},
 							},
 						},
 						"group_search_settings": {
 							Type:     schema.TypeList,
 							Optional: true,
+							Computed: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
-									"group_attribute": {Type: schema.TypeString, Optional: true},
-									"group_base_dn":   {Type: schema.TypeString, Optional: true},
-									"group_filter":    {Type: schema.TypeString, Optional: true},
+									"group_attribute": {Type: schema.TypeString, Optional: true, Computed: true},
+									"group_base_dn":   {Type: schema.TypeString, Optional: true, Computed: true},
+									"group_filter":    {Type: schema.TypeString, Optional: true, Computed: true},
 								},
 							},
 						},
 						"tls_config": {
 							Type:     schema.TypeList,
 							Optional: true,
+							Computed: true,
 							MaxItems: 1,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
-									"tls":             {Type: schema.TypeBool, Optional: true},
-									"tls_ca_cert":     {Type: schema.TypeString, Optional: true},
-									"tls_cert":        {Type: schema.TypeString, Optional: true},
-									"tls_key":         {Type: schema.TypeString, Optional: true},
-									"tls_skip_verify": {Type: schema.TypeBool, Optional: true},
+									"tls":             {Type: schema.TypeBool, Optional: true, Computed: true},
+									"tls_ca_cert":     {Type: schema.TypeString, Optional: true, Computed: true},
+									"tls_cert":        {Type: schema.TypeString, Optional: true, Computed: true},
+									"tls_key":         {Type: schema.TypeString, Optional: true, Computed: true},
+									"tls_skip_verify": {Type: schema.TypeBool, Optional: true, Computed: true},
 								},
 							},
 						},
@@ -469,7 +500,7 @@ func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
 	d.SetId("portainer-settings")
 	_ = d.Set("edge_portainer_url", result.EdgePortainerURL)
 	_ = d.Set("authentication_method", result.AuthenticationMethod)
-	_ = d.Set("enable_telemetry", result.EnableTelemetry)
+	// _ = d.Set("enable_telemetry", result.EnableTelemetry)
 	_ = d.Set("logo_url", result.LogoURL)
 	_ = d.Set("snapshot_interval", result.SnapshotInterval)
 	_ = d.Set("templates_url", result.TemplatesURL)

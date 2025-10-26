@@ -33,12 +33,6 @@ variable "public" {
   default     = false
 }
 
-variable "sub_resource_ids" {
-  description = "List of sub-resource IDs (if any)"
-  type        = list(string)
-  default     = []
-}
-
 variable "teams" {
   description = "List of team IDs allowed to access the resource"
   type        = list(number)
