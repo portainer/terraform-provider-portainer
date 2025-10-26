@@ -26,11 +26,9 @@ variable "cloud_credentials_provider" {
 variable "cloud_credentials_data" {
   description = "JSON-encoded credentials block for the cloud provider"
   type        = string
-  default     = <<EOT
-{
-  "accessKeyId": "your-access-key",
-  "secretAccessKey": "your-secret-key",
-  "region": "eu-central-1"
-}
-EOT
+  default     = jsonencode({
+    accessKeyId     = "your-access-key"
+    secretAccessKey = "your-secret-key"
+    region          = "eu-central-1"
+  })
 }
