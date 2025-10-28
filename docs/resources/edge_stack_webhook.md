@@ -4,6 +4,8 @@
 The `portainer_edge_stack_webhook` resource allows you to trigger an update of a Portainer-managed edge stack via its webhook.  
 This is useful for GitOps workflows or external automation systems.
 
+> `Webhook` currently working only for Portainer BE edition
+
 ## Example Usage
 ```hcl
 resource "portainer_edge_stack_webhook" "trigger_my_edge_stack" {

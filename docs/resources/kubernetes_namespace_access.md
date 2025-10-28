@@ -50,11 +50,11 @@ Access is **applied on every `terraform apply`**, but only triggers the update r
 | Name              | Type         | Required | Description                                                                 |
 |-------------------|--------------|----------|-----------------------------------------------------------------------------|
 | `endpoint_id`     | number       | ✅ yes   | ID of the Portainer environment (endpoint)                                  |
-| `namespace_id`    | string       | ✅ yes   | ID of the Kubernetes namespace, typically obtained from portainer_kubernetes_namespace                    |
-| `users_to_add`    | list(number) | 🚫 no    | List of user IDs to be granted access to the namespace                      |
-| `users_to_remove` | list(number) | 🚫 no    | List of user IDs to be revoked from the namespace                           |
-| `teams_to_add`    | list(number) | 🚫 no    | List of team IDs to be granted access to the namespace                      |
-| `teams_to_remove` | list(number) | 🚫 no    | List of team IDs to be revoked from the namespace                           |
+| `namespace_id`    | string       | ✅ yes   | ID of the Kubernetes namespace, typically obtained from portainer_kubernetes_namespace |
+| `users_to_add`    | list(number) | 🚫 optional | List of user IDs to be granted access to the namespace                   |
+| `users_to_remove` | list(number) | 🚫 optional | List of user IDs to be revoked from the namespace                        |
+| `teams_to_add`    | list(number) | 🚫 optional | List of team IDs to be granted access to the namespace                   |
+| `teams_to_remove` | list(number) | 🚫 optional | List of team IDs to be revoked from the namespace                        |
 
 ---
 

@@ -3,6 +3,8 @@
 ## Overview
 The `portainer_chat` resource allows you to send a query to Portainer’s integrated OpenAI assistant (if enabled). It supports providing context and environment-specific prompts, and retrieves an AI-generated YAML or message.
 
+> Currently working only for Portainer BE edition
+
 ---
 
 ## 📘 Example Usage
@@ -46,7 +48,7 @@ Note: The resource ID is synthetic (`chat-{environment_id}`) and not persisted r
 | `context`         | string | ✅ yes   | Context of the query (e.g. `environment_aware`)                        |
 | `environment_id`  | number | ✅ yes   | ID of the Portainer environment                                        |
 | `message`         | string | ✅ yes   | The natural language prompt to send to OpenAI                          |
-| `model`           | string | 🚫 no    | The OpenAI model to use (e.g. `gpt-3.5-turbo`, `gpt-4`)                |
+| `model`           | string | 🚫 optional | The OpenAI model to use (e.g. `gpt-3.5-turbo`, `gpt-4`)                |
 
 ---
 

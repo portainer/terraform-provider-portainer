@@ -7,13 +7,14 @@ The `portainer_docker_volume` resource allows you to create and manage Docker vo
 
 ### Create a Docker Volume
 ```hcl
-resource "portainer_docker_image" "nginx_test" {
+resource "portainer_docker_volume" "example" {
   endpoint_id = 1
-  image       = "nginx:alpine"
+  name        = "my-test-volume"
+  driver      = "local"
 }
 ```
 
-### Pull private image with registry authentication
+### Advanced: Create a Volume with driver configuration and labels
 ```hcl
 resource "portainer_docker_volume" "example" {
   endpoint_id = 1
@@ -107,6 +108,7 @@ terraform destroy
 | `labels`              | `map(string)` | 🚫 optional | Key-value metadata applied to the volume                               |
 | `cluster_volume_spec` | `block`       | 🚫 optional | Cluster-level volume configuration for scheduling, secrets, and access |
 
+
 ### `cluster_volume_spec` block
 | Attribute                    | Type           | Required    | Description                          |
 | ---------------------------- | -------------- | ----------- | ------------------------------------ |
@@ -117,26 +119,30 @@ terraform destroy
 | `capacity_range`             | `block`        | 🚫 optional | Volume capacity constraints          |
 | `availability`               | `string`       | 🚫 optional | Availability state (`active`, etc.)  |
 
-#### `access_mode` block
+
+### `access_mode` block
 | Attribute      | Type          | Description                           |
 | -------------- | ------------- | ------------------------------------- |
 | `scope`        | `string`      | e.g., `single`, `multi`               |
 | `sharing`      | `string`      | e.g., `none`, `readonly`, `readwrite` |
 | `mount_volume` | `map(string)` | Arbitrary key-value mount options     |
 
-#### `secrets` block
+
+### `secrets` block
 | Attribute | Type     | Description                   |
 | --------- | -------- | ----------------------------- |
 | `key`     | `string` | Key used within the volume    |
 | `secret`  | `string` | Name of the referenced secret |
 
-#### `accessibility_requirements` block
+
+### `accessibility_requirements` block
 | Attribute   | Type                | Description                       |
 | ----------- | ------------------- | --------------------------------- |
 | `requisite` | `list(map(string))` | List of required node properties  |
 | `preferred` | `list(map(string))` | List of preferred node properties |
 
-#### `capacity_range` block
+
+### `capacity_range` block
 | Attribute        | Type | Description                       |
 | ---------------- | ---- | --------------------------------- |
 | `required_bytes` | int  | Minimum storage required in bytes |

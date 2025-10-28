@@ -13,7 +13,7 @@ resource "portainer_endpoint_group" "your-group" {
 }
 ```
 
-### Create Endpoint Group
+### Create Endpoint Group with tags
 
 ```hcl
 resource "portainer_tag" "your-tag" {

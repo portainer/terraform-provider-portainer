@@ -3,6 +3,9 @@
 # portainer_webhook_execute
 The `portainer_webhook_execute` resource allows you to trigger a webhook execution in Portainer – either for restarting a Docker service (via token) or triggering a stack Git update (via stack ID).
 > ⚠️ This is an execution resource – it performs an action upon `terraform apply` and doesn't manage state on Portainer.
+
+> Currently working only for Portainer BE edition
+
 ## Example Usage
 ### Trigger webhook by token (for Docker service restart/update)
 ```hcl

@@ -5,7 +5,7 @@ The `portainer_auth` resource allows you to authenticate to the Portainer API us
 It returns a JWT token that can be used for other API calls or debug purposes.
 
 ## Example Usage
-### Create Backup
+
 ```hcl
 resource "portainer_auth" "login" {
   username = "admin"
@@ -18,6 +18,7 @@ output "jwt_token" {
 }
 ```
 > ✅ Note: This resource does not persist anything in Portainer. It only returns a JWT token that can be used in subsequent API calls.
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/auth)
 
 ## Lifecycle & Behavior
 - This resource authenticates via the /auth API endpoint using username/password.

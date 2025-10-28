@@ -80,17 +80,17 @@ terraform apply
 | `is_compose_format` | bool         | 🚫 optional | Whether to treat as Compose format (default: `false`)                      |
 | `variables`         | list(object) | 🚫 optional | List of input variables (`name`, `label`, `description`, `defaultValue`)   |
 
-### For String-based Template
+### For `String-based` Template
 | Name           | Type   | Required    | Description                                                  |
 |----------------|--------|-------------|--------------------------------------------------------------|
 | `file_content` | string | ✅ required | Inline Compose content (exclusive with `file_path` and `repository_url`) |
 
-### For File-based Template
+### For `File-based` Template
 | Name       | Type   | Required    | Description                                                       |
 |------------|--------|-------------|-------------------------------------------------------------------|
 | `file_path`| string | ✅ required | Path to local Compose file (exclusive with `file_content` and `repository_url`) |
 
-### For Repository-based Template
+### For `Repository-based` Template
 | Name                        | Type   | Required    | Description                                                          |
 | --------------------------- | ------ | ----------- | -------------------------------------------------------------------- |
 | `repository_url`            | string | ✅ required  | Git repository URL                                                  |

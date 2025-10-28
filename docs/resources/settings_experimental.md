@@ -5,6 +5,8 @@ The `portainer_settings_experimental` resource allows you to manage experimental
 
 > ⚠️ This endpoint is intended for administrators only. Use with care.
 
+> Currently working only for Portainer BE edition
+
 ---
 
 ## 📘 Example Usage

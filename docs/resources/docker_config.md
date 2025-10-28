@@ -44,6 +44,7 @@ Use `terraform destroy` to remove the config.
 | data        | string       | ✅ yes       | Base64-encoded string containing the config content               |
 | labels      | map(string)  | 🚫 optional  | Map of labels to associate with the config                        |
 | templating  | map(string)  | 🚫 optional  | Templating configuration (e.g., `name`, `Options`)                |
+
 > ⚠️ Note: **The `data` must be a valid base64-encoded string. Use Terraform's `base64encode()` function if needed.**
 
 ## Attributes Reference

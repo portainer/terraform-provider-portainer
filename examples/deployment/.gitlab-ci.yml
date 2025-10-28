@@ -1,0 +1,47 @@
+image: hashicorp/terraform  # or use ghcr.io/opentofu/opentofu if you can use tofu commands instead of terraform
+
+stages:
+  - test
+  - plan
+  - deploy
+
+before_script:
+  - rm -rf terraform.tfstate
+  - rm -rf terraform.tfstate.backup
+
+test:
+  stage: test
+  script:
+    - terraform init
+    - terraform check
+    - terraform validate
+  artifacts:
+    paths:
+      - .terraform.lock.hcl
+      - .terraform
+    expire_in: 1h
+
+plan:
+  stage: plan
+  script:
+    - terraform plan -target=portainer_docker_image.pull -out=plan-pull.tfplan
+    - terraform plan -target=portainer_deploy.deploy -out=plan-deploy.tfplan
+    - terraform plan -target=portainer_container_exec.exec -out=plan-exec.tfplan
+    - terraform plan -target=portainer_check.check -out=plan-check.tfplan
+  artifacts:
+    paths:
+      - plan*
+      - .terraform.lock.hcl
+      - .terraform
+    expire_in: 1h
+
+deploy:
+  stage: deploy
+  only:
+    - master
+  when: manual
+  script:
+    - terraform apply -auto-approve plan-pull.tfplan
+    - terraform apply -auto-approve plan-deploy.tfplan
+    - terraform apply -auto-approve plan-exec.tfplan
+    - terraform apply -auto-approve plan-check.tfplan

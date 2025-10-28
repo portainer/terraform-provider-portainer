@@ -4,15 +4,22 @@
 The `portainer_backup_s3` resource allows you to back up your Portainer instance to an AWS S3 bucket or compatible storage system.
 > ⚠️ Note: This resource performs a one-time backup upload on every terraform apply. It is not stateful and will always re-trigger.
 
+> Currently working only for Portainer BE edition
+
 ## Example Usage
-### Create Backup
 
 ```hcl
-resource "portainer_backup" "your-backup" {
-  password    = "your-backup-password"
-  output_path = "your-backup-path-for-tar-gz-file"
+resource "portainer_backup_s3" "s3_backup" {
+  access_key_id      = "s3_access_key"
+  secret_access_key  = "s3_secret_key"
+  bucket_name        = "s3_bucket"
+  region             = "s3_region"
+  s3_compatible_host = "s3_endpoint"
+  password           = "backup_password"
+  cron_rule          = var.backup_cron_rule   # optional
 }
 ```
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/backup_s3)
 
 ## Lifecycle & Behavior
 This resource does not track state — it performs a one-time backup to the specified S3 bucket every time terraform apply runs.

@@ -67,6 +67,8 @@ func Provider() *schema.Provider {
 			"portainer_edge_stack":                              resourceEdgeStack(),
 			"portainer_custom_template":                         resourceCustomTemplate(),
 			"portainer_stack":                                   resourcePortainerStack(),
+			"portainer_deploy":                                  resourceDeploy(),
+			"portainer_check":                                   resourceCheck(),
 			"portainer_container_exec":                          resourceContainerExec(),
 			"portainer_docker_node":                             resourceDockerNode(),
 			"portainer_docker_network":                          resourceDockerNetwork(),

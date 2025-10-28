@@ -8,7 +8,7 @@ The `portainer_docker_plugin` resource allows installation and (optionally) enab
 
 ## 📦 **Example Usage**
 
-### Install and enable `rclone/docker-volume-rclone` plugin
+### Install and enable `rclone/docker-volume-rclone` plugin:
 
 ```hcl
 resource "portainer_docker_plugin" "rclone" {
@@ -44,6 +44,7 @@ resource "portainer_docker_plugin" "rclone" {
   }
 }
 ```
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/docker_plugin)
 
 ---
 
@@ -53,10 +54,10 @@ resource "portainer_docker_plugin" "rclone" {
 | --------------- | ------------ | -------- | ------------------------------------------------------------------ |
 | `endpoint_id`   | int          | ✅ yes    | ID of the Portainer endpoint where the plugin will be installed    |
 | `remote`        | string       | ✅ yes    | Plugin image name (e.g., `rclone/docker-volume-rclone`)            |
-| `name`          | string       | ❌ no     | Local alias for the plugin (e.g., `rclone`)                        |
-| `enable`        | bool         | ❌ no     | Whether to enable the plugin after installation (default: `false`) |
-| `registry_auth` | string       | ❌ no     | Value for the `X-Registry-Auth` header (default: `e30=` = `{}`)    |
-| `settings`      | list(object) | ❌ no     | List of objects with name and value defining plugin privileges     |
+| `name`          | string       | 🚫 optional | Local alias for the plugin (e.g., `rclone`)                        |
+| `enable`        | bool         | 🚫 optional | Whether to enable the plugin after installation (default: `false`) |
+| `registry_auth` | string       | 🚫 optional | Value for the `X-Registry-Auth` header (default: `e30=` = `{}`)    |
+| `settings`      | list(object) | 🚫 optional | List of objects with name and value defining plugin privileges     |
 
 ---
 
@@ -66,7 +67,7 @@ resource "portainer_docker_plugin" "rclone" {
 | ------------- | ------------ | -------- | --------------------------------------------------------------- |
 | `name`        | string       | ✅ yes    | Type of privilege: `network`, `mount`, `device`, `capabilities` |
 | `value`       | list(string) | ✅ yes    | List of values for the given privilege                          |
-| `description` | string       | ❌ no     | Optional description (ignored if empty)                         |
+| `description` | string       | 🚫 optional | Optional description (ignored if empty)                         |
 
 ---
 

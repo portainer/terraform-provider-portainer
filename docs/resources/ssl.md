@@ -33,8 +33,8 @@ $ openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.
 |----------------|--------|----------|--------------------------------------------------------------------------|
 | `cert`         | string | ✅ yes   | Contents of the SSL certificate (e.g., `file("certs/server.crt")`)      |
 | `key`          | string | ✅ yes   | Contents of the private key (e.g., `file("certs/server.key")`)          |
-| `client_cert`  | string | 🚫 no    | Contents of the client certificate, if required for mutual TLS          |
-| `http_enabled` | bool   | 🚫 no    | Whether to keep HTTP access enabled (default: `false`)                  |
+| `client_cert`  | string | 🚫 optional | Contents of the client certificate, if required for mutual TLS          |
+| `http_enabled` | bool   | 🚫 optional | Whether to keep HTTP access enabled (default: `false`)                  |
 
 ## Attributes Reference
 

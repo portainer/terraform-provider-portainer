@@ -3,6 +3,8 @@
 ## Overview
 The `portainer_endpoints_edge_generate_key` resource allows administrators to generate a general-purpose Edge key, which can be used to register Portainer Edge Agents.
 
+> Currently working only for Portainer BE edition
+
 ---
 
 ## 📘 Example Usage

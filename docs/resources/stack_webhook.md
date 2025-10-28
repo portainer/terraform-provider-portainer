@@ -4,6 +4,8 @@
 The `portainer_stack_webhook` resource allows you to trigger an update of a Portainer-managed stack via its webhook.  
 This is useful for GitOps workflows or external automation systems.
 
+> Currently working only for Portainer BE edition
+
 ## Example Usage
 ```hcl
 resource "portainer_stack_webhook" "trigger_my_stack" {

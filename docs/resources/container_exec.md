@@ -5,6 +5,7 @@ The `portainer_container_exec` resource allows you to remotely execute a command
 > You can target a container in a **standalone** or **swarm** environment.
 
 ## Example Usage
+
 ### Run command in standalone container
 ```hcl
 resource "portainer_container_exec" "standalone" {
@@ -44,8 +45,9 @@ output "exec_output" {
 | `service_name`| string | ✅ yes      | Name of the container (for standalone) or service (for swarm)             |
 | `command`     | string | ✅ yes      | Command to execute inside the container                                   |
 | `user`        | string | 🚫 optional | User to run the command as (default: `"root:root"`)                       |
-| `wait`        | int    | 🚫 optional | Seconds to wait before executing the command (default: `0`)              |
-| `mode`        | string | 🚫 optional | Deployment type: `"standalone"` (default) or `"swarm"`                   |
+| `wait`        | int    | 🚫 optional | Seconds to wait before executing the command (default: `0`)               |
+| `mode`        | string | 🚫 optional | Deployment type: `"standalone"` (default) or `"swarm"`                    |
+
 ---
 
 ## Attributes Reference

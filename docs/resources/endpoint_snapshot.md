@@ -24,7 +24,7 @@ terraform apply
 ## Arguments Reference
 | Name         | Type   | Required | Description                                                                 |
 |--------------|--------|----------|-----------------------------------------------------------------------------|
-| `endpoint_id`| number | 🚫 no    | ID of the environment (endpoint) to snapshot. If not set, all endpoints will be snapshotted. |
+| `endpoint_id`| number | 🚫 optional | ID of the environment (endpoint) to snapshot. If not set, all endpoints will be snapshotted. |
 
 ## Attributes Reference
 
