@@ -23,12 +23,12 @@ resource "portainer_kubernetes_helm" "example" {
 ### Arguments Reference
 | Name             | Type   | Required | Description                                                                 |
 |------------------|--------|----------|-----------------------------------------------------------------------------|
-| `environment_id` | number | ✅ yes   | The ID of the Kubernetes environment (endpoint) in Portainer.              |
-| `chart`          | string | ✅ yes   | The name of the Helm chart (e.g. `nginx`, `redis`).                        |
-| `name`           | string | ✅ yes   | The name of the Helm release.                                              |
-| `namespace`      | string | ✅ yes   | Kubernetes namespace to install the chart into (e.g. `default`).           |
-| `repo`           | string | ✅ yes   | The Helm chart repository URL (e.g. `https://charts.bitnami.com/bitnami`).|
-| `values`         | string | ❌ no    | Optional YAML values for the chart as raw string.                          |
+| `environment_id` | number | ✅ yes   | The ID of the Kubernetes environment (endpoint) in Portainer.               |
+| `chart`          | string | ✅ yes   | The name of the Helm chart (e.g. `nginx`, `redis`).                         |
+| `name`           | string | ✅ yes   | The name of the Helm release.                                               |
+| `namespace`      | string | ✅ yes   | Kubernetes namespace to install the chart into (e.g. `default`).            |
+| `repo`           | string | ✅ yes   | The Helm chart repository URL (e.g. `https://charts.bitnami.com/bitnami`).  |
+| `values`         | string | 🚫 optional | Optional YAML values for the chart as raw string.                        |
 
 ---
 

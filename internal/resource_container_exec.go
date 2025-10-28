@@ -230,20 +230,3 @@ func resourceContainerExecDelete(d *schema.ResourceData, meta interface{}) error
 	d.SetId("")
 	return nil
 }
-
-func apiGET(url string, apiKey string, client *APIClient) ([]byte, error) {
-	req, _ := http.NewRequest("GET", url, nil)
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return nil, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
-}

@@ -9,16 +9,16 @@ It also optionally allows setting the state of the configuration after creation 
 ## 📘 Example Usage
 
 ```hcl
-resource "portainer_edge_configurations" "example" {
-  name            = "nginx-deploy"
-  type            = "file"
-  category        = "apps"
-  base_dir        = "/app"
-  edge_group_ids  = [1]
-  file_path       = "files/nginx.yaml"
-  state           = 2
+resource "portainer_edge_configurations" "example_edge_configuration" {
+  name            = "Test Edge Config"
+  type            = "general"
+  category        = "configuration"
+  base_dir        = "/etc/some/path/of/edge/config"                        # optional
+  edge_group_ids  = [1]                                                    # optional
+  file_path       = "${path.module}/config.zip"
 }
 ```
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/edge_configurations)
 
 ---
 

@@ -3,7 +3,11 @@
 # portainer_cloud_credentials
 The `portainer_cloud_credentials` resource allows you to provision cloud credentials in Portainer for use with providers like AWS, DigitalOcean, Civo, etc.
 
+> Currently working only for Portainer BE edition
+
 ## Example Usage
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/cloud_credentials)
+
 ```hcl
 resource "portainer_cloud_credentials" "example" {
   name     = "example-aws-creds"
@@ -39,7 +43,7 @@ terraform apply
 | **Name**      | **Type** | **Required** | **Description**                                                            |
 |---------------|----------|--------------|----------------------------------------------------------------------------|
 | `name`        | string   | ✅ yes       | Human-readable name for the cloud credentials                             |
-| `provider`    | string   | ✅ yes       | Provider name (`aws`, `digitalocean`, `civo`, `gcp`, etc.)                |
+| `cloud_provider`| string   | ✅ yes       | Provider name (`aws`, `digitalocean`, `civo`, `gcp`, etc.)                |
 | `credentials` | string   | ✅ yes       | JSON-encoded credentials payload (use `jsonencode({ ... })`)              |
 
 ## Attributes Reference

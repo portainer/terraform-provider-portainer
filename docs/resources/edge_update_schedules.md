@@ -3,6 +3,8 @@
 ## Overview
 The `portainer_edge_update_schedules` resource allows you to schedule update or rollback procedures for Edge agents in Portainer.
 
+> Currently working only for Portainer BE edition
+
 ---
 
 ## 📘 Example Usage

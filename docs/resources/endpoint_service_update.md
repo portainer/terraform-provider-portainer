@@ -27,7 +27,7 @@ terraform apply
 |----------------|--------|----------|-----------------------------------------------------------------------------|
 | `endpoint_id`  | number | ✅ yes   | ID of the Portainer endpoint                                                |
 | `service_name` | string | ✅ yes   | Name of the Docker service to update (must exist on the endpoint)          |
-| `pull_image`   | bool   | 🚫 no    | Whether to pull the latest image before updating the service (default: false) |
+| `pull_image`   | bool   | 🚫 optional | Whether to pull the latest image before updating the service (`default: false`) |
 
 ## Attributes Reference
 | Name | Description                                            |

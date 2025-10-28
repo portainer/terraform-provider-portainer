@@ -46,11 +46,13 @@ terraform apply
 |-----------------|-------------|----------------|-----------------------------------------------------------------------------|
 | `name`          | string      | ✅ yes         | Name of the Edge Group.                                                     |
 | `dynamic`       | bool        | ✅ yes         | If true, the group is dynamic (matched by tags); if false, it's static.     |
-| `partial_match` | bool        | 🚫 optional    | For dynamic groups, if true, partial match on tags is used. Default: false. |
+| `partial_match` | bool        | 🚫 optional    | For dynamic groups, if true, partial match on tags is used. `Default: false`|
 | `tag_ids`       | list(int)   | 🚫 optional    | List of tag IDs to use for matching environments in dynamic groups.         |
 | `endpoints`     | list(int)   | 🚫 optional    | List of environment IDs to assign manually (for static groups).             |
-> ⚠️ When dynamic = true, you should provide tag_ids.
-> ⚠️ When dynamic = false, you may provide endpoints.
+
+> ⚠️ When `dynamic = true`, you should provide tag_ids.
+
+> ⚠️ When `dynamic = false`, you may provide endpoints.
 
 ## Attributes Reference
 

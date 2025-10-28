@@ -5,6 +5,8 @@ The `portainer_support_debug_log` resource allows administrators to enable or di
 
 This is useful for collecting additional runtime information to help with diagnostics and troubleshooting.
 
+> Currently working only for Portainer BE edition
+
 ---
 
 ## 📘 Example Usage

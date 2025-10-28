@@ -43,17 +43,8 @@ terraform apply
 | Name                           | Type   | Required | Description                                                        |
 |--------------------------------|--------|----------|--------------------------------------------------------------------|
 | `endpoint_id`                  | number | ✅ yes   | ID of the environment (endpoint) to configure                      |
-| `allow_bind_mounts`            | bool   | 🚫 no    | Allow bind mounts for regular users                                |
-| `allow_container_capabilities` | bool   | 🚫 no    | Allow setting container capabilities for regular users             |
-| `allow_device_mapping`         | bool   | 🚫 no    | Allow device mapping                                               |
-| `allow_host_namespace`         | bool   | 🚫 no    | Allow use of host namespaces                                       |
-| `allow_privileged_mode`        | bool   | 🚫 no    | Allow privileged containers                                        |
-| `allow_stack_management`       | bool   | 🚫 no    | Allow regular users to manage stacks                               |
-| `allow_sysctl_setting`         | bool   | 🚫 no    | Allow sysctl settings                                              |
-| `allow_volume_browser`         | bool   | 🚫 no    | Allow volume browser in UI                                         |
-| `enable_gpu_management`        | bool   | 🚫 no    | Enable GPU selection for deployments                               |
-| `enable_host_management`       | bool   | 🚫 no    | Enable host management features in Portainer UI                    |
-| `enable_image_notification`    | bool   | 🚫 no    | Enable image update notifications                                  |
+| `enable_gpu_management`        | bool   | 🚫 optional | Enable GPU selection for deployments (`default: false`)            |
+| `enable_image_notification`    | bool   | 🚫 optional | Enable image update notifications (`default: false`)               |
 
 ### `gpus` Block
 
@@ -66,32 +57,32 @@ terraform apply
 
 | Name        | Type   | Required | Description                          |
 |-------------|--------|----------|--------------------------------------|
-| `enabled`   | bool   | 🚫 no    | Whether the change window is enabled |
-| `start_time`| string | 🚫 no    | Start time in `HH:MM` format         |
-| `end_time`  | string | 🚫 no    | End time in `HH:MM` format           |
+| `enabled`   | bool   | 🚫 optional | Whether the change window is enabled |
+| `start_time`| string | 🚫 optional | Start time in `HH:MM` format         |
+| `end_time`  | string | 🚫 optional | End time in `HH:MM` format           |
 
 ### `deployment_options` Block
 
 | Name                    | Type   | Required | Description                                       |
 |-------------------------|--------|----------|---------------------------------------------------|
-| `hide_add_with_form`    | bool   | 🚫 no    | Hide the “Deploy via form” stack UI option        |
-| `hide_file_upload`      | bool   | 🚫 no    | Hide “Upload docker-compose file” UI              |
-| `hide_web_editor`       | bool   | 🚫 no    | Hide the “Web editor” stack deployment UI         |
-| `override_global_options`| bool  | 🚫 no    | Override global deployment options                |
+| `hide_add_with_form`    | bool   | 🚫 optional | Hide the “Deploy via form” stack UI option        |
+| `hide_file_upload`      | bool   | 🚫 optional | Hide “Upload docker-compose file” UI              |
+| `hide_web_editor`       | bool   | 🚫 optional | Hide the “Web editor” stack deployment UI         |
+| `override_global_options`| bool  | 🚫 optional | Override global deployment options                |
 
 ### `security_settings` Block
 
 | Name                         | Type   | Required | Description                                                  |
 |------------------------------|--------|----------|--------------------------------------------------------------|
-| `allow_bind_mounts`          | bool   | 🚫 no    | Allow bind mounts for regular users                          |
-| `allow_container_capabilities`| bool  | 🚫 no    | Allow setting container capabilities                         |
-| `allow_device_mapping`       | bool   | 🚫 no    | Allow device mapping                                         |
-| `allow_host_namespace`       | bool   | 🚫 no    | Allow use of host namespaces                                 |
-| `allow_privileged_mode`      | bool   | 🚫 no    | Allow privileged containers                                  |
-| `allow_stack_management`     | bool   | 🚫 no    | Allow stack management                                       |
-| `allow_sysctl_setting`       | bool   | 🚫 no    | Allow sysctl settings                                        |
-| `allow_volume_browser`       | bool   | 🚫 no    | Allow volume browser                                         |
-| `enable_host_management`     | bool   | 🚫 no    | Enable host management in the UI                             |
+| `allow_bind_mounts`          | bool   | 🚫 optional | Allow bind mounts for regular users                          |
+| `allow_container_capabilities`| bool  | 🚫 optional | Allow setting container capabilities                         |
+| `allow_device_mapping`       | bool   | 🚫 optional | Allow device mapping                                         |
+| `allow_host_namespace`       | bool   | 🚫 optional | Allow use of host namespaces                                 |
+| `allow_privileged_mode`      | bool   | 🚫 optional | Allow privileged containers                                  |
+| `allow_stack_management`     | bool   | 🚫 optional | Allow stack management                                       |
+| `allow_sysctl_setting`       | bool   | 🚫 optional | Allow sysctl settings                                        |
+| `allow_volume_browser`       | bool   | 🚫 optional | Allow volume browser                                         |
+| `enable_host_management`     | bool   | 🚫 optional | Enable host management in the UI                             |
 
 ## Attributes Reference
 

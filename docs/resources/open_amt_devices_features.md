@@ -32,13 +32,13 @@ resource "portainer_open_amt_devices_features" "example" {
 
 | Name           | Type   | Required | Description                                                   |
 |----------------|--------|----------|---------------------------------------------------------------|
-| `environment_id` | number | ✅ yes   | ID of the Portainer environment (endpoint)                    |
-| `device_id`      | number | ✅ yes   | ID of the AMT-managed device                                  |
-| `ider`           | bool   | 🚫 no    | Enable IDE Redirection                                        |
-| `kvm`            | bool   | 🚫 no    | Enable KVM (Keyboard/Video/Mouse)                             |
-| `sol`            | bool   | 🚫 no    | Enable Serial over LAN                                        |
-| `redirection`    | bool   | 🚫 no    | Enable redirection                                            |
-| `user_consent`   | string | 🚫 no    | User consent level (`none`, `all`, `kvmOnly`, etc.)           |
+| `environment_id` | number | ✅ yes   | ID of the Portainer environment (endpoint)                  |
+| `device_id`      | number | ✅ yes   | ID of the AMT-managed device                                |
+| `ider`           | bool   | 🚫 optional | Enable IDE Redirection (`default: false`)                |
+| `kvm`            | bool   | 🚫 optional | Enable KVM (Keyboard/Video/Mouse) (`default: false`)     |
+| `sol`            | bool   | 🚫 optional | Enable Serial over LAN (`default: false`)                |
+| `redirection`    | bool   | 🚫 optional | Enable redirection (`default: false`)                    |
+| `user_consent`   | string | 🚫 optional | User consent level (`none`, `all`, `kvmOnly`, etc.) (`default: ""`) |
 
 ---
 

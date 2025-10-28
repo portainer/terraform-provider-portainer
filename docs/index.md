@@ -86,6 +86,8 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_cloud_credentials`                  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_cloud_provider_provision`           | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_compose_convert`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_deploy`                             | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_check`                              | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_container_exec`                     | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_custom_template`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_docker_config`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |

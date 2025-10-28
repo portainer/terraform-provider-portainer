@@ -6,14 +6,13 @@ The `portainer_backup` resource allows you to trigger a backup of your Portainer
 The backup is encrypted using the password.
 
 ## Example Usage
-### Create Backup
-
 ```hcl
-resource "portainer_backup" "your-backup" {
+resource "portainer_backup" "backup" {
   password    = "your-backup-password"
-  output_path = "your-backup-path-for-tar-gz-file"
+  output_path = "backup.tar.gz"
 }
 ```
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/backup)
 
 ## Lifecycle & Behavior
 This resource performs a one-time backup when applied. It does not manage state and will always re-trigger on each terraform apply.

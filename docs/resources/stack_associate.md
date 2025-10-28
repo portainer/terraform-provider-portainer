@@ -29,7 +29,7 @@ terraform apply
 | `stack_id`       | number  | ✅ yes   | ID of the orphaned stack to associate.                                  |
 | `endpoint_id`    | number  | ✅ yes   | ID of the environment (endpoint) to associate the stack with.           |
 | `swarm_id`       | string  | ✅ yes   | Swarm cluster ID the stack should be associated with.                   |
-| `orphaned_running` | boolean | optional | Whether the stack is orphaned and already running (default: `false`). |
+| `orphaned_running` | boolean | 🚫 optional | Whether the stack is orphaned and already running (default: `false`). |
 
 ## Attributes Reference
 

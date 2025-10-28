@@ -3,6 +3,8 @@
 ## Overview
 The `portainer_cloud_provider_provision` resource provisions a new Kubernetes cluster using supported cloud providers through the Portainer API.
 
+> Currently working only for Portainer BE edition
+
 It currently supports:
 - Civo, DigitalOcean, Linode → via `/cloud/{provider}/provision`
 - Amazon EKS → via `/cloud/amazon/provision`
@@ -126,7 +128,7 @@ resource "portainer_cloud_provider_provision" "gke_cluster" {
 
 ---
 
-## 🌐 Civo, DigitalOcean, Linode Payload Fields
+## 🌐 Civo, DigitalOcean, Linode - Payload Fields
 | Name               | Type     | Required | Description                      |
 |--------------------|----------|----------|----------------------------------|
 | `credentialID`     | number   | ✅ yes   | ID of the Portainer cloud credential |
@@ -140,7 +142,7 @@ resource "portainer_cloud_provider_provision" "gke_cluster" {
 
 ---
 
-## ☁️ Amazon (EKS) Payload Fields
+## ☁️ Amazon (EKS) - Payload Fields
 | Name               | Type     | Required | Description                      |
 |--------------------|----------|----------|----------------------------------|
 | `credentialID`     | number   | ✅ yes   | ID of the Portainer cloud credential |
@@ -156,7 +158,7 @@ resource "portainer_cloud_provider_provision" "gke_cluster" {
 
 ---
 
-## ☁️ Azure (AKS) Payload Fields
+## ☁️ Azure (AKS) - Payload Fields
 | Name                  | Type     | Required | Description                      |
 |-----------------------|----------|----------|----------------------------------|
 | `credentialID`        | number   | ✅ yes   | ID of the Portainer cloud credential |
@@ -176,7 +178,7 @@ resource "portainer_cloud_provider_provision" "gke_cluster" {
 
 ---
 
-## ☸️ Google GKE Payload Fields
+## ☸️ Google GKE - Payload Fields
 | Name               | Type     | Required | Description                      |
 |--------------------|----------|----------|----------------------------------|
 | `credentialID`     | number   | ✅ yes   | ID of the Portainer cloud credential |

@@ -127,12 +127,13 @@ terraform apply
 | `pull_image`                | bool   | 🚫 optional | Pull latest image during update (default: `false`)                   |
 | `relative_path`             | string | 🚫 optional | Enables relative path volumes (from Compose) and sets the `filesystemPath` |
 
-
 ## 🧮 Computed Outputs
 | Name          | Description                     |
 | ------------- | ------------------------------- |
 | `webhook_id`  | GitOps webhook UUID             |
 | `webhook_url` | Full URL to trigger the webhook |
+
+> `Webhook` currently working only for Portainer BE edition
 
 ---
 

@@ -11,16 +11,24 @@ resource "portainer_docker_secret" "example_secret" {
   name        = "app-key.crt"
   data        = base64encode("THIS IS NOT A REAL CERTIFICATE\n")
 
-  labels = {
+  labels = {                                               # optional
     "com.example.some-label" = "some-value"
   }
 
-  templating = {
+  driver = {                                               # optional
+    name    = "secret-driver"
+    option1 = "value1"
+    option2 = "value2"
+  }
+
+  templating = {                                           # optional
     name     = "some-driver"
     OptionA  = "value for driver-specific option A"
   }
 }
 ```
+
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/docker_secret)
 
 ## Lifecycle & Behavior
 Docker secrets are **immutable**. Updating them (changing `data, labels`, etc.) will **force recreation**.

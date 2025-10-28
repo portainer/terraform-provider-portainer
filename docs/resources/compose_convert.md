@@ -10,6 +10,7 @@ The `portainer_compose_convert` resource allows you to convert a Docker Compose 
 ---
 
 ## 📌 Example Usage
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/compose_convert)
 
 ```hcl
 resource "portainer_compose_convert" "example" {
@@ -52,7 +53,7 @@ resource "local_file" "k8s_manifests" {
 
 ---
 
-## 📌 Kompose Requirement
+## 📌 Compose Requirement
 
 Kompose must be installed or available via Docker container. See:
 👉 [https://github.com/kubernetes/kompose/blob/main/docs/installation.md](https://github.com/kubernetes/kompose/blob/main/docs/installation.md)

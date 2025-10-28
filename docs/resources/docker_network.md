@@ -10,9 +10,15 @@ You can define bridge or overlay networks, including driver-specific options, la
 ```hcl
 resource "portainer_docker_network" "bridge_network" {
   endpoint_id = 1
-  name        = "tf-bridge"
-  driver      = "bridge"
-  internal    = false
+  name        = "new-bridge-network"
+}
+```
+
+### Create an attachable bridge network with options and labels
+```hcl
+resource "portainer_docker_network" "bridge_network_with_configuration" {
+  endpoint_id = 1
+  name        = "new-bridge-network-with-configuration"
   attachable  = true
 
   options = {
@@ -29,9 +35,9 @@ resource "portainer_docker_network" "bridge_network" {
 
 ### Create a network with custom IPAM config
 ```hcl
-resource "portainer_docker_network" "with_ipam" {
+resource "portainer_docker_network" "network_with_ipam" {
   endpoint_id = 1
-  name        = "tf-ipam"
+  name        = "new-ipam-network"
   driver      = "bridge"
   attachable  = true
   ipam_driver = "default"
