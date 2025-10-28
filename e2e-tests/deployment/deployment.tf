@@ -20,6 +20,8 @@ resource "portainer_stack" "standalone_file" {
 # Example of full automation deployment steps if your project run in docker standalone or swarm (must only modified variable stack_deployment_type) from your Git tool
 ### Pull image for new version of service
 resource "portainer_docker_image" "pull" {
+  depends_on = [portainer_stack.standalone_file]
+
   endpoint_id = var.stack_endpoint_id
   image       = var.new_image
 }
