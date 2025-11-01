@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/go-cty/cty"
+
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -132,9 +134,55 @@ func resourcePortainerStack() *schema.Resource {
 				Computed:    true,
 				Description: "Full URL of the webhook trigger",
 			},
-			"repository_url":      {Type: schema.TypeString, Optional: true, ForceNew: true},
-			"repository_username": {Type: schema.TypeString, Optional: true},
-			"repository_password": {Type: schema.TypeString, Optional: true, Sensitive: true},
+			"repository_url": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				ConflictsWith: []string{"repository_url_wo"},
+			},
+			"repository_username": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				ConflictsWith: []string{"repository_username_wo"},
+			},
+			"repository_password": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				ConflictsWith: []string{"repository_password_wo"},
+			},
+			"repository_url_wo": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				WriteOnly:     true,
+				Description:   "Write-only repository URL (supports ephemeral values; not stored in Terraform state).",
+				ConflictsWith: []string{"repository_url"},
+				RequiredWith:  []string{"repository_wo_version"},
+			},
+			"repository_username_wo": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				WriteOnly:     true,
+				Sensitive:     true,
+				Description:   "Write-only repository username (supports ephemeral values).",
+				ConflictsWith: []string{"repository_username"},
+				RequiredWith:  []string{"repository_wo_version"},
+			},
+			"repository_password_wo": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				WriteOnly:     true,
+				Sensitive:     true,
+				Description:   "Write-only repository password (supports ephemeral values; not stored in Terraform state).",
+				ConflictsWith: []string{"repository_password"},
+				RequiredWith:  []string{"repository_wo_version"},
+			},
+			"repository_wo_version": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Version flag for write-only repository credentials; increment to trigger recreation.",
+			},
 			"repository_reference_name": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -733,6 +781,15 @@ func flattenEnvList(envList []interface{}) []map[string]string {
 	return out
 }
 
+func firstNonEmpty(values ...interface{}) string {
+	for _, v := range values {
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+			return s
+		}
+	}
+	return ""
+}
+
 func mustJSON(data interface{}) []byte {
 	out, _ := json.Marshal(data)
 	return out
@@ -780,12 +837,28 @@ func createStackStandaloneString(d *schema.ResourceData, client *APIClient) erro
 }
 
 func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error {
+	repoURL := d.Get("repository_url").(string)
+	repoUser := d.Get("repository_username").(string)
+	repoPass := d.Get("repository_password").(string)
+
+	if d.Get("repository_wo_version").(int) != 0 {
+		if raw, diag := d.GetRawConfigAt(cty.GetAttrPath("repository_url_wo")); diag == nil && raw.IsKnown() && !raw.IsNull() {
+			repoURL = raw.AsString()
+		}
+		if raw, diag := d.GetRawConfigAt(cty.GetAttrPath("repository_username_wo")); diag == nil && raw.IsKnown() && !raw.IsNull() {
+			repoUser = raw.AsString()
+		}
+		if raw, diag := d.GetRawConfigAt(cty.GetAttrPath("repository_password_wo")); diag == nil && raw.IsKnown() && !raw.IsNull() {
+			repoPass = raw.AsString()
+		}
+	}
+
 	payload := map[string]interface{}{
 		"name":                     d.Get("name").(string),
 		"composeFile":              d.Get("file_path_in_repository").(string),
-		"repositoryURL":            d.Get("repository_url").(string),
-		"repositoryUsername":       d.Get("repository_username").(string),
-		"repositoryPassword":       d.Get("repository_password").(string),
+		"repositoryURL":            repoURL,
+		"repositoryUsername":       repoUser,
+		"repositoryPassword":       repoPass,
 		"repositoryReferenceName":  d.Get("repository_reference_name").(string),
 		"repositoryAuthentication": d.Get("git_repository_authentication").(bool),
 		"supportRelativePath":      d.Get("support_relative_path").(bool),
@@ -890,12 +963,27 @@ func createStackSwarmString(d *schema.ResourceData, client *APIClient) error {
 }
 
 func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
+	repoURL := d.Get("repository_url").(string)
+	repoUser := d.Get("repository_username").(string)
+	repoPass := d.Get("repository_password").(string)
+
+	if d.Get("repository_wo_version").(int) != 0 {
+		if raw, diag := d.GetRawConfigAt(cty.GetAttrPath("repository_url_wo")); diag == nil && raw.IsKnown() && !raw.IsNull() {
+			repoURL = raw.AsString()
+		}
+		if raw, diag := d.GetRawConfigAt(cty.GetAttrPath("repository_username_wo")); diag == nil && raw.IsKnown() && !raw.IsNull() {
+			repoUser = raw.AsString()
+		}
+		if raw, diag := d.GetRawConfigAt(cty.GetAttrPath("repository_password_wo")); diag == nil && raw.IsKnown() && !raw.IsNull() {
+			repoPass = raw.AsString()
+		}
+	}
 	payload := map[string]interface{}{
 		"name":                     d.Get("name").(string),
 		"composeFile":              d.Get("file_path_in_repository").(string),
-		"repositoryURL":            d.Get("repository_url").(string),
-		"repositoryUsername":       d.Get("repository_username").(string),
-		"repositoryPassword":       d.Get("repository_password").(string),
+		"repositoryURL":            repoURL,
+		"repositoryUsername":       repoUser,
+		"repositoryPassword":       repoPass,
 		"repositoryReferenceName":  d.Get("repository_reference_name").(string),
 		"repositoryAuthentication": d.Get("git_repository_authentication").(bool),
 		"supportRelativePath":      d.Get("support_relative_path").(bool),
@@ -1011,14 +1099,29 @@ func createStackK8sString(d *schema.ResourceData, client *APIClient) error {
 }
 
 func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
+	repoURL := d.Get("repository_url").(string)
+	repoUser := d.Get("repository_username").(string)
+	repoPass := d.Get("repository_password").(string)
+
+	if d.Get("repository_wo_version").(int) != 0 {
+		if raw, diag := d.GetRawConfigAt(cty.GetAttrPath("repository_url_wo")); diag == nil && raw.IsKnown() && !raw.IsNull() {
+			repoURL = raw.AsString()
+		}
+		if raw, diag := d.GetRawConfigAt(cty.GetAttrPath("repository_username_wo")); diag == nil && raw.IsKnown() && !raw.IsNull() {
+			repoUser = raw.AsString()
+		}
+		if raw, diag := d.GetRawConfigAt(cty.GetAttrPath("repository_password_wo")); diag == nil && raw.IsKnown() && !raw.IsNull() {
+			repoPass = raw.AsString()
+		}
+	}
 	payload := map[string]interface{}{
 		"stackName":                d.Get("name").(string),
 		"manifestFile":             d.Get("file_path_in_repository").(string),
 		"namespace":                d.Get("namespace").(string),
 		"composeFormat":            d.Get("compose_format").(bool),
-		"repositoryURL":            d.Get("repository_url").(string),
-		"repositoryUsername":       d.Get("repository_username").(string),
-		"repositoryPassword":       d.Get("repository_password").(string),
+		"repositoryURL":            repoURL,
+		"repositoryUsername":       repoUser,
+		"repositoryPassword":       repoPass,
 		"repositoryReferenceName":  d.Get("repository_reference_name").(string),
 		"repositoryAuthentication": d.Get("git_repository_authentication").(bool),
 		"tlsskipVerify":            d.Get("tlsskip_verify").(bool),

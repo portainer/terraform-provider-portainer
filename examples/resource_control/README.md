@@ -23,7 +23,6 @@
 | <a name="input_public"></a> [public](#input\_public) | Whether the resource should be public | `bool` | `false` | no |
 | <a name="input_resource_id"></a> [resource\_id](#input\_resource\_id) | ID of the Docker/Kubernetes resource to control | `string` | n/a | yes |
 | <a name="input_resource_type"></a> [resource\_type](#input\_resource\_type) | Type of the resource (e.g., 1 = container, 2 = volume, etc.) | `number` | n/a | yes |
-| <a name="input_sub_resource_ids"></a> [sub\_resource\_ids](#input\_sub\_resource\_ids) | List of sub-resource IDs (if any) | `list(string)` | `[]` | no |
 | <a name="input_teams"></a> [teams](#input\_teams) | List of team IDs allowed to access the resource | `list(number)` | `[]` | no |
 | <a name="input_users"></a> [users](#input\_users) | List of user IDs allowed to access the resource | `list(number)` | `[]` | no |
 <!-- END_TF_DOCS -->
