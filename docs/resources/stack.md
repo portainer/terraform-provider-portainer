@@ -72,6 +72,41 @@ output "webhook_url" {
   value       = portainer_stack.standalone_repo.webhook_url
 }
 ```
+
+### Deploy Standalone Stack from Git Repository (Ephemeral Credentials)
+```hcl
+resource "portainer_stack" "standalone_repo_ephemeral" {
+  name                      = "your-standalone-repo"
+  deployment_type           = "standalone"
+  method                    = "repository"
+  endpoint_id               = 1
+
+  # Ephemeral (write-only) Git credentials
+  repository_url_wo         = "https://github.com/example/private-repo"
+  repository_username_wo    = "gituser"
+  repository_password_wo    = "super-secret-token"
+  repository_wo_version     = 1
+
+  repository_reference_name = "refs/heads/main"
+  file_path_in_repository   = "docker-compose.yml"
+  tlsskip_verify            = false
+  additional_files = [
+    "some-other-docker-compose.yml"
+  ]
+
+  stack_webhook             = true
+  update_interval           = "10m"
+  pull_image                = true
+  force_update              = true
+  git_repository_authentication = true
+
+  env {
+    name  = "ENV"
+    value = "production"
+  }
+}
+```
+
 ### Deploy Swarm Stack from String
 ```hcl
 resource "portainer_stack" "swarm_string" {
@@ -120,11 +155,35 @@ resource "portainer_stack" "swarm_repo" {
   repository_password       = "secure"
   repository_reference_name = "refs/heads/main"
   file_path_in_repository   = "docker-compose.yml"
-  additional_files            = [
+  additional_files = [
     "some-other-docker-compose.yml"
   ]
 }
 ```
+### Deploy Swarm Stack from Git Repository (Ephemeral Credentials)
+```hcl
+resource "portainer_stack" "swarm_repo_ephemeral" {
+  name                      = "your-swarm-repo"
+  deployment_type           = "swarm"
+  method                    = "repository"
+  endpoint_id               = 1
+
+  # Ephemeral (write-only) credentials
+  repository_url_wo         = "https://github.com/example/private-repo"
+  repository_username_wo    = "gituser"
+  repository_password_wo    = "super-secret-token"
+  repository_wo_version     = 1   # bump this value to trigger rotation
+
+  repository_reference_name = "refs/heads/main"
+  file_path_in_repository   = "docker-compose.yml"
+
+  env {
+    name  = "ENV"
+    value = "production"
+  }
+}
+```
+
 ### Deploy Kubernetes Stack from String
 ```hcl
 resource "portainer_stack" "k8s_string" {
@@ -164,6 +223,30 @@ resource "portainer_stack" "k8s_repo" {
   ]
 }
 ```
+### Deploy Kubernetes Stack from Repository (Ephemeral Credentials)
+```hcl
+resource "portainer_stack" "k8s_repo_ephemeral" {
+  name                      = "kube-stack"
+  deployment_type           = "kubernetes"
+  method                    = "repository"
+  endpoint_id               = 2
+
+  # Ephemeral (write-only) Git credentials
+  repository_url_wo         = "https://github.com/example/private-repo"
+  repository_username_wo    = "gituser"
+  repository_password_wo    = "super-secret-token"
+  repository_wo_version     = 1
+
+  repository_reference_name = "refs/heads/main"
+  file_path_in_repository   = "kube.yaml"
+  namespace                 = "default"
+  compose_format            = true
+  additional_files = [
+    "some-other-file.yaml"
+  ]
+}
+```
+
 ### Deploy Kubernetes Stack from URL
 ```hcl
 resource "portainer_stack" "k8s_url" {
@@ -217,21 +300,25 @@ terraform apply
 | `stack_file_path` | string | ✅ yes    | Path to local Docker Compose file|
 
 #### Method: `repository`
-| Name                            | Type   | Required    | Description                                          |
-| ------------------------------- | ------ | ----------- | ---------------------------------------------------- |
-| `repository_url`                | string | ✅ yes      | Git repository URL                                   |
-| `repository_reference_name`     | string | ✅ yes      | Git reference (default: `refs/heads/main`)           |
-| `file_path_in_repository`       | string | ✅ yes      | Path to Compose file (default: `docker-compose.yml`) |
-| `tlsskip_verify`                | bool   | 🚫 optional | Skip TLS verification                                |
-| `git_repository_authentication` | bool   | 🚫 optional | Enable auth for Git repo (default: `false`)          |
-| `repository_username`           | string | 🚫 optional | Git username (if auth is enabled)                    |
-| `repository_password`           | string | 🚫 optional | Git password/token (if auth is enabled)              |
-| `stack_webhook`                 | bool   | 🚫 optional | Enable GitOps webhook (default: `false`)             |
-| `update_interval`               | string | 🚫 optional | Polling interval (e.g. `30m`, `1h`)                  |
-| `force_update`                  | bool   | 🚫 optional | Whether to force redeploy (default: `false`)         |
-| `support_relative_path`         | bool   | 🚫 optional | Enable resolving of relative paths (default: `false`)|
-| `filesystem_path`               | string | 🚫 optional | Base path on disk to resolve relative paths from     |
-| `additional_files`              | string | 🚫 optional | List of additional yaml files paths                  |
+| Name                                | Type   | Required    | Description                                                                                             |
+| ----------------------------------- | ------ | ----------- | ------------------------------------------------------------------------------------------------------- |
+| `repository_url`                    | string | ✅ yes       | Git repository URL                                                                                     |
+| `repository_reference_name`         | string | ✅ yes       | Git reference (default: `refs/heads/main`)                                                             |
+| `file_path_in_repository`           | string | ✅ yes       | Path to Compose file (default: `docker-compose.yml`)                                                   |
+| `tlsskip_verify`                    | bool   | 🚫 optional | Skip TLS verification                                                                                   |
+| `git_repository_authentication`     | bool   | 🚫 optional | Enable authentication for Git repo (default: `false`)                                                   |
+| `repository_username`               | string | 🚫 optional | Git username (if auth is enabled)                                                                       |
+| `repository_password`               | string | 🚫 optional | Git password or token (if auth is enabled)                                                              |
+| `repository_url_wo`                 | string | 🚫 optional | **Write-only** repository URL (supports ephemeral values; not stored in Terraform state).               |
+| `repository_username_wo`            | string | 🚫 optional | **Write-only** repository username (supports ephemeral values; not stored in Terraform state).          |
+| `repository_password_wo`            | string | 🚫 optional | **Write-only** repository password or token (supports ephemeral values; not stored in Terraform state). |
+| `repository_credentials_wo_version` | int    | 🚫 optional | Version flag for write-only credentials; must be set when using `_wo` fields to trigger redeployment.   |
+| `stack_webhook`                     | bool   | 🚫 optional | Enable GitOps webhook (default: `false`)                                                                |
+| `update_interval`                   | string | 🚫 optional | Polling interval (e.g. `30m`, `1h`)                                                                     |
+| `force_update`                      | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                                                            |
+| `support_relative_path`             | bool   | 🚫 optional | Enable resolving of relative paths (default: `false`)                                                   |
+| `filesystem_path`                   | string | 🚫 optional | Base path on disk to resolve relative paths from                                                        |
+| `additional_files`                  | string | 🚫 optional | List of additional Compose/YAML file paths                                                              |
 
 #### Extra for `swarm`
 | Name       | Type   | Required    | Description                  |
@@ -249,21 +336,25 @@ terraform apply
 | `compose_format`     | bool   | 🚫 optional | Use Compose format (default: `false`) |
 
 #### Method: `repository`
-| Name                            | Type   | Required    | Description                                      |
-| ------------------------------- | ------ | ----------- | ------------------------------------------------ |
-| `repository_url`                | string | ✅ yes      | Git repository URL                               |
-| `namespace`                     | string | ✅ yes      | Kubernetes namespace                             |
-| `repository_reference_name`     | string | ✅ yes      | Git reference (default: `refs/heads/main`)       |
-| `file_path_in_repository`       | string | ✅ yes      | Path to manifest (default: `docker-compose.yml`) |
-| `tlsskip_verify`                | bool   | 🚫 optional | Skip TLS verification (default: `false`)         |
-| `git_repository_authentication` | bool   | 🚫 optional | Enable auth for Git repo (default: `false`)      |
-| `repository_username`           | string | 🚫 optional | Git username (if auth is enabled)                |
-| `repository_password`           | string | 🚫 optional | Git password/token (if auth is enabled)          |
-| `stack_webhook`                 | bool   | 🚫 optional | Enable GitOps webhook (default: `false`)         |
-| `update_interval`               | string | 🚫 optional | Polling interval (e.g. `30m`, `1h`)              |
-| `force_update`                  | bool   | 🚫 optional | Whether to force redeploy (default: `false`)     |
-| `compose_format`                | bool   | 🚫 optional | Compose format support (default: `false`)        |
-| `additional_files`              | string | 🚫 optional | List of additional yaml files paths              |
+| Name                                | Type   | Required    | Description                                                                                             |
+| ----------------------------------- | ------ | ----------- | ------------------------------------------------------------------------------------------------------- |
+| `repository_url`                    | string | ✅ yes       | Git repository URL                                                                                     |
+| `namespace`                         | string | ✅ yes       | Kubernetes namespace                                                                                   |
+| `repository_reference_name`         | string | ✅ yes       | Git reference (default: `refs/heads/main`)                                                             |
+| `file_path_in_repository`           | string | ✅ yes       | Path to manifest file (default: `docker-compose.yml`)                                                  |
+| `tlsskip_verify`                    | bool   | 🚫 optional | Skip TLS verification (default: `false`)                                                                |
+| `git_repository_authentication`     | bool   | 🚫 optional | Enable authentication for Git repo (default: `false`)                                                   |
+| `repository_username`               | string | 🚫 optional | Git username (if auth is enabled)                                                                       |
+| `repository_password`               | string | 🚫 optional | Git password or token (if auth is enabled)                                                              |
+| `repository_url_wo`                 | string | 🚫 optional | **Write-only** repository URL (supports ephemeral values; not stored in Terraform state).               |
+| `repository_username_wo`            | string | 🚫 optional | **Write-only** repository username (supports ephemeral values; not stored in Terraform state).          |
+| `repository_password_wo`            | string | 🚫 optional | **Write-only** repository password or token (supports ephemeral values; not stored in Terraform state). |
+| `repository_credentials_wo_version` | int    | 🚫 optional | Version flag for write-only credentials; must be set when using `_wo` fields to trigger redeployment.   |
+| `stack_webhook`                     | bool   | 🚫 optional | Enable GitOps webhook (default: `false`)                                                                |
+| `update_interval`                   | string | 🚫 optional | Polling interval (e.g. `30m`, `1h`)                                                                     |
+| `force_update`                      | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                                                            |
+| `compose_format`                    | bool   | 🚫 optional | Compose format support (default: `false`)                                                               |
+| `additional_files`                  | string | 🚫 optional | List of additional YAML/manifest file paths                                                             |
 
 #### Method: `url`
 | Name             | Type   | Required    | Description                |

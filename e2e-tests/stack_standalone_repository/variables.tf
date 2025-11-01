@@ -44,7 +44,7 @@ variable "stack_repository_url" {
 variable "stack_file_path_in_repository" {
   description = "Inline file content for the template (YAML/Compose)"
   type        = string
-  default     = "gitea-postgres/compose.yaml"
+  default     = "plex/compose.yaml"
 }
 
 variable "stack_repository_reference_name" {

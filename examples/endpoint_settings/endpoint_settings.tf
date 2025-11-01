@@ -1,5 +1,5 @@
 resource "portainer_endpoint_settings" "test" {
-  endpoint_id                  = var.endpoint_id
+  endpoint_id = var.endpoint_id
 
   security_settings {
     allow_bind_mounts            = var.allow_bind_mounts
@@ -13,7 +13,7 @@ resource "portainer_endpoint_settings" "test" {
     enable_host_management       = var.enable_host_management
   }
 
-  enable_gpu_management        = var.enable_gpu_management
+  enable_gpu_management = var.enable_gpu_management
 
   dynamic "gpus" {
     for_each = var.gpus

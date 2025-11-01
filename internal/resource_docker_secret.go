@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/hashicorp/go-cty/cty"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -34,8 +36,35 @@ func resourceDockerSecret() *schema.Resource {
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {Type: schema.TypeInt, Required: true},
 			"name":        {Type: schema.TypeString, Required: true},
-			"data":        {Type: schema.TypeString, Required: true, Sensitive: true},
-			"labels":      {Type: schema.TypeMap, Optional: true, Elem: &schema.Schema{Type: schema.TypeString}},
+			"data": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				ConflictsWith: []string{"data_wo", "data_wo_version"},
+				Description:   "Base64-encoded secret data (stored in Terraform state).",
+			},
+			"data_wo": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				WriteOnly:     true,
+				ConflictsWith: []string{"data"},
+				RequiredWith:  []string{"data_wo_version"},
+				Description:   "Write-only secret data (supports ephemeral values; not stored in Terraform state).",
+			},
+			"data_wo_version": {
+				Type:          schema.TypeInt,
+				Optional:      true,
+				ForceNew:      true,
+				Description:   "Version flag for write-only data; must be set when using `data_wo` to trigger updates.",
+				ConflictsWith: []string{"data"},
+			},
+			"labels": {
+				Type:     schema.TypeMap,
+				Optional: true,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+			},
 			"driver": {
 				Type:     schema.TypeMap,
 				Optional: true,
@@ -82,9 +111,27 @@ func findExistingDockerSecretByName(client *APIClient, endpointID int, name stri
 }
 
 func buildSecretPayload(d *schema.ResourceData) map[string]interface{} {
+	var dataValue string
+	if v, ok := d.GetOk("data_wo_version"); ok && v.(int) != 0 && d.HasChange("data_wo_version") {
+		raw, diags := d.GetRawConfigAt(cty.GetAttrPath("data_wo"))
+		if diags.HasError() {
+			fmt.Printf("[ERROR] Unable to read data_wo: %v\n", diags)
+		} else if raw.IsKnown() && !raw.IsNull() {
+			dataValue = raw.AsString()
+			fmt.Printf("[DEBUG] Read write-only secret from raw config (len=%d)\n", len(dataValue))
+		}
+	}
+	if dataValue == "" {
+		if v := d.Get("data"); v != nil {
+			if s, ok := v.(string); ok && s != "" {
+				dataValue = s
+			}
+		}
+	}
+
 	payload := map[string]interface{}{
 		"Name":   d.Get("name").(string),
-		"Data":   d.Get("data").(string),
+		"Data":   dataValue,
 		"Labels": d.Get("labels").(map[string]interface{}),
 	}
 
@@ -104,6 +151,7 @@ func buildSecretPayload(d *schema.ResourceData) map[string]interface{} {
 		}
 	}
 
+	fmt.Printf("[DEBUG] Creating Docker secret %s with data length: %d\n", d.Get("name").(string), len(dataValue))
 	return payload
 }
 

@@ -5,13 +5,13 @@
 
 | Name | Version |
 |------|---------|
-| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | 0.1.0 |
+| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | n/a |
 
 ## Resources
 
 | Name | Type |
 |------|------|
-| portainer_docker_node.example | resource |
+| [portainer_docker_node.example](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/docker_node) | resource |
 
 ## Inputs
 

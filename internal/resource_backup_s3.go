@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -15,16 +16,62 @@ func resourceBackupS3() *schema.Resource {
 		Delete: resourceBackupS3Delete,
 		Schema: map[string]*schema.Schema{
 			"access_key_id": {
-				Type:      schema.TypeString,
-				Required:  true,
-				Sensitive: true,
-				ForceNew:  true,
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				ForceNew:      true,
+				ConflictsWith: []string{"access_key_id_wo", "backup_wo_version"},
+				Description:   "S3 Access Key ID (stored in Terraform state).",
 			},
 			"secret_access_key": {
-				Type:      schema.TypeString,
-				Required:  true,
-				Sensitive: true,
-				ForceNew:  true,
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				ForceNew:      true,
+				ConflictsWith: []string{"secret_access_key_wo", "backup_wo_version"},
+				Description:   "S3 Secret Access Key (stored in Terraform state).",
+			},
+			"password": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				ForceNew:      true,
+				ConflictsWith: []string{"password_wo", "backup_wo_version"},
+				Description:   "Encryption password (stored in Terraform state).",
+			},
+			"access_key_id_wo": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				WriteOnly:     true,
+				RequiredWith:  []string{"backup_wo_version"},
+				ConflictsWith: []string{"access_key_id"},
+				Description:   "Ephemeral S3 Access Key ID (write-only, not stored in state).",
+			},
+			"secret_access_key_wo": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				WriteOnly:     true,
+				RequiredWith:  []string{"backup_wo_version"},
+				ConflictsWith: []string{"secret_access_key"},
+				Description:   "Ephemeral S3 Secret Access Key (write-only, not stored in state).",
+			},
+			"password_wo": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				WriteOnly:     true,
+				RequiredWith:  []string{"backup_wo_version"},
+				ConflictsWith: []string{"password"},
+				Description:   "Ephemeral encryption password (write-only, not stored in state).",
+			},
+			"backup_wo_version": {
+				Type:          schema.TypeInt,
+				Optional:      true,
+				ForceNew:      true,
+				Description:   "Version flag to trigger recreation when using ephemeral credentials.",
+				ConflictsWith: []string{"access_key_id", "secret_access_key", "password"},
 			},
 			"bucket_name": {
 				Type:     schema.TypeString,
@@ -41,12 +88,6 @@ func resourceBackupS3() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 			},
-			"password": {
-				Type:      schema.TypeString,
-				Required:  true,
-				Sensitive: true,
-				ForceNew:  true,
-			},
 			"cron_rule": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -56,16 +97,36 @@ func resourceBackupS3() *schema.Resource {
 	}
 }
 
+func getBackupS3Credentials(d *schema.ResourceData) (string, string, string) {
+	accessKey := d.Get("access_key_id").(string)
+	secretKey := d.Get("secret_access_key").(string)
+	password := d.Get("password").(string)
+
+	if d.Get("backup_wo_version").(int) != 0 {
+		if raw, diag := d.GetRawConfigAt(cty.GetAttrPath("access_key_id_wo")); diag == nil && raw.IsKnown() && !raw.IsNull() {
+			accessKey = raw.AsString()
+		}
+		if raw, diag := d.GetRawConfigAt(cty.GetAttrPath("secret_access_key_wo")); diag == nil && raw.IsKnown() && !raw.IsNull() {
+			secretKey = raw.AsString()
+		}
+		if raw, diag := d.GetRawConfigAt(cty.GetAttrPath("password_wo")); diag == nil && raw.IsKnown() && !raw.IsNull() {
+			password = raw.AsString()
+		}
+	}
+
+	return accessKey, secretKey, password
+}
+
 func resourceBackupS3Create(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-
+	accessKey, secretKey, password := getBackupS3Credentials(d)
 	body := map[string]interface{}{
-		"accessKeyID":      d.Get("access_key_id").(string),
-		"secretAccessKey":  d.Get("secret_access_key").(string),
+		"accessKeyID":      accessKey,
+		"secretAccessKey":  secretKey,
 		"bucketName":       d.Get("bucket_name").(string),
 		"region":           d.Get("region").(string),
 		"s3CompatibleHost": d.Get("s3_compatible_host").(string),
-		"password":         d.Get("password").(string),
+		"password":         password,
 	}
 
 	if v, ok := d.GetOk("cron_rule"); ok {
@@ -128,7 +189,6 @@ func resourceBackupS3Read(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceBackupS3Delete(d *schema.ResourceData, meta interface{}) error {
-	// This operation cannot be undone via API; just remove from state.
 	d.SetId("")
 	return nil
 }
