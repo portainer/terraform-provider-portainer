@@ -22,6 +22,7 @@ func resourceBackup() *schema.Resource {
 				Type:          schema.TypeString,
 				Optional:      true,
 				Sensitive:     true,
+				ForceNew:      true
 				ConflictsWith: []string{"password_wo", "backup_wo_version"},
 				Description:   "Password used to encrypt the backup file (stored in Terraform state).",
 			},
