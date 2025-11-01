@@ -31,6 +31,7 @@ func resourceBackup() *schema.Resource {
 				Optional:      true,
 				Sensitive:     true,
 				WriteOnly:     true,
+				Computed:      true,
 				RequiredWith:  []string{"backup_wo_version"},
 				ConflictsWith: []string{"password"},
 				Description:   "Ephemeral write-only password used for backup encryption (not stored in state).",
