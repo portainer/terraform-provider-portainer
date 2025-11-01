@@ -5,8 +5,8 @@
 
 | Name | Version |
 |------|---------|
-| <a name="provider_local"></a> [local](#provider\_local) | n/a |
-| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | n/a |
+| <a name="provider_local"></a> [local](#provider\_local) | 2.5.3 |
+| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | 1.13.2 |
 
 ## Resources
 
