@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -196,21 +197,91 @@ func resourceDockerNetworkCreate(d *schema.ResourceData, meta interface{}) error
 	return nil
 }
 
+// dockerNetworkSummary is a minimal representation used for fallback lookup.
+type dockerNetworkSummary struct {
+	ID     string `json:"Id"`
+	Name   string `json:"Name"`
+	Driver string `json:"Driver"`
+	Scope  string `json:"Scope"`
+}
+
+// findDockerNetworkFallback tries to locate a network by name/driver/scope
+// via /networks?filters=... when a lookup by ID failed (e.g. transient 404).
+func findDockerNetworkFallback(d *schema.ResourceData, client *APIClient, endpointID int, headers map[string]string) (*dockerNetworkSummary, error) {
+	name := d.Get("name").(string)
+	driver := d.Get("driver").(string)
+	scope := d.Get("scope").(string)
+
+	filters := map[string]map[string]bool{
+		"name":   {name: true},
+		"driver": {driver: true},
+		"scope":  {scope: true},
+	}
+
+	filtersJSON, err := json.Marshal(filters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal docker network filters: %w", err)
+	}
+
+	path := fmt.Sprintf(
+		"/endpoints/%d/docker/networks?filters=%s",
+		endpointID,
+		url.QueryEscape(string(filtersJSON)),
+	)
+
+	resp, err := client.DoRequest(http.MethodGet, path, headers, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list docker networks for fallback lookup: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list docker networks for fallback lookup: %s", string(body))
+	}
+
+	var networks []dockerNetworkSummary
+	if err := json.NewDecoder(resp.Body).Decode(&networks); err != nil {
+		return nil, fmt.Errorf("failed to decode docker networks list: %w", err)
+	}
+
+	if len(networks) == 1 {
+		return &networks[0], nil
+	}
+
+	return nil, nil
+}
+
 func resourceDockerNetworkRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	networkID := d.Id()
+
+	headers := map[string]string{}
+	if nodeID, ok := d.GetOk("swarm_node_id"); ok && nodeID.(string) != "" {
+		headers["X-PortainerAgent-Target"] = nodeID.(string)
+	}
+
 	path := fmt.Sprintf("/endpoints/%d/docker/networks/%s", endpointID, networkID)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
+	resp, err := client.DoRequest(http.MethodGet, path, headers, nil)
 	if err != nil {
 		return fmt.Errorf("failed to read docker network: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		d.SetId("")
-		return nil
+		network, err := findDockerNetworkFallback(d, client, endpointID, headers)
+		if err != nil {
+			return err
+		}
+		if network == nil {
+			d.SetId("")
+			return nil
+		}
+		d.SetId(network.ID)
+		return resourceDockerNetworkRead(d, meta)
 	}
+
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to read docker network: %s", string(body))
@@ -325,8 +396,13 @@ func resourceDockerNetworkDelete(d *schema.ResourceData, meta interface{}) error
 	endpointID := d.Get("endpoint_id").(int)
 	id := d.Id()
 
+	headers := map[string]string{}
+	if nodeID, ok := d.GetOk("swarm_node_id"); ok && nodeID.(string) != "" {
+		headers["X-PortainerAgent-Target"] = nodeID.(string)
+	}
+
 	path := fmt.Sprintf("/endpoints/%d/docker/networks/%s", endpointID, id)
-	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
+	resp, err := client.DoRequest(http.MethodDelete, path, headers, nil)
 	if err != nil {
 		return fmt.Errorf("failed to delete docker network: %w", err)
 	}
