@@ -75,6 +75,10 @@ func resourceDockerSecret() *schema.Resource {
 				Optional: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
 			},
+			"resource_control_id": {
+				Type:     schema.TypeInt,
+				Computed: true,
+			},
 		},
 	}
 }
@@ -155,6 +159,15 @@ func buildSecretPayload(d *schema.ResourceData) map[string]interface{} {
 	return payload
 }
 
+type dockerSecretCreateResponse struct {
+	ID        string `json:"ID"`
+	Portainer struct {
+		ResourceControl struct {
+			Id int `json:"Id"`
+		} `json:"ResourceControl"`
+	} `json:"Portainer"`
+}
+
 func resourceDockerSecretCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
@@ -169,9 +182,7 @@ func resourceDockerSecretCreate(d *schema.ResourceData, meta interface{}) error 
 
 	payload := buildSecretPayload(d)
 
-	var response struct {
-		ID string `json:"Id"`
-	}
+	var response dockerSecretCreateResponse
 
 	path := fmt.Sprintf("/endpoints/%d/docker/secrets/create", endpointID)
 	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
@@ -189,7 +200,14 @@ func resourceDockerSecretCreate(d *schema.ResourceData, meta interface{}) error 
 		return err
 	}
 
+	// ID secretu
 	d.SetId(response.ID)
+
+	// ID resource controlu
+	if response.Portainer.ResourceControl.Id != 0 {
+		_ = d.Set("resource_control_id", response.Portainer.ResourceControl.Id)
+	}
+
 	return nil
 }
 
@@ -214,6 +232,7 @@ func resourceDockerSecretRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	var result struct {
+		ID   string `json:"ID"`
 		Spec struct {
 			Name       string                 `json:"Name"`
 			Labels     map[string]string      `json:"Labels"`
@@ -223,6 +242,11 @@ func resourceDockerSecretRead(d *schema.ResourceData, meta interface{}) error {
 		Version struct {
 			Index int `json:"Index"`
 		} `json:"Version"`
+		Portainer struct {
+			ResourceControl struct {
+				Id int `json:"Id"`
+			} `json:"ResourceControl"`
+		} `json:"Portainer"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -233,6 +257,10 @@ func resourceDockerSecretRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("labels", result.Spec.Labels)
 	d.Set("driver", result.Spec.Driver)
 	d.Set("templating", result.Spec.Templating)
+
+	if result.Portainer.ResourceControl.Id != 0 {
+		_ = d.Set("resource_control_id", result.Portainer.ResourceControl.Id)
+	}
 
 	return nil
 }

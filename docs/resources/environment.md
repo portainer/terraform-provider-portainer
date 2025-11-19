@@ -58,6 +58,39 @@ output "edge_id" {
 }
 ```
 
+### Register Docker host secured via TLS (certs rxample from Vault/TLS)
+
+```hcl
+resource "vault_pki_secret_backend_cert" "portainer_client" {
+  backend     = "pki"
+  name        = "portainer-client"
+  common_name = "client.example.com"
+}
+
+resource "tls_private_key" "portainer_client" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "portainer_environment" "docker_tls" {
+  name                = "Docker over TLS"
+  environment_address = "tcp://192.168.1.100:2376"
+  type                = 1
+  group_id            = 1
+
+  # TLS must be enabled and server verification must NOT be skipped
+  tls_enabled     = true
+  tls_skip_verify = false
+
+  # These values are uploaded to Portainer as TLSCACertFile, TLSCertFile and TLSKeyFile
+  tls_ca_cert = vault_pki_secret_backend_cert.portainer_client.ca_chain
+  tls_cert    = vault_pki_secret_backend_cert.portainer_client.certificate
+  tls_key     = tls_private_key.portainer_client.private_key_pem
+}
+```
+> TLS files (`tls_ca_cert`, `tls_cert`, `tls_key`) will be upload to Portaienr only if variables set this:
+> `tls_enabled = true` **and** `tls_skip_verify = false`.
+
 ## Lifecycle & Behavior
 
 Environments are updated if any of the attributes change (e.g., name, address, type, group_id, tag_ids).
@@ -75,18 +108,21 @@ terraform apply
 
 ## Arguments Reference
 
-| Name                  | Type       | Required                     | Description                                                                                      |
-|-----------------------|------------|------------------------------|--------------------------------------------------------------------------------------------------|
-| `name`                | string     | ✅ yes                       | Display name of the environment in Portainer.                                                    |
-| `environment_address` | string     | ✅ yes                       | Target environment address (e.g. `tcp://host:9001`).                                             |
-| `type`                | int        | ✅ yes                       | Environment type: `1` = Docker, `2` = Agent, `3` = Azure, `4` = Edge Agent, `5` = Kubernetes.    |
-| `group_id`            | int        | 🚫 optional (default `1`)   | ID of the Portainer endpoint group. Default is `1` (Unassigned).                                  |
-| `tag_ids`             | list(int)  | 🚫 optional                 | List of Portainer tag IDs to assign to the environment. Only used during creation.                |
-| `tls_enabled`          | bool       | 🚫 optional (default `true`)| Enable TLS for connection to the agent. Must be `true` for agent-based environments.             |
-| `tls_skip_verify`      | bool       | 🚫 optional (default `true`)| Skip server certificate verification. Useful for self-signed certificates.                       |
-| `tls_skip_client_verify` | bool     | 🚫 optional (default `true`)| Skip client certificate verification. Used when mutual TLS is not required.                      |
-| `user_access_policies`   | map(object({ RoleId = int }))| 🚫 optional | Access control for users (applies to environments only)                                      |
-| `team_access_policies`   | map(object({ RoleId = int }))| 🚫 optional | Access control for teams (applies to environments only)                                      |
+| Name                       | Type       | Required                     | Description                                                                                      |
+|----------------------------|------------|------------------------------|--------------------------------------------------------------------------------------------------|
+| `name`                     | string     | ✅ yes                       | Display name of the environment in Portainer.                                                   |
+| `environment_address`      | string     | ✅ yes                       | Target environment address (e.g. `tcp://host:9001`).                                            |
+| `type`                     | int        | ✅ yes                       | Environment type: `1` = Docker, `2` = Agent, `3` = Azure, `4` = Edge Agent, `5` = Kubernetes.   |
+| `group_id`                 | int        | 🚫 optional (default `1`)   | ID of the Portainer endpoint group. Default is `1` (Unassigned).                                |
+| `tag_ids`                  | list(int)  | 🚫 optional                 | List of Portainer tag IDs to assign to the environment. Only used during creation.              |
+| `tls_enabled`              | bool       | 🚫 optional (default `true`)| Enable TLS for connection to the agent. Must be `true` for agent-based environments.            |
+| `tls_skip_verify`          | bool       | 🚫 optional (default `true`)| Skip server certificate verification. Useful for self-signed certificates.                      |
+| `tls_skip_client_verify`   | bool       | 🚫 optional (default `true`)| Skip client certificate verification. Used when mutual TLS is not required.                     |
+| `tls_ca_cert`              | string     | 🚫 optional (sensitive)     | PEM-encoded CA certificate. Uploaded as `TLSCACertFile` when `tls_enabled = true` and `tls_skip_verify = false`. |
+| `tls_cert`                 | string     | 🚫 optional (sensitive)     | PEM-encoded client certificate. Uploaded as `TLSCertFile` when `tls_enabled = true` and `tls_skip_verify = false`. |
+| `tls_key`                  | string     | 🚫 optional (sensitive)     | PEM-encoded client private key. Uploaded as `TLSKeyFile` when `tls_enabled = true` and `tls_skip_verify = false`. |
+| `user_access_policies`     | map(object({ RoleId = int })) | 🚫 optional | Access control for users (applies to environments only).                                       |
+| `team_access_policies`     | map(object({ RoleId = int })) | 🚫 optional | Access control for teams (applies to environments only).                                       |
 
 ## Attributes Reference
 | Name       | Description                                |

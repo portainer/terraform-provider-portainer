@@ -64,6 +64,21 @@ func resourceEnvironment() *schema.Resource {
 				Optional: true,
 				Default:  true,
 			},
+			"tls_ca_cert": {
+				Type:      schema.TypeString,
+				Optional:  true,
+				Sensitive: true,
+			},
+			"tls_cert": {
+				Type:      schema.TypeString,
+				Optional:  true,
+				Sensitive: true,
+			},
+			"tls_key": {
+				Type:      schema.TypeString,
+				Optional:  true,
+				Sensitive: true,
+			},
 			"tls_skip_client_verify": {
 				Type:     schema.TypeBool,
 				Optional: true,
@@ -110,6 +125,40 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 	_ = writer.WriteField("TLS", strconv.FormatBool(d.Get("tls_enabled").(bool)))
 	_ = writer.WriteField("TLSSkipVerify", strconv.FormatBool(d.Get("tls_skip_verify").(bool)))
 	_ = writer.WriteField("TLSSkipClientVerify", strconv.FormatBool(d.Get("tls_skip_client_verify").(bool)))
+
+	tlsEnabled := d.Get("tls_enabled").(bool)
+	tlsSkipVerify := d.Get("tls_skip_verify").(bool)
+	if tlsEnabled && !tlsSkipVerify {
+		if v, ok := d.GetOk("tls_ca_cert"); ok && v.(string) != "" {
+			part, err := writer.CreateFormFile("TLSCACertFile", "ca.pem")
+			if err != nil {
+				return fmt.Errorf("failed to create TLSCACertFile form file: %w", err)
+			}
+			if _, err := io.Copy(part, bytes.NewReader([]byte(v.(string)))); err != nil {
+				return fmt.Errorf("failed to write TLSCACertFile content: %w", err)
+			}
+		}
+
+		if v, ok := d.GetOk("tls_cert"); ok && v.(string) != "" {
+			part, err := writer.CreateFormFile("TLSCertFile", "cert.pem")
+			if err != nil {
+				return fmt.Errorf("failed to create TLSCertFile form file: %w", err)
+			}
+			if _, err := io.Copy(part, bytes.NewReader([]byte(v.(string)))); err != nil {
+				return fmt.Errorf("failed to write TLSCertFile content: %w", err)
+			}
+		}
+
+		if v, ok := d.GetOk("tls_key"); ok && v.(string) != "" {
+			part, err := writer.CreateFormFile("TLSKeyFile", "key.pem")
+			if err != nil {
+				return fmt.Errorf("failed to create TLSKeyFile form file: %w", err)
+			}
+			if _, err := io.Copy(part, bytes.NewReader([]byte(v.(string)))); err != nil {
+				return fmt.Errorf("failed to write TLSKeyFile content: %w", err)
+			}
+		}
+	}
 
 	if v, ok := d.GetOk("tag_ids"); ok {
 		tagIds := v.([]interface{})
