@@ -72,6 +72,7 @@ Use `terraform destroy` to remove the secret.
 
 ## Attributes Reference
 
-| Name | Description              |
-|------|--------------------------|
-| `id` | ID of the created Docker secret (from Portainer) |
+| Attribute             | Description                                                                 |
+| --------------------- | --------------------------------------------------------------------------- |
+| `id`                  | ID of the created Docker secret (from Portainer)                            |
+| `resource_control_id` | ID of the automatically generated Portainer ResourceControl for this secret |

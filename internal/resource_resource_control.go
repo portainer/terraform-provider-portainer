@@ -19,7 +19,12 @@ func resourceResourceControl() *schema.Resource {
 		Schema: map[string]*schema.Schema{
 			"resource_id": {
 				Type:     schema.TypeString,
-				Required: true,
+				Optional: true,
+				ForceNew: true,
+			},
+			"resource_control_id": {
+				Type:     schema.TypeInt,
+				Optional: true,
 				ForceNew: true,
 			},
 			"type": {
@@ -86,6 +91,26 @@ func lookupResourceControlID(client *APIClient, resourceType int, resourceId str
 
 func resourceResourceControlRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+
+	// 1) Pokud máme přímo resource_control_id (třeba z docker_secret),
+	//    nevoláme žádné API, jen nastavíme ID ve state.
+	if v, ok := d.GetOk("resource_control_id"); ok && v.(int) != 0 {
+		rcInt := v.(int)
+		rcId := strconv.Itoa(rcInt)
+
+		// Nastavíme ID resource v TF
+		d.SetId(rcId)
+
+		// Pro jistotu uložíme zpět i resource_control_id,
+		// kdyby přišlo z importu nebo staršího state.
+		_ = d.Set("resource_control_id", rcInt)
+
+		// Ostatní atributy (administrators_only, public, teams, users)
+		// necháme tak, jak jsou – pochází z konfigurace / předchozího apply.
+		return nil
+	}
+
+	// 2) Jinak starý režim: lookup podle type + resource_id (stack apod.)
 	resourceType := d.Get("type").(int)
 	resourceId := d.Get("resource_id").(string)
 
@@ -96,6 +121,12 @@ func resourceResourceControlRead(d *schema.ResourceData, meta interface{}) error
 	}
 
 	d.SetId(rcId)
+
+	// uložíme resource_control_id, pokud ho server vrátí
+	if v, ok := rcData["Id"].(float64); ok {
+		_ = d.Set("resource_control_id", int(v))
+	}
+
 	if v, ok := rcData["AdministratorsOnly"].(bool); ok {
 		_ = d.Set("administrators_only", v)
 	}
@@ -134,12 +165,19 @@ func resourceResourceControlCreate(d *schema.ResourceData, meta interface{}) err
 
 func resourceResourceControlUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	resourceType := d.Get("type").(int)
-	resourceId := d.Get("resource_id").(string)
 
-	rcId, _, err := lookupResourceControlID(client, resourceType, resourceId)
-	if err != nil {
-		return err
+	var rcId string
+	if v, ok := d.GetOk("resource_control_id"); ok && v.(int) != 0 {
+		rcId = strconv.Itoa(v.(int))
+	} else {
+		resourceType := d.Get("type").(int)
+		resourceId := d.Get("resource_id").(string)
+
+		var err error
+		rcId, _, err = lookupResourceControlID(client, resourceType, resourceId)
+		if err != nil {
+			return err
+		}
 	}
 
 	body := map[string]interface{}{
@@ -165,13 +203,20 @@ func resourceResourceControlUpdate(d *schema.ResourceData, meta interface{}) err
 
 func resourceResourceControlDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	resourceType := d.Get("type").(int)
-	resourceId := d.Get("resource_id").(string)
 
-	rcId, _, err := lookupResourceControlID(client, resourceType, resourceId)
-	if err != nil {
-		d.SetId("")
-		return nil
+	var rcId string
+	if v, ok := d.GetOk("resource_control_id"); ok && v.(int) != 0 {
+		rcId = strconv.Itoa(v.(int))
+	} else {
+		resourceType := d.Get("type").(int)
+		resourceId := d.Get("resource_id").(string)
+
+		var err error
+		rcId, _, err = lookupResourceControlID(client, resourceType, resourceId)
+		if err != nil {
+			d.SetId("")
+			return nil
+		}
 	}
 
 	resp, err := client.DoRequest("DELETE", fmt.Sprintf("/resource_controls/%s", rcId), nil, nil)

@@ -52,3 +52,27 @@ variable "portainer_skip_ssl_verify" {
   type        = bool
   default     = true
 }
+
+variable "portainer_team_name" {
+  description = "Portainer Team Name"
+  type        = string
+  default     = "your-team-test"
+}
+
+variable "resource_control_type" {
+  description = "Portainer ResourceControl type"
+  type        = number
+  default     = 5
+}
+
+variable "resource_control_administrators_only" {
+  description = "Only administrators can access the resource"
+  type        = bool
+  default     = false
+}
+
+variable "resource_control_public" {
+  description = "Whether the resource is public"
+  type        = bool
+  default     = false
+}
