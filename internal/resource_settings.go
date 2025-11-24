@@ -550,7 +550,6 @@ func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
 			"auth_style":              result.OAuthSettings.AuthStyle,
 			"authorization_uri":       result.OAuthSettings.AuthorizationURI,
 			"client_id":               result.OAuthSettings.ClientID,
-			"client_secret":           result.OAuthSettings.ClientSecret,
 			"default_team_id":         result.OAuthSettings.DefaultTeamID,
 			"logout_uri":              result.OAuthSettings.LogoutURI,
 			"oauth_auto_create_users": result.OAuthSettings.OAuthAutoCreateUsers,
@@ -561,6 +560,17 @@ func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
 			"user_identifier":         result.OAuthSettings.UserIdentifier,
 			"kube_secret_key":         result.OAuthSettings.KubeSecretKey,
 		}
+
+		if currentOAuth, ok := d.GetOk("oauth_settings"); ok {
+			if items := currentOAuth.([]interface{}); len(items) > 0 {
+				if current := items[0].(map[string]interface{}); current != nil {
+					if secret := current["client_secret"]; secret != "" {
+						oauth["client_secret"] = secret
+					}
+				}
+			}
+		}
+
 		d.Set("oauth_settings", []interface{}{oauth})
 	}
 
@@ -573,6 +583,18 @@ func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
 			"reader_dn":         result.LDAPSettings.ReaderDN,
 			"start_tls":         result.LDAPSettings.StartTLS,
 			"url":               result.LDAPSettings.URL,
+		}
+
+		if currentLDAP, ok := d.GetOk("ldap_settings"); ok {
+			if items := currentLDAP.([]interface{}); len(items) > 0 {
+				if current := items[0].(map[string]interface{}); current != nil {
+					if pwRaw, ok := current["password"]; ok {
+						if pwStr, ok := pwRaw.(string); ok && pwStr != "" {
+							ldap["password"] = pwStr
+						}
+					}
+				}
+			}
 		}
 
 		// search_settings

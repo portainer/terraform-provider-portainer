@@ -277,7 +277,7 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 		if err != nil {
 			return fmt.Errorf("failed to fetch swarm_id: %w", err)
 		}
-		d.Set("swarm_id", swarmID)
+		_ = d.Set("swarm_id", swarmID)
 	}
 
 	if existingID, err := findExistingStackByName(client, name, endpointID); err != nil {
@@ -287,71 +287,95 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 		return resourcePortainerStackUpdate(d, meta)
 	}
 
+	var err error
+
 	switch deployment {
 	case "standalone":
 		switch method {
 		case "string":
-			return createStackStandaloneString(d, client)
+			err = createStackStandaloneString(d, client)
 		case "file":
 			path := d.Get("stack_file_path").(string)
-			content, err := os.ReadFile(path)
-			if err != nil {
-				return fmt.Errorf("failed to read stack file from path: %w", err)
+			content, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return fmt.Errorf("failed to read stack file from path: %w", readErr)
 			}
-			d.Set("stack_file_content", string(content))
-			return createStackStandaloneString(d, client)
+			_ = d.Set("stack_file_content", string(content))
+			err = createStackStandaloneString(d, client)
 		case "repository":
-			return createStackStandaloneRepo(d, client)
+			err = createStackStandaloneRepo(d, client)
+		default:
+			return fmt.Errorf("invalid method %q for standalone deployment", method)
 		}
+
 	case "swarm":
 		switch method {
 		case "string":
-			return createStackSwarmString(d, client)
+			err = createStackSwarmString(d, client)
 		case "file":
 			path := d.Get("stack_file_path").(string)
-			content, err := os.ReadFile(path)
-			if err != nil {
-				return fmt.Errorf("failed to read stack file from path: %w", err)
+			content, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return fmt.Errorf("failed to read stack file from path: %w", readErr)
 			}
-			d.Set("stack_file_content", string(content))
-			return createStackSwarmString(d, client)
+			_ = d.Set("stack_file_content", string(content))
+			err = createStackSwarmString(d, client)
 		case "repository":
-			return createStackSwarmRepo(d, client)
+			err = createStackSwarmRepo(d, client)
+		default:
+			return fmt.Errorf("invalid method %q for swarm deployment", method)
 		}
+
 	case "kubernetes":
 		switch method {
 		case "string":
-			return createStackK8sString(d, client)
+			err = createStackK8sString(d, client)
 		case "repository":
-			return createStackK8sRepo(d, client)
+			err = createStackK8sRepo(d, client)
 		case "url":
-			return createStackK8sURL(d, client)
+			err = createStackK8sURL(d, client)
+		default:
+			return fmt.Errorf("invalid method %q for kubernetes deployment", method)
 		}
+
+	default:
+		return fmt.Errorf("invalid deployment_type %q", deployment)
 	}
 
-	return fmt.Errorf("invalid combination of deployment_type and method")
+	if err != nil {
+		return err
+	}
 
-	if d.Get("stack_webhook").(bool) && d.Get("method").(string) != "repository" {
-		webhookToken := uuid.New().String()
+	if method != "repository" {
+		var webhookToken string
+		if d.Get("stack_webhook").(bool) {
+			webhookToken = d.Get("webhook_id").(string)
+			if webhookToken == "" {
+				webhookToken = uuid.New().String()
+			}
+		}
 
 		payload := map[string]interface{}{
 			"env":              flattenEnvList(d.Get("env").([]interface{})),
 			"stackFileContent": d.Get("stack_file_content").(string),
 			"prune":            d.Get("prune").(bool),
 			"pullImage":        d.Get("pull_image").(bool),
-			"webhook":          webhookToken,
+		}
+		if webhookToken != "" {
+			payload["webhook"] = webhookToken
 		}
 
 		jsonBody, err := json.Marshal(payload)
 		if err != nil {
-			return fmt.Errorf("failed to marshal webhook update payload: %w", err)
+			return fmt.Errorf("failed to marshal stack update (create) payload: %w", err)
 		}
 
-		url := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, d.Id(), d.Get("endpoint_id").(int))
+		url := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, d.Id(), endpointID)
 		req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
 		if err != nil {
-			return fmt.Errorf("failed to build webhook update request: %w", err)
+			return fmt.Errorf("failed to build stack update (create) request: %w", err)
 		}
+
 		if client.APIKey != "" {
 			req.Header.Set("X-API-Key", client.APIKey)
 		} else if client.JWTToken != "" {
@@ -363,18 +387,23 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
-			return fmt.Errorf("failed to perform webhook update request: %w", err)
+			return fmt.Errorf("failed to perform stack update (create) request: %w", err)
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != 200 {
 			data, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to update stack webhook, status %d: %s", resp.StatusCode, string(data))
+			return fmt.Errorf("failed to finalize stack creation (prune/webhook), status %d: %s", resp.StatusCode, string(data))
 		}
 
-		d.Set("webhook_id", webhookToken)
+		if webhookToken != "" {
+			_ = d.Set("webhook_id", webhookToken)
+			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+			webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookToken)
+			_ = d.Set("webhook_url", webhookURL)
+		}
 	}
-	return nil
+	return resourcePortainerStackRead(d, meta)
 }
 
 func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error {
@@ -440,6 +469,25 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	d.Set("swarm_id", stack.SwarmID)
 	d.Set("namespace", stack.Namespace)
 	d.Set("compose_format", stack.ComposeFmt)
+	var webhookToken string
+	if stack.AutoUpdate != nil && stack.AutoUpdate.Webhook != "" {
+		webhookToken = stack.AutoUpdate.Webhook
+	} else if stack.Webhook != "" {
+		webhookToken = stack.Webhook
+	}
+
+	if webhookToken != "" {
+		_ = d.Set("stack_webhook", true)
+		_ = d.Set("webhook_id", webhookToken)
+
+		baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+		webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookToken)
+		_ = d.Set("webhook_url", webhookURL)
+	} else {
+		_ = d.Set("stack_webhook", false)
+		_ = d.Set("webhook_id", "")
+		_ = d.Set("webhook_url", "")
+	}
 
 	method := d.Get("method").(string)
 	if method != "repository" {
@@ -484,7 +532,6 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	d.Set("env", tfEnvs)
 	_ = d.Set("method", method)
 	_ = d.Set("endpoint_id", stack.EndpointID)
-	_ = d.Set("stack_webhook", stack.AutoUpdate != nil && stack.AutoUpdate.Webhook != "")
 	_ = d.Set("support_relative_path", stack.SupportRelativePath)
 	if method == "repository" && stack.GitConfig != nil {
 		_ = d.Set("tlsskip_verify", stack.GitConfig.TLSSkipVerify)
@@ -571,9 +618,10 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		if err != nil {
 			return fmt.Errorf("failed to read stack file for update: %w", err)
 		}
-		d.Set("stack_file_content", string(content))
+		_ = d.Set("stack_file_content", string(content))
 	}
 
+	// ---------------- REPOSITORY STACK ----------------
 	if method == "repository" {
 		payload := map[string]interface{}{
 			"supportRelativePath":       d.Get("support_relative_path").(bool),
@@ -594,7 +642,11 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		}
 
 		if d.Get("stack_webhook").(bool) {
-			webhookID := uuid.New().String()
+			webhookID := d.Get("webhook_id").(string)
+			if webhookID == "" {
+				webhookID = uuid.New().String()
+			}
+
 			autoUpdate := map[string]interface{}{
 				"forcePullImage": d.Get("pull_image").(bool),
 				"forceUpdate":    d.Get("force_update").(bool),
@@ -602,11 +654,11 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 				"webhook":        webhookID,
 			}
 			payload["autoUpdate"] = autoUpdate
-			d.Set("webhook_id", webhookID)
+			_ = d.Set("webhook_id", webhookID)
 
 			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
 			webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
-			d.Set("webhook_url", webhookURL)
+			_ = d.Set("webhook_url", webhookURL)
 
 			jsonBody, err := json.Marshal(payload)
 			if err != nil {
@@ -681,9 +733,10 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			return fmt.Errorf("failed to redeploy git stack: %s", string(data))
 		}
 
-		return nil
+		return resourcePortainerStackRead(d, meta)
 	}
 
+	// ---------------- NON-REPOSITORY STACKS ----------------
 	if method != "repository" {
 		payload := map[string]interface{}{
 			"env":              flattenEnvList(d.Get("env").([]interface{})),
@@ -723,8 +776,11 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		}
 	}
 
-	if d.Get("stack_webhook").(bool) && d.Get("method").(string) != "repository" {
-		webhookToken := uuid.New().String()
+	if d.Get("stack_webhook").(bool) && method != "repository" {
+		webhookToken := d.Get("webhook_id").(string)
+		if webhookToken == "" {
+			webhookToken = uuid.New().String()
+		}
 
 		payload := map[string]interface{}{
 			"env":              flattenEnvList(d.Get("env").([]interface{})),
@@ -739,7 +795,7 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			return fmt.Errorf("failed to marshal webhook update payload: %w", err)
 		}
 
-		url := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, d.Id(), d.Get("endpoint_id").(int))
+		url := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, d.Id(), endpointID)
 		req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
 		if err != nil {
 			return fmt.Errorf("failed to build webhook update request: %w", err)
@@ -764,9 +820,13 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			return fmt.Errorf("failed to update stack webhook, status %d: %s", resp.StatusCode, string(data))
 		}
 
-		d.Set("webhook_id", webhookToken)
+		_ = d.Set("webhook_id", webhookToken)
+		baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+		webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookToken)
+		_ = d.Set("webhook_url", webhookURL)
 	}
-	return nil
+
+	return resourcePortainerStackRead(d, meta)
 }
 
 func flattenEnvList(envList []interface{}) []map[string]string {
