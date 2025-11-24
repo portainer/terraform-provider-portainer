@@ -34,3 +34,9 @@ variable "portainer_skip_ssl_verify" {
   type        = bool
   default     = true
 }
+
+variable "public_ip" {
+  type        = string
+  description = "Public IP/URL for Portainer PublicURL"
+  default     = "test.domain.com"
+}

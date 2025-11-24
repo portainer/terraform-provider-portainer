@@ -30,6 +30,11 @@ func resourceEnvironment() *schema.Resource {
 				Type:     schema.TypeString,
 				Required: true,
 			},
+			"public_ip": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Public IP/URL used by Portainer for Published Ports (maps to PublicURL).",
+			},
 			"type": {
 				Type:        schema.TypeInt,
 				Required:    true,
@@ -125,6 +130,9 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 	_ = writer.WriteField("TLS", strconv.FormatBool(d.Get("tls_enabled").(bool)))
 	_ = writer.WriteField("TLSSkipVerify", strconv.FormatBool(d.Get("tls_skip_verify").(bool)))
 	_ = writer.WriteField("TLSSkipClientVerify", strconv.FormatBool(d.Get("tls_skip_client_verify").(bool)))
+	if v, ok := d.GetOk("public_ip"); ok && v.(string) != "" {
+		_ = writer.WriteField("PublicURL", v.(string))
+	}
 
 	tlsEnabled := d.Get("tls_enabled").(bool)
 	tlsSkipVerify := d.Get("tls_skip_verify").(bool)
@@ -282,10 +290,12 @@ func resourceEnvironmentRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("group_id", env.GroupID)
 	d.Set("tag_ids", env.TagIds)
 
-	if env.Type == 1 {
-		d.Set("environment_address", env.URL)
+	d.Set("environment_address", env.URL)
+
+	if env.PublicURL != "" {
+		d.Set("public_ip", env.PublicURL)
 	} else {
-		d.Set("environment_address", env.PublicURL)
+		d.Set("public_ip", "")
 	}
 
 	if env.EdgeKey != "" {
@@ -304,11 +314,16 @@ func resourceEnvironmentUpdate(d *schema.ResourceData, meta interface{}) error {
 	id := d.Id()
 
 	payload := map[string]interface{}{
-		"name":      d.Get("name").(string),
-		"url":       d.Get("environment_address").(string),
-		"publicURL": d.Get("environment_address").(string),
-		"groupID":   d.Get("group_id").(int),
-		"tagIDs":    d.Get("tag_ids").([]interface{}),
+		"name":    d.Get("name").(string),
+		"url":     d.Get("environment_address").(string),
+		"groupID": d.Get("group_id").(int),
+		"tagIDs":  d.Get("tag_ids").([]interface{}),
+	}
+
+	if v, ok := d.GetOk("public_ip"); ok && v.(string) != "" {
+		payload["publicURL"] = v.(string)
+	} else {
+		payload["publicURL"] = d.Get("environment_address").(string)
 	}
 
 	if v, ok := d.GetOk("user_access_policies"); ok {
