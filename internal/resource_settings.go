@@ -203,9 +203,9 @@ func resourceSettings() *schema.Resource {
 							Optional:  true,
 							Computed:  true,
 							Sensitive: true,
-							DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
-								return old == "" || new == ""
-							},
+							//	DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+							//		return old == "" || new == ""
+							//	},
 						},
 						"default_team_id":         {Type: schema.TypeInt, Optional: true, Computed: true},
 						"logout_uri":              {Type: schema.TypeString, Optional: true, Computed: true},
@@ -238,9 +238,9 @@ func resourceSettings() *schema.Resource {
 							Optional:  true,
 							Computed:  true,
 							Sensitive: true,
-							DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
-								return old == "" || new == ""
-							},
+							//	DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+							//		return old == "" || new == ""
+							//	},
 						},
 						"reader_dn": {Type: schema.TypeString, Optional: true, Computed: true},
 						"start_tls": {Type: schema.TypeBool, Optional: true, Computed: true},
@@ -561,11 +561,13 @@ func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
 			"kube_secret_key":         result.OAuthSettings.KubeSecretKey,
 		}
 
-		if currentOAuth, ok := d.GetOk("oauth_settings"); ok {
-			if items := currentOAuth.([]interface{}); len(items) > 0 {
-				if current := items[0].(map[string]interface{}); current != nil {
-					if secret := current["client_secret"]; secret != "" {
-						oauth["client_secret"] = secret
+		if currentOAuthRaw, ok := d.GetOk("oauth_settings"); ok {
+			if list, ok := currentOAuthRaw.([]interface{}); ok && len(list) > 0 && list[0] != nil {
+				if currentMap, ok := list[0].(map[string]interface{}); ok {
+					if secretRaw, ok := currentMap["client_secret"]; ok {
+						if secretStr, ok := secretRaw.(string); ok && secretStr != "" {
+							oauth["client_secret"] = secretStr
+						}
 					}
 				}
 			}
