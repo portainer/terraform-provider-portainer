@@ -38,11 +38,11 @@ func resourceEnvironment() *schema.Resource {
 			"type": {
 				Type:        schema.TypeInt,
 				Required:    true,
-				Description: "Environment type: 1 = Docker, 2 = Agent, 3 = Azure, 4 = Edge Agent, 5 = Kubernetes",
+				Description: "Environment type: 1 = Docker, 2 = Agent, 3 = Azure, 4 = Edge Agent, 5 = Kubernetes, 6 = Kubernetes via agent",
 				ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
 					t := val.(int)
-					if t < 1 || t > 5 {
-						errs = append(errs, fmt.Errorf("%q must be between 1 and 5", key))
+					if t < 1 || t > 6 {
+						errs = append(errs, fmt.Errorf("%q must be between 1 and 6", key))
 					}
 					return
 				},
@@ -123,9 +123,15 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 	var requestBody bytes.Buffer
 	writer := multipart.NewWriter(&requestBody)
 
+	envType := d.Get("type").(int)
+	endpointCreationType := envType
+	if envType == 6 {
+		endpointCreationType = 2
+	}
+
+	_ = writer.WriteField("EndpointCreationType", strconv.Itoa(endpointCreationType))
 	_ = writer.WriteField("Name", d.Get("name").(string))
 	_ = writer.WriteField("URL", d.Get("environment_address").(string))
-	_ = writer.WriteField("EndpointCreationType", strconv.Itoa(d.Get("type").(int)))
 	_ = writer.WriteField("GroupID", strconv.Itoa(d.Get("group_id").(int)))
 	_ = writer.WriteField("TLS", strconv.FormatBool(d.Get("tls_enabled").(bool)))
 	_ = writer.WriteField("TLSSkipVerify", strconv.FormatBool(d.Get("tls_skip_verify").(bool)))
