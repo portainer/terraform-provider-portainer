@@ -105,22 +105,41 @@ terraform apply
 | `tls_skip_verify`     | bool     | 🚫 no    | Skip certificate verification |
 
 ### `oauth_settings` Block
-| Name                  | Type           | Required | Description                                                                 |
-|-----------------------|----------------|----------|-----------------------------------------------------------------------------|
-| `access_token_uri`    | string         | ✅ yes   | OAuth token endpoint                                                        |
-| `auth_style`          | number         | 🚫 no    | OAuth auth style (e.g., 0 = auto, 1 = basic, 2 = post)                      |
-| `authorization_uri`   | string         | ✅ yes   | OAuth authorization endpoint                                                |
-| `client_id`           | string         | ✅ yes   | OAuth client ID                                                             |
-| `client_secret`       | string         | ✅ yes   | OAuth client secret                                                         |
-| `default_team_id`     | number         | 🚫 no    | ID of default team assigned to new users                                   |
-| `kube_secret_key`     | list(number)   | 🚫 no    | List of Kube secret key IDs                                                |
-| `logout_uri`          | string         | 🚫 no    | OAuth logout endpoint                                                       |
-| `oauth_auto_create_users` | bool      | 🚫 no    | Automatically create users on first login                                  |
-| `redirect_uri`        | string         | ✅ yes   | OAuth redirect URI                                                          |
-| `resource_uri`        | string         | 🚫 no    | Resource URI for user info                                                 |
-| `sso`                 | bool           | 🚫 no    | Enable SSO                                                                  |
-| `scopes`              | string         | 🚫 no    | Scopes requested during authentication                                      |
-| `user_identifier`     | string         | 🚫 no    | Attribute or claim used to identify users                                  |
+| Name                              | Type         | Required | Description                                                       |
+| --------------------------------- | ------------ | -------- | ----------------------------------------------------------------- |
+| `access_token_uri`                | string       | ✅ yes    | OAuth/OpenID token endpoint                                       |
+| `authorization_uri`               | string       | ✅ yes    | OAuth/OpenID authorization endpoint                               |
+| `client_id`                       | string       | ✅ yes    | OAuth application Client ID                                       |
+| `client_secret`                   | string       | ✅ yes    | OAuth application Client Secret (sensitive)                       |
+| `redirect_uri`                    | string       | ✅ yes    | Redirect URI used during OAuth login                              |
+| `scopes`                          | string       | 🚫 no    | Scopes requested during auth (e.g., `openid email profile roles`) |
+| `resource_uri`                    | string       | 🚫 no    | Resource/UserInfo URI (OIDC userinfo endpoint)                    |
+| `logout_uri`                      | string       | 🚫 no    | OAuth logout URL                                                  |
+| `user_identifier`                 | string       | 🚫 no    | Claim/attribute used as unique user identifier                    |
+| `auth_style`                      | number       | 🚫 no    | Authentication style (0=auto, 1=basic, 2=post)                    |
+| `default_team_id`                 | number       | 🚫 no    | Default team ID for auto-created users                            |
+| `sso`                             | bool         | 🚫 no    | Enable Single Sign-On                                             |
+| `kube_secret_key`                 | list(number) | 🚫 no    | List of Kubernetes secret key references                          |
+| `oauth_auto_create_users`         | bool         | 🚫 no    | Automatically create users on first login                         |
+| `oauth_auto_map_team_memberships` | bool         | 🚫 no    | Automatically assign users to teams based on OAuth claim values   |
+| `hide_internal_auth`              | bool         | 🚫 no    | Hide Portainer internal login when OAuth is enabled               |
+| `microsoft_tenant_id`             | string       | 🚫 no    | Required for Azure AD (Microsoft Identity / Entra ID) providers   |
+| `team_memberships`                | block        | 🚫 no    | Detailed mapping of claims → Portainer teams (see below)          |
+
+### `team_memberships` Nested Block
+| Name                            | Type         | Required | Description                                                 |
+| ------------------------------- | ------------ | -------- | ----------------------------------------------------------- |
+| `oauth_claim_name`              | string       | ✅ yes    | Name of the OAuth claim that contains role/group values     |
+| `admin_auto_populate`           | bool         | 🚫 no    | Automatically grant users admin privileges if claim matches |
+| `admin_group_claims_regex_list` | list(string) | 🚫 no    | List of regex patterns that grant admin rights              |
+| `oauth_claim_mappings`          | list(object) | 🚫 no    | Explicit mappings from claim values to team IDs             |
+
+### `oauth_claim_mappings` Nested Object
+
+| Name              | Type   | Required | Description                    |
+| ----------------- | ------ | -------- | ------------------------------ |
+| `claim_val_regex` | string | ✅ yes    | Regex that matches claim value |
+| `team`            | number | ✅ yes    | Portainer Team ID to assign    |
 
 ### `blacklisted_labels` Block
 | Name     | Type   | Required | Description                         |

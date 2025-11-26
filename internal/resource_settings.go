@@ -51,22 +51,42 @@ type InternalAuthSettings struct {
 	RequiredPasswordLength int `json:"requiredPasswordLength,omitempty"`
 }
 
-type OAuthSettings struct {
-	AccessTokenURI       string `json:"AccessTokenURI,omitempty"`
-	AuthStyle            int    `json:"AuthStyle,omitempty"`
-	AuthorizationURI     string `json:"AuthorizationURI,omitempty"`
-	ClientID             string `json:"ClientID,omitempty"`
-	ClientSecret         string `json:"ClientSecret,omitempty"`
-	DefaultTeamID        int    `json:"DefaultTeamID,omitempty"`
-	LogoutURI            string `json:"LogoutURI,omitempty"`
-	OAuthAutoCreateUsers bool   `json:"OAuthAutoCreateUsers,omitempty"`
-	RedirectURI          string `json:"RedirectURI,omitempty"`
-	ResourceURI          string `json:"ResourceURI,omitempty"`
-	SSO                  bool   `json:"SSO,omitempty"`
-	Scopes               string `json:"Scopes,omitempty"`
-	UserIdentifier       string `json:"UserIdentifier,omitempty"`
-	KubeSecretKey        []int  `json:"KubeSecretKey,omitempty"`
+// --- OAuth structs ---
+
+type OAuthClaimMapping struct {
+	ClaimValRegex string `json:"ClaimValRegex,omitempty"`
+	Team          int    `json:"Team,omitempty"`
 }
+
+type OAuthTeamMemberships struct {
+	AdminAutoPopulate         bool                `json:"AdminAutoPopulate,omitempty"`
+	AdminGroupClaimsRegexList []string            `json:"AdminGroupClaimsRegexList,omitempty"`
+	OAuthClaimMappings        []OAuthClaimMapping `json:"OAuthClaimMappings,omitempty"`
+	OAuthClaimName            string              `json:"OAuthClaimName,omitempty"`
+}
+
+type OAuthSettings struct {
+	AccessTokenURI              string                `json:"AccessTokenURI,omitempty"`
+	AuthStyle                   int                   `json:"AuthStyle,omitempty"`
+	AuthorizationURI            string                `json:"AuthorizationURI,omitempty"`
+	ClientID                    string                `json:"ClientID,omitempty"`
+	ClientSecret                string                `json:"ClientSecret,omitempty"`
+	DefaultTeamID               int                   `json:"DefaultTeamID,omitempty"`
+	LogoutURI                   string                `json:"LogoutURI,omitempty"`
+	OAuthAutoCreateUsers        bool                  `json:"OAuthAutoCreateUsers,omitempty"`
+	RedirectURI                 string                `json:"RedirectURI,omitempty"`
+	ResourceURI                 string                `json:"ResourceURI,omitempty"`
+	SSO                         bool                  `json:"SSO,omitempty"`
+	Scopes                      string                `json:"Scopes,omitempty"`
+	UserIdentifier              string                `json:"UserIdentifier,omitempty"`
+	KubeSecretKey               []int                 `json:"KubeSecretKey,omitempty"`
+	HideInternalAuth            bool                  `json:"HideInternalAuth,omitempty"`
+	MicrosoftTenantID           string                `json:"MicrosoftTenantID,omitempty"`
+	OAuthAutoMapTeamMemberships bool                  `json:"OAuthAutoMapTeamMemberships,omitempty"`
+	TeamMemberships             *OAuthTeamMemberships `json:"TeamMemberships,omitempty"`
+}
+
+// --- LDAP structs ---
 
 type LDAPSettings struct {
 	AnonymousMode       bool            `json:"AnonymousMode,omitempty"`
@@ -203,9 +223,6 @@ func resourceSettings() *schema.Resource {
 							Optional:  true,
 							Computed:  true,
 							Sensitive: true,
-							//	DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
-							//		return old == "" || new == ""
-							//	},
 						},
 						"default_team_id":         {Type: schema.TypeInt, Optional: true, Computed: true},
 						"logout_uri":              {Type: schema.TypeString, Optional: true, Computed: true},
@@ -220,6 +237,66 @@ func resourceSettings() *schema.Resource {
 							Optional: true,
 							Computed: true,
 							Elem:     &schema.Schema{Type: schema.TypeInt},
+						},
+						"hide_internal_auth": {
+							Type:     schema.TypeBool,
+							Optional: true,
+							Computed: true,
+						},
+						"microsoft_tenant_id": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"oauth_auto_map_team_memberships": {
+							Type:     schema.TypeBool,
+							Optional: true,
+							Computed: true,
+						},
+						"team_memberships": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Computed: true,
+							MaxItems: 1,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"oauth_claim_name": {
+										Type:     schema.TypeString,
+										Optional: true,
+										Computed: true,
+									},
+									"admin_auto_populate": {
+										Type:     schema.TypeBool,
+										Optional: true,
+										Computed: true,
+									},
+									"admin_group_claims_regex_list": {
+										Type:     schema.TypeList,
+										Optional: true,
+										Computed: true,
+										Elem:     &schema.Schema{Type: schema.TypeString},
+									},
+									"oauth_claim_mappings": {
+										Type:     schema.TypeList,
+										Optional: true,
+										Computed: true,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"claim_val_regex": {
+													Type:     schema.TypeString,
+													Optional: true,
+													Computed: true,
+												},
+												"team": {
+													Type:     schema.TypeInt,
+													Optional: true,
+													Computed: true,
+												},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -238,9 +315,6 @@ func resourceSettings() *schema.Resource {
 							Optional:  true,
 							Computed:  true,
 							Sensitive: true,
-							//	DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
-							//		return old == "" || new == ""
-							//	},
 						},
 						"reader_dn": {Type: schema.TypeString, Optional: true, Computed: true},
 						"start_tls": {Type: schema.TypeBool, Optional: true, Computed: true},
@@ -312,24 +386,65 @@ func resourceSettingsApply(d *schema.ResourceData, meta interface{}) error {
 		items := v.([]interface{})
 		if len(items) > 0 && items[0] != nil {
 			m := items[0].(map[string]interface{})
+
 			oauth = &OAuthSettings{
-				AccessTokenURI:       m["access_token_uri"].(string),
-				AuthStyle:            m["auth_style"].(int),
-				AuthorizationURI:     m["authorization_uri"].(string),
-				ClientID:             m["client_id"].(string),
-				ClientSecret:         m["client_secret"].(string),
-				DefaultTeamID:        m["default_team_id"].(int),
-				LogoutURI:            m["logout_uri"].(string),
-				OAuthAutoCreateUsers: m["oauth_auto_create_users"].(bool),
-				RedirectURI:          m["redirect_uri"].(string),
-				ResourceURI:          m["resource_uri"].(string),
-				SSO:                  m["sso"].(bool),
-				Scopes:               m["scopes"].(string),
-				UserIdentifier:       m["user_identifier"].(string),
+				AccessTokenURI:              m["access_token_uri"].(string),
+				AuthStyle:                   m["auth_style"].(int),
+				AuthorizationURI:            m["authorization_uri"].(string),
+				ClientID:                    m["client_id"].(string),
+				ClientSecret:                m["client_secret"].(string),
+				DefaultTeamID:               m["default_team_id"].(int),
+				LogoutURI:                   m["logout_uri"].(string),
+				OAuthAutoCreateUsers:        m["oauth_auto_create_users"].(bool),
+				RedirectURI:                 m["redirect_uri"].(string),
+				ResourceURI:                 m["resource_uri"].(string),
+				SSO:                         m["sso"].(bool),
+				Scopes:                      m["scopes"].(string),
+				UserIdentifier:              m["user_identifier"].(string),
+				HideInternalAuth:            m["hide_internal_auth"].(bool),
+				MicrosoftTenantID:           m["microsoft_tenant_id"].(string),
+				OAuthAutoMapTeamMemberships: m["oauth_auto_map_team_memberships"].(bool),
 			}
+
 			if raw, ok := m["kube_secret_key"]; ok {
 				for _, v := range raw.([]interface{}) {
 					oauth.KubeSecretKey = append(oauth.KubeSecretKey, v.(int))
+				}
+			}
+
+			// team_memberships blok
+			if rawTM, ok := m["team_memberships"]; ok {
+				tmItems := rawTM.([]interface{})
+				if len(tmItems) > 0 && tmItems[0] != nil {
+					tmMap := tmItems[0].(map[string]interface{})
+					tm := &OAuthTeamMemberships{}
+
+					if v, ok := tmMap["oauth_claim_name"]; ok {
+						tm.OAuthClaimName = v.(string)
+					}
+					if v, ok := tmMap["admin_auto_populate"]; ok {
+						tm.AdminAutoPopulate = v.(bool)
+					}
+					if rawList, ok := tmMap["admin_group_claims_regex_list"]; ok {
+						for _, r := range rawList.([]interface{}) {
+							tm.AdminGroupClaimsRegexList = append(tm.AdminGroupClaimsRegexList, r.(string))
+						}
+					}
+					if rawMappings, ok := tmMap["oauth_claim_mappings"]; ok {
+						for _, mv := range rawMappings.([]interface{}) {
+							mm := mv.(map[string]interface{})
+							mapping := OAuthClaimMapping{}
+							if v, ok := mm["claim_val_regex"]; ok {
+								mapping.ClaimValRegex = v.(string)
+							}
+							if v, ok := mm["team"]; ok {
+								mapping.Team = v.(int)
+							}
+							tm.OAuthClaimMappings = append(tm.OAuthClaimMappings, mapping)
+						}
+					}
+
+					oauth.TeamMemberships = tm
 				}
 			}
 		}
@@ -545,20 +660,45 @@ func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
 
 	// oauth_settings
 	if result.OAuthSettings != nil {
+		o := result.OAuthSettings
+
 		oauth := map[string]interface{}{
-			"access_token_uri":        result.OAuthSettings.AccessTokenURI,
-			"auth_style":              result.OAuthSettings.AuthStyle,
-			"authorization_uri":       result.OAuthSettings.AuthorizationURI,
-			"client_id":               result.OAuthSettings.ClientID,
-			"default_team_id":         result.OAuthSettings.DefaultTeamID,
-			"logout_uri":              result.OAuthSettings.LogoutURI,
-			"oauth_auto_create_users": result.OAuthSettings.OAuthAutoCreateUsers,
-			"redirect_uri":            result.OAuthSettings.RedirectURI,
-			"resource_uri":            result.OAuthSettings.ResourceURI,
-			"sso":                     result.OAuthSettings.SSO,
-			"scopes":                  result.OAuthSettings.Scopes,
-			"user_identifier":         result.OAuthSettings.UserIdentifier,
-			"kube_secret_key":         result.OAuthSettings.KubeSecretKey,
+			"access_token_uri":                o.AccessTokenURI,
+			"auth_style":                      o.AuthStyle,
+			"authorization_uri":               o.AuthorizationURI,
+			"client_id":                       o.ClientID,
+			"default_team_id":                 o.DefaultTeamID,
+			"logout_uri":                      o.LogoutURI,
+			"oauth_auto_create_users":         o.OAuthAutoCreateUsers,
+			"redirect_uri":                    o.RedirectURI,
+			"resource_uri":                    o.ResourceURI,
+			"sso":                             o.SSO,
+			"scopes":                          o.Scopes,
+			"user_identifier":                 o.UserIdentifier,
+			"kube_secret_key":                 o.KubeSecretKey,
+			"hide_internal_auth":              o.HideInternalAuth,
+			"microsoft_tenant_id":             o.MicrosoftTenantID,
+			"oauth_auto_map_team_memberships": o.OAuthAutoMapTeamMemberships,
+		}
+
+		// TeamMemberships flatten
+		if o.TeamMemberships != nil {
+			tm := map[string]interface{}{
+				"oauth_claim_name":              o.TeamMemberships.OAuthClaimName,
+				"admin_auto_populate":           o.TeamMemberships.AdminAutoPopulate,
+				"admin_group_claims_regex_list": o.TeamMemberships.AdminGroupClaimsRegexList,
+			}
+
+			mappings := make([]interface{}, 0, len(o.TeamMemberships.OAuthClaimMappings))
+			for _, m := range o.TeamMemberships.OAuthClaimMappings {
+				mappings = append(mappings, map[string]interface{}{
+					"claim_val_regex": m.ClaimValRegex,
+					"team":            m.Team,
+				})
+			}
+			tm["oauth_claim_mappings"] = mappings
+
+			oauth["team_memberships"] = []interface{}{tm}
 		}
 
 		if currentOAuthRaw, ok := d.GetOk("oauth_settings"); ok {
@@ -573,7 +713,9 @@ func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
 			}
 		}
 
-		d.Set("oauth_settings", []interface{}{oauth})
+		_ = d.Set("oauth_settings", []interface{}{oauth})
+	} else {
+		_ = d.Set("oauth_settings", nil)
 	}
 
 	// ldap_settings
@@ -581,14 +723,13 @@ func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
 		ldap := map[string]interface{}{
 			"anonymous_mode":    result.LDAPSettings.AnonymousMode,
 			"auto_create_users": result.LDAPSettings.AutoCreateUsers,
-			"password":          result.LDAPSettings.Password,
 			"reader_dn":         result.LDAPSettings.ReaderDN,
 			"start_tls":         result.LDAPSettings.StartTLS,
 			"url":               result.LDAPSettings.URL,
 		}
 
 		if currentLDAP, ok := d.GetOk("ldap_settings"); ok {
-			if items := currentLDAP.([]interface{}); len(items) > 0 {
+			if items := currentLDAP.([]interface{}); len(items) > 0 && items[0] != nil {
 				if current := items[0].(map[string]interface{}); current != nil {
 					if pwRaw, ok := current["password"]; ok {
 						if pwStr, ok := pwRaw.(string); ok && pwStr != "" {
@@ -632,7 +773,9 @@ func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
 			}}
 		}
 
-		d.Set("ldap_settings", []interface{}{ldap})
+		_ = d.Set("ldap_settings", []interface{}{ldap})
+	} else {
+		_ = d.Set("ldap_settings", nil)
 	}
 
 	return nil
