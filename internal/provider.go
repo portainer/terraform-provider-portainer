@@ -63,6 +63,7 @@ func Provider() *schema.Provider {
 			"portainer_backup_s3":                               resourceBackupS3(),
 			"portainer_edge_group":                              resourceEdgeGroup(),
 			"portainer_edge_job":                                resourceEdgeJob(),
+			"portainer_init":                                    resourceInit(),
 			"portainer_auth":                                    resourceAuth(),
 			"portainer_edge_stack":                              resourceEdgeStack(),
 			"portainer_custom_template":                         resourceCustomTemplate(),
@@ -207,6 +208,7 @@ func (c *APIClient) DoMultipartRequest(method, url string, body *bytes.Buffer, h
 }
 
 // configureProvider sets up the API client and appends '/api' if missing from the endpoint.
+// configureProvider sets up the API client and appends '/api' if missing from the endpoint.
 func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
 	endpoint := d.Get("endpoint").(string)
 	apiKey := d.Get("api_key").(string)
@@ -214,7 +216,8 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	password := d.Get("api_password").(string)
 	skipSSL := d.Get("skip_ssl_verify").(bool)
 
-	if (apiKey == "" && (user == "" || password == "")) || (apiKey != "" && (user != "" || password != "")) {
+	// Only fail if BOTH auth methods are provided
+	if apiKey != "" && (user != "" || password != "") {
 		return nil, diag.Errorf("You must specify either 'api_key' or both 'api_user' and 'api_password', but not both.")
 	}
 
@@ -247,20 +250,40 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		payload, _ := json.Marshal(authBody)
 		resp, err := http_client.Post(endpoint+"/auth", "application/json", bytes.NewBuffer(payload))
 		if err != nil {
-			return nil, diag.FromErr(fmt.Errorf("failed to authenticate using username/password: %w", err))
+			// Don't fail - just log a warning and continue without auth
+			return client, diag.Diagnostics{
+				diag.Diagnostic{
+					Severity: diag.Warning,
+					Summary:  "Authentication attempt failed",
+					Detail:   fmt.Sprintf("Failed to authenticate with provided credentials. Resources requiring authentication will fail. Error: %v", err),
+				},
+			}
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			respBody, _ := io.ReadAll(resp.Body)
-			return nil, diag.Errorf("authentication failed: %s", string(respBody))
+			// Don't fail - just log a warning and continue without auth
+			return client, diag.Diagnostics{
+				diag.Diagnostic{
+					Severity: diag.Warning,
+					Summary:  "Authentication failed",
+					Detail:   fmt.Sprintf("Invalid credentials or admin user not initialized yet. Resources requiring authentication will fail. Response: %s", string(respBody)),
+				},
+			}
 		}
 
 		var authResp struct {
 			JWT string `json:"jwt"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-			return nil, diag.FromErr(fmt.Errorf("failed to parse authentication response: %w", err))
+			return client, diag.Diagnostics{
+				diag.Diagnostic{
+					Severity: diag.Warning,
+					Summary:  "Failed to parse authentication response",
+					Detail:   fmt.Sprintf("Could not parse auth response. Resources requiring authentication will fail. Error: %v", err),
+				},
+			}
 		}
 		client.JWTToken = authResp.JWT
 	}
