@@ -80,6 +80,7 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | Resource                                       | Status                                                                |
 |------------------------------------------------|-----------------------------------------------------------------------|
 | `portainer_auth`                               | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_user_admin`                         | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_backup`                             | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_backup_s3`                          | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_chat`                               | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |

@@ -53,6 +53,7 @@ func Provider() *schema.Provider {
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
+			"portainer_user_admin":                              resourceUserAdmin(),
 			"portainer_user":                                    resourceUser(),
 			"portainer_team":                                    resourceTeam(),
 			"portainer_environment":                             resourceEnvironment(),
