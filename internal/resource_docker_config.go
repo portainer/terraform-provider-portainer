@@ -40,7 +40,7 @@ func resourceDockerConfig() *schema.Resource {
 			"name": {
 				Type:     schema.TypeString,
 				Required: true,
-				ForceNew: true,
+				// ForceNew: true,
 			},
 			"data": {
 				Type:      schema.TypeString,
