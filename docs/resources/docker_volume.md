@@ -154,3 +154,4 @@ terraform destroy
 | Name | Description              |
 |------|--------------------------|
 | `id` | Unique identifier of the volume |
+| `resource_control_id` | ID of the automatically generated Portainer ResourceControl for this volume |

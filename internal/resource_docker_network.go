@@ -29,7 +29,7 @@ func resourceDockerNetwork() *schema.Resource {
 				if err != nil {
 					return nil, fmt.Errorf("invalid endpoint ID: %w", err)
 				}
-				d.Set("endpoint_id", endpointID)
+				_ = d.Set("endpoint_id", endpointID)
 				d.SetId(parts[1])
 				return []*schema.ResourceData{d}, nil
 			},
@@ -91,8 +91,22 @@ func resourceDockerNetwork() *schema.Resource {
 					},
 				},
 			},
+			"resource_control_id": {
+				Type:     schema.TypeInt,
+				Computed: true,
+			},
 		},
 	}
+}
+
+type dockerNetworkCreateResponse struct {
+	ID        string `json:"Id"`
+	Warning   string `json:"Warning"`
+	Portainer struct {
+		ResourceControl struct {
+			Id int `json:"Id"`
+		} `json:"ResourceControl"`
+	} `json:"Portainer"`
 }
 
 func resourceDockerNetworkCreate(d *schema.ResourceData, meta interface{}) error {
@@ -168,9 +182,7 @@ func resourceDockerNetworkCreate(d *schema.ResourceData, meta interface{}) error
 	}
 	payload["IPAM"] = ipam
 
-	var response struct {
-		ID string `json:"Id"`
-	}
+	var response dockerNetworkCreateResponse
 
 	headers := map[string]string{}
 	if nodeID, ok := d.GetOk("swarm_node_id"); ok && nodeID.(string) != "" {
@@ -190,10 +202,15 @@ func resourceDockerNetworkCreate(d *schema.ResourceData, meta interface{}) error
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return err
+		return fmt.Errorf("failed to decode docker network create response: %w", err)
 	}
 
 	d.SetId(response.ID)
+
+	if response.Portainer.ResourceControl.Id != 0 {
+		_ = d.Set("resource_control_id", response.Portainer.ResourceControl.Id)
+	}
+
 	return nil
 }
 
@@ -304,6 +321,11 @@ func resourceDockerNetworkRead(d *schema.ResourceData, meta interface{}) error {
 			Options map[string]string        `json:"Options"`
 			Config  []map[string]interface{} `json:"Config"`
 		} `json:"IPAM"`
+		Portainer struct {
+			ResourceControl struct {
+				Id int `json:"Id"`
+			} `json:"ResourceControl"`
+		} `json:"Portainer"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -387,6 +409,10 @@ func resourceDockerNetworkRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	_ = d.Set("ipam_config", result.IPAM.Config)
+
+	if result.Portainer.ResourceControl.Id != 0 {
+		_ = d.Set("resource_control_id", result.Portainer.ResourceControl.Id)
+	}
 
 	return nil
 }

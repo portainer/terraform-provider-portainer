@@ -215,8 +215,12 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	password := d.Get("api_password").(string)
 	skipSSL := d.Get("skip_ssl_verify").(bool)
 
-	if (apiKey == "" && (user == "" || password == "")) || (apiKey != "" && (user != "" || password != "")) {
-		return nil, diag.Errorf("You must specify either 'api_key' or both 'api_user' and 'api_password', but not both.")
+	if apiKey != "" && (user != "" || password != "") {
+		return nil, diag.Errorf("you must specify either 'api_key' or 'api_user'/'api_password', not both")
+	}
+
+	if (user == "" && password != "") || (user != "" && password == "") {
+		return nil, diag.Errorf("'api_user' and 'api_password' must be specified together")
 	}
 
 	transport := &http.Transport{

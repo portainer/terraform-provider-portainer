@@ -4,11 +4,6 @@ variable "portainer_url" {
   default     = "https://localhost:9443"
 }
 
-variable "portainer_api_key" {
-  description = "Default Portainer Admin API Key"
-  default     = "some-fake-api-token"
-}
-
 variable "portainer_skip_ssl_verify" {
   description = "Set to true to skip TLS certificate verification (useful for self-signed certs)"
   type        = bool
