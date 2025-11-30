@@ -13,7 +13,7 @@ func resourceDockerConfig() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDockerConfigCreate,
 		Read:   resourceDockerConfigRead,
-		Update: nil, // resourceDockerConfigUpdate,
+		Update: resourceDockerConfigUpdate,
 		Delete: resourceDockerConfigDelete,
 		Importer: &schema.ResourceImporter{
 			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
@@ -60,6 +60,10 @@ func resourceDockerConfig() *schema.Resource {
 				Elem:     &schema.Schema{Type: schema.TypeString},
 				ForceNew: true,
 			},
+			"resource_control_id": {
+				Type:     schema.TypeInt,
+				Computed: true,
+			},
 		},
 	}
 }
@@ -96,6 +100,15 @@ func findExistingDockerConfigByName(client *APIClient, endpointID int, name stri
 	return "", nil
 }
 
+type dockerConfigCreateResponse struct {
+	ID        string `json:"ID"`
+	Portainer struct {
+		ResourceControl struct {
+			Id int `json:"Id"`
+		} `json:"ResourceControl"`
+	} `json:"Portainer"`
+}
+
 func resourceDockerConfigCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
@@ -122,9 +135,7 @@ func resourceDockerConfigCreate(d *schema.ResourceData, meta interface{}) error 
 		}
 	}
 
-	var response struct {
-		ID string `json:"Id"`
-	}
+	var response dockerConfigCreateResponse
 
 	path := fmt.Sprintf("/endpoints/%d/docker/configs/create", endpointID)
 	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
@@ -143,6 +154,11 @@ func resourceDockerConfigCreate(d *schema.ResourceData, meta interface{}) error 
 	}
 
 	d.SetId(response.ID)
+
+	if response.Portainer.ResourceControl.Id != 0 {
+		_ = d.Set("resource_control_id", response.Portainer.ResourceControl.Id)
+	}
+
 	return nil
 }
 
@@ -174,6 +190,11 @@ func resourceDockerConfigRead(d *schema.ResourceData, meta interface{}) error {
 			Labels     map[string]string      `json:"Labels"`
 			Templating map[string]interface{} `json:"Templating"`
 		} `json:"Spec"`
+		Portainer struct {
+			ResourceControl struct {
+				Id int `json:"Id"`
+			} `json:"ResourceControl"`
+		} `json:"Portainer"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -195,6 +216,11 @@ func resourceDockerConfigRead(d *schema.ResourceData, meta interface{}) error {
 		}
 	}
 	_ = d.Set("templating", templ)
+
+	if result.Portainer.ResourceControl.Id != 0 {
+		_ = d.Set("resource_control_id", result.Portainer.ResourceControl.Id)
+	}
+
 	return nil
 }
 

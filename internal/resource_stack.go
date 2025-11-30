@@ -214,6 +214,10 @@ func resourcePortainerStack() *schema.Resource {
 				Default:     false,
 				Description: "Whether to prune unused services/networks during stack update (default: false)",
 			},
+			"resource_control_id": {
+				Type:     schema.TypeInt,
+				Computed: true,
+			},
 		},
 	}
 }
@@ -460,6 +464,12 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 		GitConfig *struct {
 			TLSSkipVerify bool `json:"tlsskipVerify"`
 		} `json:"gitConfig,omitempty"`
+
+		Portainer struct {
+			ResourceControl struct {
+				Id int `json:"Id"`
+			} `json:"ResourceControl"`
+		} `json:"Portainer"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
 		return fmt.Errorf("failed to decode stack response: %w", err)
@@ -469,6 +479,7 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	d.Set("swarm_id", stack.SwarmID)
 	d.Set("namespace", stack.Namespace)
 	d.Set("compose_format", stack.ComposeFmt)
+
 	var webhookToken string
 	if stack.AutoUpdate != nil && stack.AutoUpdate.Webhook != "" {
 		webhookToken = stack.AutoUpdate.Webhook
@@ -521,7 +532,8 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 
 		d.Set("stack_file_content", fileContent.StackFileContent)
 	}
-	// Convert stack.Env to []map[string]string for Terraform
+
+	// Env → Terraform
 	var tfEnvs []map[string]interface{}
 	for _, env := range stack.Env {
 		tfEnvs = append(tfEnvs, map[string]interface{}{
@@ -538,6 +550,10 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	}
 	if stack.AutoUpdate != nil {
 		_ = d.Set("pull_image", stack.AutoUpdate.ForcePullImage)
+	}
+
+	if stack.Portainer.ResourceControl.Id != 0 {
+		_ = d.Set("resource_control_id", stack.Portainer.ResourceControl.Id)
 	}
 
 	return nil

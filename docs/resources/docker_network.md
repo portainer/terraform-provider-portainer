@@ -100,4 +100,5 @@ terraform apply
 
 | Name | Description                                                   |
 |------|---------------------------------------------------------------|
-| `id` | ID of the created Docker network (as returned by Portainer)  |
+| `id` | ID of the created Docker network (as returned by Portainer)   |
+| `resource_control_id` | ID of the automatically generated Portainer ResourceControl for this network |

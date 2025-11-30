@@ -376,4 +376,4 @@ terraform apply
 | Name | Description                     |
 |------|---------------------------------|
 | `id` | ID of the created stack         |
-
+| `resource_control_id` | ID of the automatically generated Portainer ResourceControl for this stack |

@@ -52,3 +52,4 @@ Use `terraform destroy` to remove the config.
 | Name | Description              |
 |------|--------------------------|
 | `id` | ID of the created Docker config (from Portainer) |
+| `resource_control_id` | ID of the automatically generated Portainer ResourceControl for this config |

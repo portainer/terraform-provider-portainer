@@ -48,6 +48,19 @@ type CapacityRange struct {
 	LimitBytes    int64 `json:"LimitBytes,omitempty"`
 }
 
+type dockerVolumeCreateResponse struct {
+	Name       string            `json:"Name"`
+	Driver     string            `json:"Driver"`
+	Labels     map[string]string `json:"Labels"`
+	Options    map[string]string `json:"Options"`
+	Mountpoint string            `json:"Mountpoint"`
+	Portainer  struct {
+		ResourceControl struct {
+			Id int `json:"Id"`
+		} `json:"ResourceControl"`
+	} `json:"Portainer"`
+}
+
 func resourceDockerVolume() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDockerVolumeCreate,
@@ -138,8 +151,26 @@ func resourceDockerVolume() *schema.Resource {
 							MaxItems: 1,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
-									"requisite": {Type: schema.TypeList, Optional: true, Elem: &schema.Resource{Schema: map[string]*schema.Schema{"property1": {Type: schema.TypeString, Optional: true}, "property2": {Type: schema.TypeString, Optional: true}}}},
-									"preferred": {Type: schema.TypeList, Optional: true, Elem: &schema.Resource{Schema: map[string]*schema.Schema{"property1": {Type: schema.TypeString, Optional: true}, "property2": {Type: schema.TypeString, Optional: true}}}},
+									"requisite": {
+										Type:     schema.TypeList,
+										Optional: true,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"property1": {Type: schema.TypeString, Optional: true},
+												"property2": {Type: schema.TypeString, Optional: true},
+											},
+										},
+									},
+									"preferred": {
+										Type:     schema.TypeList,
+										Optional: true,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"property1": {Type: schema.TypeString, Optional: true},
+												"property2": {Type: schema.TypeString, Optional: true},
+											},
+										},
+									},
 								},
 							},
 						},
@@ -157,6 +188,10 @@ func resourceDockerVolume() *schema.Resource {
 						"availability": {Type: schema.TypeString, Optional: true},
 					},
 				},
+			},
+			"resource_control_id": {
+				Type:     schema.TypeInt,
+				Computed: true,
 			},
 		},
 	}
@@ -181,17 +216,35 @@ func resourceDockerVolumeCreate(d *schema.ResourceData, meta interface{}) error 
 
 	endpointID := d.Get("endpoint_id").(int)
 	path := fmt.Sprintf("/endpoints/%d/docker/volumes/create", endpointID)
+
+	var response dockerVolumeCreateResponse
+
 	resp, err := client.DoRequest(http.MethodPost, path, nil, volume)
 	if err != nil {
 		return fmt.Errorf("failed to create volume: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to create volume, status code: %d, body: %s", resp.StatusCode, string(body))
 	}
-	d.SetId(fmt.Sprintf("%d-%s", endpointID, volume.Name))
+
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return fmt.Errorf("failed to decode create volume response: %w", err)
+	}
+
+	name := response.Name
+	if name == "" {
+		name = volume.Name
+	}
+
+	d.SetId(fmt.Sprintf("%d-%s", endpointID, name))
+
+	if response.Portainer.ResourceControl.Id != 0 {
+		_ = d.Set("resource_control_id", response.Portainer.ResourceControl.Id)
+	}
+
 	return nil
 }
 
@@ -221,17 +274,28 @@ func resourceDockerVolumeRead(d *schema.ResourceData, meta interface{}) error {
 		Labels     map[string]string `json:"Labels"`
 		Options    map[string]string `json:"Options"`
 		Mountpoint string            `json:"Mountpoint"`
+		Portainer  struct {
+			ResourceControl struct {
+				Id int `json:"Id"`
+			} `json:"ResourceControl"`
+		} `json:"Portainer"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return fmt.Errorf("failed to decode volume: %w", err)
 	}
 
-	d.Set("name", result.Name)
-	d.Set("driver", result.Driver)
-	d.Set("labels", result.Labels)
-	d.Set("driver_opts", result.Options)
-	d.SetId(fmt.Sprintf("%d-%s", endpointID, name))
+	_ = d.Set("name", result.Name)
+	_ = d.Set("driver", result.Driver)
+	_ = d.Set("labels", result.Labels)
+	_ = d.Set("driver_opts", result.Options)
+
+	d.SetId(fmt.Sprintf("%d-%s", endpointID, result.Name))
+
+	if result.Portainer.ResourceControl.Id != 0 {
+		_ = d.Set("resource_control_id", result.Portainer.ResourceControl.Id)
+	}
+
 	return nil
 }
 
@@ -248,7 +312,7 @@ func resourceDockerVolumeDelete(d *schema.ResourceData, meta interface{}) error 
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= 400 && resp.StatusCode != 404 {
 		return fmt.Errorf("failed to delete volume, status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
