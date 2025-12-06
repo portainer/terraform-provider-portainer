@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -225,7 +226,12 @@ func resourceResourceControlDelete(d *schema.ResourceData, meta interface{}) err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 && resp.StatusCode != 404 {
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusForbidden {
+		d.SetId("")
+		return nil
+	}
+
+	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to delete resource control: %s", string(data))
 	}

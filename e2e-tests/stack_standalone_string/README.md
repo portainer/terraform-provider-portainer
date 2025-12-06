@@ -5,13 +5,14 @@
 
 | Name | Version |
 |------|---------|
-| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | n/a |
+| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | 0.1.0 |
 
 ## Resources
 
 | Name | Type |
 |------|------|
-| [portainer_stack.standalone_string](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/stack) | resource |
+| portainer_resource_control.standalone_string_rc | resource |
+| portainer_stack.standalone_string | resource |
 
 ## Inputs
 
@@ -27,4 +28,10 @@
 | <a name="input_stack_file_content"></a> [stack\_file\_content](#input\_stack\_file\_content) | Inline Docker Compose file content | `string` | `"version: \"3\"\nservices:\n  web:\n    image: nginx\n"` | no |
 | <a name="input_stack_method"></a> [stack\_method](#input\_stack\_method) | Creation method: string, file, repository, or url | `string` | `"string"` | no |
 | <a name="input_stack_name"></a> [stack\_name](#input\_stack\_name) | Name of the stack | `string` | `"nginx-standalone-string"` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| <a name="output_stack_resource_control_id"></a> [stack\_resource\_control\_id](#output\_stack\_resource\_control\_id) | ResourceControl ID of docker stack |
 <!-- END_TF_DOCS -->
