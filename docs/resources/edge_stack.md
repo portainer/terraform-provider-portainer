@@ -126,6 +126,7 @@ terraform apply
 | `force_update`              | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                         |
 | `pull_image`                | bool   | 🚫 optional | Pull latest image during update (default: `false`)                   |
 | `relative_path`             | string | 🚫 optional | Enables relative path volumes (from Compose) and sets the `filesystemPath` |
+| `repository_git_credential_id` | int | 🚫 optional | ID of the Git credentials to use (replaces username/password) |
 
 ## 🧮 Computed Outputs
 | Name          | Description                     |

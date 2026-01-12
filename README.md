@@ -203,7 +203,32 @@ See our [examples](./docs/resources/) per resources in docs.
 
 
 
-### 🐳 Podman Support via Docker Resources
+## 📊 Supported Data Sources
+| Data Source                   | Documentation                                                     | Example                                           | Status | E2E Tests |
+|------------------------------|-------------------------------------------------------------------|---------------------------------------------------|--------|-----------|
+| `portainer_user`              | [user.md](docs/data-sources/user.md)                             | [user resource](docs/resources/user.md)      | ✅     | ✅        |
+| `portainer_team`              | [team.md](docs/data-sources/team.md)                             | [team resource](docs/resources/team.md)      | ✅     | ✅        |
+| `portainer_environment`       | [environment.md](docs/data-sources/environment.md)               | [env resource](docs/resources/environment.md)| ✅     | ❌        |
+| `portainer_endpoint_group`    | [endpoint_group.md](docs/data-sources/endpoint_group.md)         | [group docs](docs/data-sources/endpoint_group.md) | ✅     | ❌        |
+| `portainer_tag`               | [tag.md](docs/data-sources/tag.md)                               | [tag resource](docs/resources/tag.md)        | ✅     | ❌        |
+| `portainer_registry`          | [registry.md](docs/data-sources/registry.md)                     | [registry resource](docs/resources/registry.md) | ✅     | ✅        |
+| `portainer_stack`             | [stack.md](docs/data-sources/stack.md)                           | [stack resource](docs/resources/stack.md)    | ✅     | ❌        |
+| `portainer_edge_group`        | [edge_group.md](docs/data-sources/edge_group.md)                 | [eg docs](docs/data-sources/edge_group.md)   | ✅     | ❌        |
+| `portainer_custom_template`   | [custom_template.md](docs/data-sources/custom_template.md)       | [ct docs](docs/data-sources/custom_template.md) | ✅     | ❌        |
+| `portainer_cloud_credentials` | [cloud_credentials.md](docs/data-sources/cloud_credentials.md)   | [cc docs](docs/data-sources/cloud_credentials.md) | ✅     | ❌        |
+| `portainer_edge_stack`        | [edge_stack.md](docs/data-sources/edge_stack.md)                 | [es docs](docs/data-sources/edge_stack.md)   | ✅     | ❌        |
+| `portainer_edge_job`          | [edge_job.md](docs/data-sources/edge_job.md)                     | [ej docs](docs/data-sources/edge_job.md)     | ✅     | ❌        |
+| `portainer_edge_configuration`| [edge_configuration.md](docs/data-sources/edge_configuration.md) | [ec docs](docs/data-sources/edge_configuration.md) | ✅     | ❌        |
+| `portainer_webhook`           | [webhook.md](docs/data-sources/webhook.md)                       | [wh docs](docs/data-sources/webhook.md)      | ✅     | ❌        |
+| `portainer_docker_network`    | [docker_network.md](docs/data-sources/docker_network.md)         | [dn docs](docs/data-sources/docker_network.md) | ✅     | ✅        |
+| `portainer_docker_volume`     | [docker_volume.md](docs/data-sources/docker_volume.md)           | [dv docs](docs/data-sources/docker_volume.md) | ✅     | ❌        |
+| `portainer_docker_config`     | [docker_config.md](docs/data-sources/docker_config.md)           | [dc docs](docs/data-sources/docker_config.md) | ✅     | ❌        |
+| `portainer_docker_secret`     | [docker_secret.md](docs/data-sources/docker_secret.md)           | [ds docs](docs/data-sources/docker_secret.md) | ✅     | ❌        |
+| `portainer_docker_image`      | [docker_image.md](docs/data-sources/docker_image.md)             | [di docs](docs/data-sources/docker_image.md) | ✅     | ❌        |
+| `portainer_docker_node`       | [docker_node.md](docs/data-sources/docker_node.md)               | [dnode docs](docs/data-sources/docker_node.md) | ✅     | ❌        |
+ 
+ 
+ ### 🐳 Podman Support via Docker Resources
 
 [Podman is compatible with the Docker API](https://docs.podman.io/en/latest/_static/api.html), which means you can use existing `portainer_docker_*` resources with Podman – **no special `portainer_podman_*` resources are needed**.
 

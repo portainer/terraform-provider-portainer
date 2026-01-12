@@ -214,9 +214,20 @@ func resourcePortainerStack() *schema.Resource {
 				Default:     false,
 				Description: "Whether to prune unused services/networks during stack update (default: false)",
 			},
+			"repository_git_credential_id": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "ID of the Git credentials to use for authentication.",
+			},
 			"resource_control_id": {
 				Type:     schema.TypeInt,
 				Computed: true,
+			},
+			"registries": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "List of registry IDs allowed for this stack.",
+				Elem:        &schema.Schema{Type: schema.TypeInt},
 			},
 		},
 	}
@@ -226,6 +237,14 @@ func expandStringList(rawList []interface{}) []string {
 	result := make([]string, len(rawList))
 	for i, v := range rawList {
 		result[i] = v.(string)
+	}
+	return result
+}
+
+func expandIntList(rawList []interface{}) []int {
+	result := make([]int, len(rawList))
+	for i, v := range rawList {
+		result[i] = v.(int)
 	}
 	return result
 }
@@ -364,6 +383,7 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 			"stackFileContent": d.Get("stack_file_content").(string),
 			"prune":            d.Get("prune").(bool),
 			"pullImage":        d.Get("pull_image").(bool),
+			"registries":       expandIntList(d.Get("registries").([]interface{})),
 		}
 		if webhookToken != "" {
 			payload["webhook"] = webhookToken
@@ -456,13 +476,17 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 			Name  string `json:"name"`
 			Value string `json:"value"`
 		} `json:"Env"`
+		Registries []int `json:"Registries"`
 
 		Option struct {
 			Prune bool `json:"prune"`
 		} `json:"Option"`
 
 		GitConfig *struct {
-			TLSSkipVerify bool `json:"tlsskipVerify"`
+			TLSSkipVerify  bool `json:"tlsskipVerify"`
+			Authentication struct {
+				GitCredentialID int `json:"GitCredentialID"`
+			} `json:"Authentication"`
 		} `json:"gitConfig,omitempty"`
 
 		Portainer struct {
@@ -547,6 +571,7 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	_ = d.Set("support_relative_path", stack.SupportRelativePath)
 	if method == "repository" && stack.GitConfig != nil {
 		_ = d.Set("tlsskip_verify", stack.GitConfig.TLSSkipVerify)
+		_ = d.Set("repository_git_credential_id", stack.GitConfig.Authentication.GitCredentialID)
 	}
 	if stack.AutoUpdate != nil {
 		_ = d.Set("pull_image", stack.AutoUpdate.ForcePullImage)
@@ -648,9 +673,10 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			"repositoryUsername":        d.Get("repository_username").(string),
 			"repositoryPassword":        d.Get("repository_password").(string),
 			"repositoryReferenceName":   d.Get("repository_reference_name").(string),
-			"repositoryGitCredentialID": 0,
+			"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
 			"tlsskipVerify":             d.Get("tlsskip_verify").(bool),
 			"additionalFiles":           expandStringList(d.Get("additional_files").([]interface{})),
+			"registries":                expandIntList(d.Get("registries").([]interface{})),
 		}
 
 		if v, ok := d.GetOk("filesystem_path"); ok {
@@ -670,6 +696,7 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 				"webhook":        webhookID,
 			}
 			payload["autoUpdate"] = autoUpdate
+			payload["registries"] = expandIntList(d.Get("registries").([]interface{}))
 			_ = d.Set("webhook_id", webhookID)
 
 			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
@@ -708,15 +735,17 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		}
 
 		redeployPayload := map[string]interface{}{
-			"env":                      flattenEnvList(d.Get("env").([]interface{})),
-			"prune":                    d.Get("prune").(bool),
-			"pullImage":                d.Get("pull_image").(bool),
-			"repositoryAuthentication": d.Get("git_repository_authentication").(bool),
-			"repositoryUsername":       d.Get("repository_username").(string),
-			"repositoryPassword":       d.Get("repository_password").(string),
-			"repositoryReferenceName":  d.Get("repository_reference_name").(string),
-			"stackName":                d.Get("name").(string),
-			"additionalFiles":          expandStringList(d.Get("additional_files").([]interface{})),
+			"env":                       flattenEnvList(d.Get("env").([]interface{})),
+			"prune":                     d.Get("prune").(bool),
+			"pullImage":                 d.Get("pull_image").(bool),
+			"repositoryAuthentication":  d.Get("git_repository_authentication").(bool),
+			"repositoryUsername":        d.Get("repository_username").(string),
+			"repositoryPassword":        d.Get("repository_password").(string),
+			"repositoryReferenceName":   d.Get("repository_reference_name").(string),
+			"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
+			"stackName":                 d.Get("name").(string),
+			"additionalFiles":           expandStringList(d.Get("additional_files").([]interface{})),
+			"registries":                expandIntList(d.Get("registries").([]interface{})),
 		}
 
 		redeployBody, err := json.Marshal(redeployPayload)
@@ -804,6 +833,7 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			"prune":            d.Get("prune").(bool),
 			"pullImage":        d.Get("pull_image").(bool),
 			"webhook":          webhookToken,
+			"registries":       expandIntList(d.Get("registries").([]interface{})),
 		}
 
 		jsonBody, err := json.Marshal(payload)
@@ -879,6 +909,7 @@ func createStackStandaloneString(d *schema.ResourceData, client *APIClient) erro
 		"stackFileContent": d.Get("stack_file_content").(string),
 		"env":              flattenEnvList(d.Get("env").([]interface{})),
 		"fromAppTemplate":  false,
+		"registries":       expandIntList(d.Get("registries").([]interface{})),
 	}
 	endpointID := d.Get("endpoint_id").(int)
 	url := fmt.Sprintf("%s/stacks/create/standalone/string?endpointId=%d", client.Endpoint, endpointID)
@@ -930,18 +961,19 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 	}
 
 	payload := map[string]interface{}{
-		"name":                     d.Get("name").(string),
-		"composeFile":              d.Get("file_path_in_repository").(string),
-		"repositoryURL":            repoURL,
-		"repositoryUsername":       repoUser,
-		"repositoryPassword":       repoPass,
-		"repositoryReferenceName":  d.Get("repository_reference_name").(string),
-		"repositoryAuthentication": d.Get("git_repository_authentication").(bool),
-		"supportRelativePath":      d.Get("support_relative_path").(bool),
-		"env":                      flattenEnvList(d.Get("env").([]interface{})),
-		"fromAppTemplate":          false,
-		"tlsskipVerify":            d.Get("tlsskip_verify").(bool),
-		"additionalFiles":          expandStringList(d.Get("additional_files").([]interface{})),
+		"name":                      d.Get("name").(string),
+		"composeFile":               d.Get("file_path_in_repository").(string),
+		"repositoryURL":             repoURL,
+		"repositoryUsername":        repoUser,
+		"repositoryPassword":        repoPass,
+		"repositoryReferenceName":   d.Get("repository_reference_name").(string),
+		"repositoryAuthentication":  d.Get("git_repository_authentication").(bool),
+		"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
+		"supportRelativePath":       d.Get("support_relative_path").(bool),
+		"env":                       flattenEnvList(d.Get("env").([]interface{})),
+		"fromAppTemplate":           false,
+		"tlsskipVerify":             d.Get("tlsskip_verify").(bool),
+		"additionalFiles":           expandStringList(d.Get("additional_files").([]interface{})),
 	}
 
 	if v, ok := d.GetOk("filesystem_path"); ok {
@@ -964,6 +996,7 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 		d.Set("webhook_url", webhookURL)
 	}
 
+	payload["registries"] = expandIntList(d.Get("registries").([]interface{}))
 	endpointID := d.Get("endpoint_id").(int)
 	url := fmt.Sprintf("%s/stacks/create/standalone/repository?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)
@@ -1005,6 +1038,7 @@ func createStackSwarmString(d *schema.ResourceData, client *APIClient) error {
 		"env":              flattenEnvList(d.Get("env").([]interface{})),
 		"fromAppTemplate":  false,
 		"swarmID":          d.Get("swarm_id").(string),
+		"registries":       expandIntList(d.Get("registries").([]interface{})),
 	}
 	endpointID := d.Get("endpoint_id").(int)
 	url := fmt.Sprintf("%s/stacks/create/swarm/string?endpointId=%d", client.Endpoint, endpointID)
@@ -1055,19 +1089,20 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 		}
 	}
 	payload := map[string]interface{}{
-		"name":                     d.Get("name").(string),
-		"composeFile":              d.Get("file_path_in_repository").(string),
-		"repositoryURL":            repoURL,
-		"repositoryUsername":       repoUser,
-		"repositoryPassword":       repoPass,
-		"repositoryReferenceName":  d.Get("repository_reference_name").(string),
-		"repositoryAuthentication": d.Get("git_repository_authentication").(bool),
-		"supportRelativePath":      d.Get("support_relative_path").(bool),
-		"env":                      flattenEnvList(d.Get("env").([]interface{})),
-		"fromAppTemplate":          false,
-		"tlsskipVerify":            d.Get("tlsskip_verify").(bool),
-		"swarmID":                  d.Get("swarm_id").(string),
-		"additionalFiles":          expandStringList(d.Get("additional_files").([]interface{})),
+		"name":                      d.Get("name").(string),
+		"composeFile":               d.Get("file_path_in_repository").(string),
+		"repositoryURL":             repoURL,
+		"repositoryUsername":        repoUser,
+		"repositoryPassword":        repoPass,
+		"repositoryReferenceName":   d.Get("repository_reference_name").(string),
+		"repositoryAuthentication":  d.Get("git_repository_authentication").(bool),
+		"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
+		"supportRelativePath":       d.Get("support_relative_path").(bool),
+		"env":                       flattenEnvList(d.Get("env").([]interface{})),
+		"fromAppTemplate":           false,
+		"tlsskipVerify":             d.Get("tlsskip_verify").(bool),
+		"swarmID":                   d.Get("swarm_id").(string),
+		"additionalFiles":           expandStringList(d.Get("additional_files").([]interface{})),
 	}
 
 	if v, ok := d.GetOk("filesystem_path"); ok {
@@ -1090,6 +1125,7 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 		d.Set("webhook_url", webhookURL)
 	}
 
+	payload["registries"] = expandIntList(d.Get("registries").([]interface{}))
 	endpointID := d.Get("endpoint_id").(int)
 	url := fmt.Sprintf("%s/stacks/create/swarm/repository?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)
@@ -1141,6 +1177,7 @@ func createStackK8sString(d *schema.ResourceData, client *APIClient) error {
 		"namespace":        d.Get("namespace").(string),
 		"composeFormat":    d.Get("compose_format").(bool),
 		"fromAppTemplate":  false,
+		"registries":       expandIntList(d.Get("registries").([]interface{})),
 	}
 	endpointID := d.Get("endpoint_id").(int)
 	url := fmt.Sprintf("%s/stacks/create/kubernetes/string?endpointId=%d", client.Endpoint, endpointID)
@@ -1191,18 +1228,19 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 		}
 	}
 	payload := map[string]interface{}{
-		"stackName":                d.Get("name").(string),
-		"manifestFile":             d.Get("file_path_in_repository").(string),
-		"namespace":                d.Get("namespace").(string),
-		"composeFormat":            d.Get("compose_format").(bool),
-		"repositoryURL":            repoURL,
-		"repositoryUsername":       repoUser,
-		"repositoryPassword":       repoPass,
-		"repositoryReferenceName":  d.Get("repository_reference_name").(string),
-		"repositoryAuthentication": d.Get("git_repository_authentication").(bool),
-		"tlsskipVerify":            d.Get("tlsskip_verify").(bool),
-		"fromAppTemplate":          false,
-		"additionalFiles":          expandStringList(d.Get("additional_files").([]interface{})),
+		"stackName":                 d.Get("name").(string),
+		"manifestFile":              d.Get("file_path_in_repository").(string),
+		"namespace":                 d.Get("namespace").(string),
+		"composeFormat":             d.Get("compose_format").(bool),
+		"repositoryURL":             repoURL,
+		"repositoryUsername":        repoUser,
+		"repositoryPassword":        repoPass,
+		"repositoryReferenceName":   d.Get("repository_reference_name").(string),
+		"repositoryAuthentication":  d.Get("git_repository_authentication").(bool),
+		"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
+		"tlsskipVerify":             d.Get("tlsskip_verify").(bool),
+		"fromAppTemplate":           false,
+		"additionalFiles":           expandStringList(d.Get("additional_files").([]interface{})),
 	}
 
 	stackWebhook := d.Get("stack_webhook").(bool)
@@ -1221,6 +1259,7 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 		d.Set("webhook_url", webhookURL)
 	}
 
+	payload["registries"] = expandIntList(d.Get("registries").([]interface{}))
 	endpointID := d.Get("endpoint_id").(int)
 	url := fmt.Sprintf("%s/stacks/create/kubernetes/repository?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)
@@ -1259,6 +1298,7 @@ func createStackK8sURL(d *schema.ResourceData, client *APIClient) error {
 		"manifestURL":   d.Get("manifest_url").(string),
 		"namespace":     d.Get("namespace").(string),
 		"composeFormat": d.Get("compose_format").(bool),
+		"registries":    expandIntList(d.Get("registries").([]interface{})),
 	}
 	endpointID := d.Get("endpoint_id").(int)
 	url := fmt.Sprintf("%s/stacks/create/kubernetes/url?endpointId=%d", client.Endpoint, endpointID)

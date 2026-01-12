@@ -154,6 +154,31 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_user`                               | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_webhook`                            | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_webhook_execute`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_kubernetes_namespace_access`        | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+
+## 📊 Supported Data Sources
+| Data Source                   | Status                                                        |
+|------------------------------|---------------------------------------------------------------|
+| `portainer_user`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_team`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_environment`       | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_endpoint_group`    | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_tag`               | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_registry`          | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_stack`             | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_edge_group`        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_custom_template`   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_cloud_credentials` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_edge_stack`        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_edge_job`          | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_edge_configuration`| ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_webhook`           | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_docker_network`    | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_docker_volume`     | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_docker_config`     | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_docker_secret`     | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_docker_image`      | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_docker_node`       | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 
 
 ### 🐳 Podman Support via Docker Resources

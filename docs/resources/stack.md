@@ -107,6 +107,36 @@ resource "portainer_stack" "standalone_repo_ephemeral" {
 }
 ```
 
+### Deploy with Specific Registries
+```hcl
+resource "portainer_stack" "app_with_registries" {
+  name               = "app-with-custom-registries"
+  deployment_type    = "standalone"
+  method             = "string"
+  endpoint_id        = 1
+  stack_file_content = file("./docker-compose.yml")
+
+  # List of Portainer registry IDs allowed for this stack
+  registries = [12, 15]
+}
+```
+
+### Deploy from Git Repository using existing Credentials
+```hcl
+resource "portainer_stack" "repo_with_creds" {
+  name                      = "repo-with-existing-creds"
+  deployment_type           = "standalone"
+  method                    = "repository"
+  endpoint_id               = 1
+  repository_url            = "https://github.com/example/private-repo"
+  repository_reference_name = "refs/heads/main"
+  file_path_in_repository   = "docker-compose.yml"
+
+  # Reference existing Git credentials by ID instead of providing username/password
+  repository_git_credential_id = 5
+}
+```
+
 ### Deploy Swarm Stack from String
 ```hcl
 resource "portainer_stack" "swarm_string" {
@@ -286,6 +316,7 @@ terraform apply
 | `env`             | list(object) | 🚫 optional | List of environment variables (`name`, `value`)                      |
 | `prune`           | bool         | 🚫 optional | Remove services no longer in stack definition (default: `false`)     |
 | `pull_image`      | bool         | 🚫 optional | Pull latest image during update (default: `false`)                   |
+| `registries`      | list(int)    | 🚫 optional | List of registry IDs allowed for this stack                          |
 
 ---
 ### 🐳 Docker Stack (standalone/swarm)
@@ -319,6 +350,7 @@ terraform apply
 | `support_relative_path`             | bool   | 🚫 optional | Enable resolving of relative paths (default: `false`)                                                   |
 | `filesystem_path`                   | string | 🚫 optional | Base path on disk to resolve relative paths from                                                        |
 | `additional_files`                  | string | 🚫 optional | List of additional Compose/YAML file paths                                                              |
+| `repository_git_credential_id`      | int    | 🚫 optional | ID of the Git credentials to use (replaces username/password)                                           |
 
 #### Extra for `swarm`
 | Name       | Type   | Required    | Description                  |
