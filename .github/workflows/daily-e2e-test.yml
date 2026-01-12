@@ -13,6 +13,12 @@ jobs:
       - name: ⬇️ Checkout code
         uses: actions/checkout@v4
 
+      - name: ⚙️ Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
       - name: 🐳 Start Portainer via Docker Compose
         run: make up
 

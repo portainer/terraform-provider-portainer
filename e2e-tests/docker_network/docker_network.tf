@@ -13,3 +13,12 @@ resource "portainer_docker_network" "test_bridge" {
   options = var.network_options
   labels  = var.network_labels
 }
+
+data "portainer_docker_network" "test_lookup" {
+  endpoint_id = var.endpoint_id
+  name        = portainer_docker_network.test_bridge.name
+}
+
+output "found_network_id" {
+  value = data.portainer_docker_network.test_lookup.id
+}

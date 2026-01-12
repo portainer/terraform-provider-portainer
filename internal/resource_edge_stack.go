@@ -152,6 +152,11 @@ func resourceEdgeStack() *schema.Resource {
 				Default:     "",
 				ForceNew:    true,
 			},
+			"repository_git_credential_id": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "ID of the Git credentials to use for authentication.",
+			},
 		},
 	}
 }
@@ -323,17 +328,18 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 	if repoURLRaw, ok := d.GetOk("repository_url"); ok {
 		repoURL := repoURLRaw.(string)
 		payload := map[string]interface{}{
-			"name":                     name,
-			"deploymentType":           deployType,
-			"edgeGroups":               edgeGroups,
-			"repositoryURL":            repoURL,
-			"repositoryAuthentication": d.Get("git_repository_authentication").(bool),
-			"repositoryUsername":       d.Get("repository_username").(string),
-			"repositoryPassword":       d.Get("repository_password").(string),
-			"repositoryReferenceName":  d.Get("repository_reference_name").(string),
-			"filePathInRepository":     d.Get("file_path_in_repository").(string),
-			"useManifestNamespaces":    useManifest,
-			"registries":               registries,
+			"name":                      name,
+			"deploymentType":            deployType,
+			"edgeGroups":                edgeGroups,
+			"repositoryURL":             repoURL,
+			"repositoryAuthentication":  d.Get("git_repository_authentication").(bool),
+			"repositoryUsername":        d.Get("repository_username").(string),
+			"repositoryPassword":        d.Get("repository_password").(string),
+			"repositoryReferenceName":   d.Get("repository_reference_name").(string),
+			"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
+			"filePathInRepository":      d.Get("file_path_in_repository").(string),
+			"useManifestNamespaces":     useManifest,
+			"registries":                registries,
 		}
 
 		if relPath, ok := d.GetOk("relative_path"); ok && relPath.(string) != "" {
@@ -440,9 +446,10 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 		}
 
 		if d.Get("git_repository_authentication").(bool) {
-			payload["authentication"] = map[string]string{
-				"username": d.Get("repository_username").(string),
-				"password": d.Get("repository_password").(string),
+			payload["authentication"] = map[string]interface{}{
+				"username":        d.Get("repository_username").(string),
+				"password":        d.Get("repository_password").(string),
+				"gitCredentialID": d.Get("repository_git_credential_id").(int),
 			}
 		}
 
@@ -566,6 +573,11 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 			Name  string `json:"name"`
 			Value string `json:"value"`
 		} `json:"envVars"`
+		GitConfig *struct {
+			Authentication struct {
+				GitCredentialID int `json:"GitCredentialID"`
+			} `json:"Authentication"`
+		} `json:"GitConfig"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
@@ -579,6 +591,10 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 	}
 	if len(envMap) > 0 {
 		d.Set("environment", envMap)
+	}
+
+	if stack.GitConfig != nil {
+		d.Set("repository_git_credential_id", stack.GitConfig.Authentication.GitCredentialID)
 	}
 
 	return nil

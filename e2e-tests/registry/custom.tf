@@ -15,3 +15,11 @@ resource "portainer_registry" "custom_auth" {
   username       = var.custom_auth_username
   password       = var.custom_auth_password
 }
+
+data "portainer_registry" "test_lookup" {
+  name = portainer_registry.custom.name
+}
+
+output "found_registry_id" {
+  value = data.portainer_registry.test_lookup.id
+}
