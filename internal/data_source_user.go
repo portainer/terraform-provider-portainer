@@ -1,12 +1,11 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/users"
 )
 
 func dataSourceUser() *schema.Resource {
@@ -30,29 +29,15 @@ func dataSourceUserRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	username := d.Get("username").(string)
 
-	resp, err := client.DoRequest("GET", "/users", nil, nil)
+	params := users.NewUserListParams()
+	resp, err := client.Client.Users.UserList(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to list users: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list users, status %d: %s", resp.StatusCode, string(data))
-	}
-
-	var users []struct {
-		ID       int    `json:"Id"`
-		Username string `json:"Username"`
-		Role     int    `json:"Role"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
-		return fmt.Errorf("failed to decode user list: %w", err)
-	}
-
-	for _, u := range users {
+	for _, u := range resp.Payload {
 		if u.Username == username {
-			d.SetId(strconv.Itoa(u.ID))
+			d.SetId(strconv.FormatInt(u.ID, 10))
 			d.Set("role", u.Role)
 			return nil
 		}

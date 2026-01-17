@@ -1,12 +1,12 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/teams"
+	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceTeam() *schema.Resource {
@@ -34,117 +34,70 @@ func resourceTeamCreate(d *schema.ResourceData, meta interface{}) error {
 	teamName := d.Get("name").(string)
 
 	// Check if team already exists
-	resp, err := client.DoRequest("GET", "/teams", nil, nil)
+	paramsList := teams.NewTeamListParams()
+	respList, err := client.Client.Teams.TeamList(paramsList, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to list teams: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list teams, status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var teams []struct {
-		ID   int    `json:"Id"`
-		Name string `json:"Name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&teams); err != nil {
-		return fmt.Errorf("failed to decode team list: %w", err)
-	}
-
-	for _, t := range teams {
+	for _, t := range respList.Payload {
 		if t.Name == teamName {
 			// Team already exists, perform update
-			d.SetId(strconv.Itoa(t.ID))
+			d.SetId(strconv.FormatInt(t.ID, 10))
 
-			body := map[string]interface{}{
-				"name": teamName,
-			}
-			updateResp, err := client.DoRequest("PUT", fmt.Sprintf("/teams/%d", t.ID), nil, body)
-			if err != nil {
-				return fmt.Errorf("failed to update existing team: %w", err)
-			}
-			defer updateResp.Body.Close()
-
-			if updateResp.StatusCode != 200 && updateResp.StatusCode != 204 {
-				data, _ := io.ReadAll(updateResp.Body)
-				return fmt.Errorf("failed to update existing team: %s", string(data))
-			}
-
-			return resourceTeamRead(d, meta)
+			return resourceTeamUpdate(d, meta)
 		}
 	}
 
 	// Team not found, create new
-	body := map[string]interface{}{
-		"Name": teamName,
+	paramsCreate := teams.NewTeamCreateParams()
+	paramsCreate.Body = &models.TeamsTeamCreatePayload{
+		Name: &teamName,
 	}
-	createResp, err := client.DoRequest("POST", "/teams", nil, body)
+
+	respCreate, err := client.Client.Teams.TeamCreate(paramsCreate, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer createResp.Body.Close()
-
-	if createResp.StatusCode < 200 || createResp.StatusCode >= 300 {
-		data, _ := io.ReadAll(createResp.Body)
-		return fmt.Errorf("failed to create team: %s", string(data))
+		return fmt.Errorf("failed to create team: %w", err)
 	}
 
-	var result struct {
-		ID int `json:"Id"`
-	}
-	if err := json.NewDecoder(createResp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	d.SetId(strconv.Itoa(result.ID))
+	d.SetId(strconv.FormatInt(respCreate.Payload.ID, 10))
 	return resourceTeamRead(d, meta)
 }
 
 func resourceTeamRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	resp, err := client.DoRequest("GET", fmt.Sprintf("/teams/%s", d.Id()), nil, nil)
+	params := teams.NewTeamInspectParams()
+	params.ID = id
+
+	resp, err := client.Client.Teams.TeamInspect(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 {
-		d.SetId("")
-		return nil
-	} else if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to read team: status %d", resp.StatusCode)
+		if _, ok := err.(*teams.TeamInspectNotFound); ok {
+			d.SetId("")
+			return nil
+		}
+		return fmt.Errorf("failed to read team: %w", err)
 	}
 
-	var result struct {
-		Name string `json:"Name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	d.Set("name", result.Name)
+	d.Set("name", resp.Payload.Name)
 	return nil
 }
 
 func resourceTeamUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
+	name := d.Get("name").(string)
 
-	body := map[string]interface{}{
-		"name": d.Get("name").(string),
+	params := teams.NewTeamUpdateParams()
+	params.ID = id
+	params.Body = &models.TeamsTeamUpdatePayload{
+		Name: name,
 	}
 
-	resp, err := client.DoRequest("PUT", fmt.Sprintf("/teams/%s", d.Id()), nil, body)
+	_, err := client.Client.Teams.TeamUpdate(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 && resp.StatusCode != 204 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update team: %s", string(data))
+		return fmt.Errorf("failed to update team: %w", err)
 	}
 
 	return resourceTeamRead(d, meta)
@@ -152,17 +105,18 @@ func resourceTeamUpdate(d *schema.ResourceData, meta interface{}) error {
 
 func resourceTeamDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	resp, err := client.DoRequest("DELETE", fmt.Sprintf("/teams/%s", d.Id()), nil, nil)
+	params := teams.NewTeamDeleteParams()
+	params.ID = id
+
+	_, err := client.Client.Teams.TeamDelete(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 || resp.StatusCode == 204 {
-		return nil
+		if _, ok := err.(*teams.TeamDeleteNotFound); ok {
+			return nil
+		}
+		return fmt.Errorf("failed to delete team: %w", err)
 	}
 
-	data, _ := io.ReadAll(resp.Body)
-	return fmt.Errorf("failed to delete team: %s", string(data))
+	return nil
 }

@@ -1,12 +1,11 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/tags"
 )
 
 func dataSourceTag() *schema.Resource {
@@ -26,28 +25,15 @@ func dataSourceTagRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	resp, err := client.DoRequest("GET", "/tags", nil, nil)
+	params := tags.NewTagListParams()
+	resp, err := client.Client.Tags.TagList(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to list tags: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list tags, status %d: %s", resp.StatusCode, string(data))
-	}
-
-	var tags []struct {
-		ID   int    `json:"Id"`
-		Name string `json:"Name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
-		return fmt.Errorf("failed to decode tag list: %w", err)
-	}
-
-	for _, t := range tags {
+	for _, t := range resp.Payload {
 		if t.Name == name {
-			d.SetId(strconv.Itoa(t.ID))
+			d.SetId(strconv.FormatInt(t.ID, 10))
 			return nil
 		}
 	}

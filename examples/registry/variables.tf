@@ -380,3 +380,37 @@ variable "github_custom_password" {
   sensitive   = true
   default     = "your-github-access-token"
 }
+
+#############################################
+# Team & Environment for Access Testing
+#############################################
+
+variable "team_name" {
+  description = "Name of the test team."
+  type        = string
+  default     = "Test Team for Registry Access"
+}
+
+variable "environment_name" {
+  description = "Portainer environment name"
+  type        = string
+  default     = "local-test"
+}
+
+variable "environment_address" {
+  description = "Portainer environment address"
+  type        = string
+  default     = "unix:///var/run/docker.sock"
+}
+
+variable "environment_type" {
+  description = "Portainer environment type"
+  type        = number
+  default     = 1 # 1 = Docker
+}
+
+variable "public_ip" {
+  description = "Public IP/URL for Portainer PublicURL"
+  type        = string
+  default     = "unix:///var/run/docker.sock"
+}

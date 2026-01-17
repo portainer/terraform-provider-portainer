@@ -1,13 +1,12 @@
 package internal
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/users"
+	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceUserAdmin() *schema.Resource {
@@ -47,54 +46,27 @@ func resourceUserAdminCreate(d *schema.ResourceData, meta interface{}) error {
 	username := d.Get("username").(string)
 	password := d.Get("password").(string)
 
-	payload := map[string]string{
-		"username": username,
-		"password": password,
+	params := users.NewUserAdminInitParams()
+	params.Body = &models.UsersAdminInitPayload{
+		Username: &username,
+		Password: &password,
 	}
 
-	jsonBody, err := json.Marshal(payload)
+	resp, err := client.Client.Users.UserAdminInit(params)
 	if err != nil {
-		return fmt.Errorf("failed to marshal admin init payload: %w", err)
-	}
-
-	// IMPORTANT: this endpoint is PUBLIC – do not send any auth headers.
-	url := fmt.Sprintf("%s/users/admin/init", client.Endpoint)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return fmt.Errorf("failed to build admin init request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to perform admin init request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	// Treat 409 (admin already initialized) as a successful, idempotent create.
-	if resp.StatusCode == http.StatusConflict {
-		// Admin already exists – we just mark the resource as initialized.
-		if d.Id() == "" {
-			d.SetId("portainer-admin")
+		// Treat 409 (admin already initialized) as a successful, idempotent create.
+		if _, ok := err.(*users.UserAdminInitConflict); ok {
+			if d.Id() == "" {
+				d.SetId("portainer-admin")
+			}
+			_ = d.Set("initialized", true)
+			return nil
 		}
-		_ = d.Set("initialized", true)
-		return nil
+		return fmt.Errorf("failed to initialize admin user: %w", err)
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("failed to initialize admin user, status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result struct {
-		ID       int    `json:"Id"`
-		Username string `json:"Username"`
-	}
-	_ = json.Unmarshal(body, &result)
-
-	if result.ID != 0 {
-		d.SetId(fmt.Sprintf("%d", result.ID))
+	if resp.Payload.ID != 0 {
+		d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
 	} else {
 		d.SetId("portainer-admin")
 	}

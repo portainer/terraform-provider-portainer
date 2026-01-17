@@ -8,10 +8,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/go-openapi/runtime"
+	httptransport "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
+	portainer "github.com/portainer/client-api-go/v2/pkg/client"
 )
 
 // Provider defines the Portainer Terraform provider schema and resources.
@@ -128,6 +134,7 @@ func Provider() *schema.Provider {
 			"portainer_sshkeygen":                               resourcePortainerSSHKeygen(),
 			"portainer_cloud_provider_provision":                resourcePortainerCloudProvision(),
 			"portainer_kubernetes_namespace_access":             resourceKubernetesNamespaceAccess(),
+			"portainer_registry_access":                         resourceRegistryAccess(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"portainer_user":               dataSourceUser(),
@@ -161,6 +168,8 @@ type APIClient struct {
 	APIKey     string
 	JWTToken   string
 	HTTPClient http.Client
+	Client     *portainer.PortainerClientAPI
+	AuthInfo   runtime.ClientAuthInfoWriter
 }
 
 // DoRequest is a reusable method for making API requests
@@ -254,6 +263,24 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		Transport: transport,
 	}
 
+	// Prepare SDK transport
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, diag.FromErr(err)
+	}
+
+	host := u.Host
+	basePath := u.Path
+	if basePath == "" || basePath == "/" {
+		basePath = "/api"
+	} else if !strings.HasSuffix(basePath, "/api") {
+		basePath = strings.TrimRight(basePath, "/") + "/api"
+	}
+	schemes := []string{u.Scheme}
+
+	sdkTransport := httptransport.New(host, basePath, schemes)
+	sdkTransport.Transport = transport
+
 	if !strings.HasSuffix(endpoint, "/api") {
 		endpoint = strings.TrimRight(endpoint, "/") + "/api"
 	}
@@ -263,6 +290,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		APIKey:     apiKey,
 		JWTToken:   "",
 		HTTPClient: *http_client,
+		Client:     portainer.New(sdkTransport, strfmt.Default),
 	}
 
 	// Authenticate via user/password and fetch JWT if api_key is not used
@@ -290,6 +318,18 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 			return nil, diag.FromErr(fmt.Errorf("failed to parse authentication response: %w", err))
 		}
 		client.JWTToken = authResp.JWT
+	}
+
+	// Configure SDK authentication
+	if client.APIKey != "" {
+		client.AuthInfo = httptransport.APIKeyAuth("X-API-Key", "header", client.APIKey)
+	} else if client.JWTToken != "" {
+		client.AuthInfo = httptransport.BearerToken(client.JWTToken)
+	}
+
+	// Set default authentication on transport as well, just in case
+	if client.AuthInfo != nil {
+		sdkTransport.DefaultAuthentication = client.AuthInfo
 	}
 
 	var diags diag.Diagnostics

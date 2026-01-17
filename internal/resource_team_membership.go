@@ -1,26 +1,13 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/team_memberships"
+	"github.com/portainer/client-api-go/v2/pkg/models"
 )
-
-type TeamMembershipPayload struct {
-	Role   int `json:"role"`
-	TeamID int `json:"teamID"`
-	UserID int `json:"userID"`
-}
-
-type TeamMembershipResponse struct {
-	ID     int `json:"Id"`
-	Role   int `json:"Role"`
-	TeamID int `json:"TeamID"`
-	UserID int `json:"UserID"`
-}
 
 func resourceTeamMembership() *schema.Resource {
 	return &schema.Resource{
@@ -55,53 +42,38 @@ func resourceTeamMembership() *schema.Resource {
 
 func resourceTeamMembershipCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	role := int64(d.Get("role").(int))
+	teamID := int64(d.Get("team_id").(int))
+	userID := int64(d.Get("user_id").(int))
 
-	payload := TeamMembershipPayload{
-		Role:   d.Get("role").(int),
-		TeamID: d.Get("team_id").(int),
-		UserID: d.Get("user_id").(int),
+	params := team_memberships.NewTeamMembershipCreateParams()
+	params.Body = &models.TeammembershipsTeamMembershipCreatePayload{
+		Role:   &role,
+		TeamID: &teamID,
+		UserID: &userID,
 	}
 
-	resp, err := client.DoRequest("POST", "/team_memberships", nil, payload)
+	resp, err := client.Client.TeamMemberships.TeamMembershipCreate(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to create team membership: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create team membership: %s", body)
-	}
-
-	var result TeamMembershipResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	d.SetId(strconv.Itoa(result.ID))
+	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
 	return resourceTeamMembershipRead(d, meta)
 }
 
 func resourceTeamMembershipRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	resp, err := client.DoRequest("GET", "/team_memberships", nil, nil)
+	params := team_memberships.NewTeamMembershipListParams()
+	resp, err := client.Client.TeamMemberships.TeamMembershipList(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to fetch team memberships list: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to fetch team memberships list: %s", resp.Status)
-	}
-
-	var memberships []TeamMembershipResponse
-	if err := json.NewDecoder(resp.Body).Decode(&memberships); err != nil {
-		return err
-	}
-
-	for _, m := range memberships {
-		if strconv.Itoa(m.ID) == d.Id() {
+	for _, m := range resp.Payload {
+		if m.ID == id {
 			d.Set("role", m.Role)
 			d.Set("team_id", m.TeamID)
 			d.Set("user_id", m.UserID)
@@ -115,23 +87,22 @@ func resourceTeamMembershipRead(d *schema.ResourceData, meta interface{}) error 
 
 func resourceTeamMembershipUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	id := d.Id()
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
+	role := int64(d.Get("role").(int))
+	teamID := int64(d.Get("team_id").(int))
+	userID := int64(d.Get("user_id").(int))
 
-	payload := TeamMembershipPayload{
-		Role:   d.Get("role").(int),
-		TeamID: d.Get("team_id").(int),
-		UserID: d.Get("user_id").(int),
+	params := team_memberships.NewTeamMembershipUpdateParams()
+	params.ID = id
+	params.Body = &models.TeammembershipsTeamMembershipUpdatePayload{
+		Role:   &role,
+		TeamID: &teamID,
+		UserID: &userID,
 	}
 
-	resp, err := client.DoRequest("PUT", fmt.Sprintf("/team_memberships/%s", id), nil, payload)
+	_, err := client.Client.TeamMemberships.TeamMembershipUpdate(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to update team membership: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update team membership: %s", body)
 	}
 
 	return resourceTeamMembershipRead(d, meta)
@@ -146,19 +117,18 @@ func resourceTeamMembershipImport(d *schema.ResourceData, meta interface{}) ([]*
 
 func resourceTeamMembershipDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	id := d.Id()
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	resp, err := client.DoRequest("DELETE", fmt.Sprintf("/team_memberships/%s", id), nil, nil)
+	params := team_memberships.NewTeamMembershipDeleteParams()
+	params.ID = id
+
+	_, err := client.Client.TeamMemberships.TeamMembershipDelete(params, client.AuthInfo)
 	if err != nil {
+		if _, ok := err.(*team_memberships.TeamMembershipDeleteNotFound); ok {
+			return nil
+		}
 		return fmt.Errorf("failed to delete team membership: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete team membership: %s", body)
-	}
-
-	d.SetId("")
 	return nil
 }
