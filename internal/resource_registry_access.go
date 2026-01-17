@@ -2,12 +2,15 @@ package internal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
+
+var ErrRegistryNotFound = errors.New("registry not found")
 
 func resourceRegistryAccess() *schema.Resource {
 	return &schema.Resource{
@@ -58,6 +61,10 @@ func getRegistryPolicies(client *APIClient, registryID int, endpointID int) (*Re
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return nil, ErrRegistryNotFound
+	}
 
 	if resp.StatusCode != 200 {
 		data, _ := io.ReadAll(resp.Body)
@@ -147,6 +154,10 @@ func resourceRegistryAccessRead(d *schema.ResourceData, meta interface{}) error 
 
 	policies, err := getRegistryPolicies(client, registryID, endpointID)
 	if err != nil {
+		if errors.Is(err, ErrRegistryNotFound) {
+			d.SetId("")
+			return nil
+		}
 		return err
 	}
 
@@ -185,6 +196,9 @@ func resourceRegistryAccessDelete(d *schema.ResourceData, meta interface{}) erro
 
 	policies, err := getRegistryPolicies(client, registryID, endpointID)
 	if err != nil {
+		if errors.Is(err, ErrRegistryNotFound) {
+			return nil
+		}
 		return err
 	}
 
