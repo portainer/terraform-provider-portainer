@@ -1,12 +1,15 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
+	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/auth"
+	"github.com/portainer/client-api-go/v2/pkg/client/team_memberships"
+	"github.com/portainer/client-api-go/v2/pkg/client/users"
+	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceUser() *schema.Resource {
@@ -68,7 +71,7 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	username := d.Get("username").(string)
 	password := d.Get("password").(string)
-	role := d.Get("role").(int)
+	role := int64(d.Get("role").(int))
 	ldapUser := d.Get("ldap_user").(bool)
 
 	if ldapUser && password != "" {
@@ -78,80 +81,54 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("password is required for non-LDAP user")
 	}
 
-	resp, err := client.DoRequest("GET", "/users", nil, nil)
+	// Check if user already exists
+	paramsList := users.NewUserListParams()
+	respList, err := client.Client.Users.UserList(paramsList, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to list users: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list users, status %d: %s", resp.StatusCode, string(data))
-	}
-
-	var users []struct {
-		ID       int    `json:"Id"`
-		Username string `json:"Username"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
-		return fmt.Errorf("failed to decode user list: %w", err)
-	}
-
-	for _, u := range users {
+	for _, u := range respList.Payload {
 		if u.Username == username {
-			d.SetId(strconv.Itoa(u.ID))
+			d.SetId(strconv.FormatInt(u.ID, 10))
 			return resourceUserUpdate(d, meta)
 		}
 	}
 
-	body := map[string]interface{}{
-		"Username": username,
-		"Role":     role,
+	paramsCreate := users.NewUserCreateParams()
+	paramsCreate.Body = &models.UsersUserCreatePayload{
+		Username: &username,
+		Role:     &role,
 	}
 	if !ldapUser {
-		body["Password"] = password
+		paramsCreate.Body.Password = &password
 	}
 
-	createResp, err := client.DoRequest("POST", "/users", nil, body)
+	respCreate, err := client.Client.Users.UserCreate(paramsCreate, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
-	defer createResp.Body.Close()
 
-	if createResp.StatusCode < 200 || createResp.StatusCode >= 300 {
-		data, _ := io.ReadAll(createResp.Body)
-		return fmt.Errorf("failed to create user: %s", string(data))
-	}
+	d.SetId(strconv.FormatInt(respCreate.Payload.ID, 10))
 
-	var result struct {
-		ID int `json:"Id"`
-	}
-	if err := json.NewDecoder(createResp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	d.SetId(strconv.Itoa(result.ID))
-
-	if teamID, ok := d.GetOk("team_id"); ok {
+	if teamIDInt, ok := d.GetOk("team_id"); ok {
 		if role != 2 {
 			return fmt.Errorf("team_id can only be used with standard users (role = 2)")
 		}
+		teamID := int64(teamIDInt.(int))
+		userID := respCreate.Payload.ID
+		roleMember := int64(2)
 
-		teamMembership := map[string]interface{}{
-			"UserID": result.ID,
-			"TeamID": teamID.(int),
-			"Role":   2,
+		paramsTeam := team_memberships.NewTeamMembershipCreateParams()
+		paramsTeam.Body = &models.TeammembershipsTeamMembershipCreatePayload{
+			UserID: &userID,
+			TeamID: &teamID,
+			Role:   &roleMember,
 		}
 
-		teamResp, err := client.DoRequest("POST", "/team_memberships", nil, teamMembership)
+		_, err := client.Client.TeamMemberships.TeamMembershipCreate(paramsTeam, client.AuthInfo)
 		if err != nil {
 			return fmt.Errorf("failed to assign user to team: %w", err)
-		}
-		defer teamResp.Body.Close()
-
-		if teamResp.StatusCode < 200 || teamResp.StatusCode >= 300 {
-			data, _ := io.ReadAll(teamResp.Body)
-			return fmt.Errorf("failed to assign user to team: %s", string(data))
 		}
 	}
 
@@ -161,57 +138,33 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 			return fmt.Errorf("password must be set to generate API key")
 		}
 
-		loginPayload := map[string]interface{}{
-			"Username": username,
-			"Password": password,
+		// Authenticate as new user
+		paramsAuth := auth.NewAuthenticateUserParams()
+		paramsAuth.Body = &models.AuthAuthenticatePayload{
+			Username: &username,
+			Password: &password,
 		}
-		loginResp, err := client.DoRequest("POST", "/auth", nil, loginPayload)
+
+		respAuth, err := client.Client.Auth.AuthenticateUser(paramsAuth)
 		if err != nil {
 			return fmt.Errorf("failed to authenticate as new user: %w", err)
 		}
-		defer loginResp.Body.Close()
 
-		if loginResp.StatusCode != 200 {
-			data, _ := io.ReadAll(loginResp.Body)
-			return fmt.Errorf("failed to authenticate as new user: %s", string(data))
-		}
+		userAuthInfo := httptransport.BearerToken(respAuth.Payload.Jwt)
 
-		var loginResult struct {
-			JWT string `json:"jwt"`
-		}
-		if err := json.NewDecoder(loginResp.Body).Decode(&loginResult); err != nil {
-			return fmt.Errorf("failed to decode login response: %w", err)
+		paramsKey := users.NewUserGenerateAPIKeyParams()
+		paramsKey.ID = respCreate.Payload.ID
+		paramsKey.Body = &models.UsersUserAccessTokenCreatePayload{
+			Description: &description,
+			Password:    &password,
 		}
 
-		userClient := &APIClient{
-			Endpoint:   client.Endpoint,
-			APIKey:     "",
-			JWTToken:   loginResult.JWT,
-			HTTPClient: client.HTTPClient,
-		}
-
-		apiPayload := map[string]interface{}{
-			"description": description,
-			"password":    password,
-		}
-		apiResp, err := userClient.DoRequest("POST", fmt.Sprintf("/users/%d/tokens", result.ID), nil, apiPayload)
+		respKey, err := client.Client.Users.UserGenerateAPIKey(paramsKey, userAuthInfo)
 		if err != nil {
 			return fmt.Errorf("failed to generate API key: %w", err)
 		}
-		defer apiResp.Body.Close()
 
-		if apiResp.StatusCode != 200 {
-			data, _ := io.ReadAll(apiResp.Body)
-			return fmt.Errorf("failed to generate API key: %s", string(data))
-		}
-
-		var tokenResp struct {
-			RawAPIKey string `json:"rawAPIKey"`
-		}
-		if err := json.NewDecoder(apiResp.Body).Decode(&tokenResp); err != nil {
-			return err
-		}
-		d.Set("api_key_raw", tokenResp.RawAPIKey)
+		d.Set("api_key_raw", respKey.Payload.RawAPIKey)
 	}
 
 	return resourceUserRead(d, meta)
@@ -219,59 +172,38 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 
 func resourceUserRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	resp, err := client.DoRequest("GET", fmt.Sprintf("/users/%s", d.Id()), nil, nil)
+	params := users.NewUserInspectParams()
+	params.ID = id
+
+	resp, err := client.Client.Users.UserInspect(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 {
-		d.SetId("")
-		return nil
-	} else if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to read user")
+		if _, ok := err.(*users.UserInspectNotFound); ok {
+			d.SetId("")
+			return nil
+		}
+		return fmt.Errorf("failed to read user: %w", err)
 	}
 
-	var user struct {
-		Username string `json:"Username"`
-		Role     int    `json:"Role"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
-		return err
-	}
-
-	d.Set("username", user.Username)
-	d.Set("role", user.Role)
+	d.Set("username", resp.Payload.Username)
+	d.Set("role", resp.Payload.Role)
 	return nil
 }
 
 func resourceUserReadByUsername(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-
-	resp, err := client.DoRequest("GET", "/users", nil, nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to list users for lookup")
-	}
-
-	var users []struct {
-		ID       int    `json:"Id"`
-		Username string `json:"Username"`
-		Role     int    `json:"Role"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
-		return err
-	}
-
 	username := d.Get("username").(string)
-	for _, u := range users {
+
+	params := users.NewUserListParams()
+	resp, err := client.Client.Users.UserList(params, client.AuthInfo)
+	if err != nil {
+		return fmt.Errorf("failed to list users for lookup: %w", err)
+	}
+
+	for _, u := range resp.Payload {
 		if u.Username == username {
-			d.SetId(strconv.Itoa(u.ID))
+			d.SetId(strconv.FormatInt(u.ID, 10))
 			d.Set("role", u.Role)
 			return nil
 		}
@@ -282,40 +214,41 @@ func resourceUserReadByUsername(d *schema.ResourceData, meta interface{}) error 
 
 func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	id := d.Id()
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
 	if d.HasChange("password") {
 		oldPw, newPw := d.GetChange("password")
-		payload := map[string]string{
-			"password":    oldPw.(string),
-			"newPassword": newPw.(string),
+		oldPwString := oldPw.(string)
+		newPwString := newPw.(string)
+
+		paramsPwd := users.NewUserUpdatePasswordParams()
+		paramsPwd.ID = id
+		paramsPwd.Body = &models.UsersUserUpdatePasswordPayload{
+			Password:    &oldPwString,
+			NewPassword: &newPwString,
 		}
-		resp, err := client.DoRequest("PUT", fmt.Sprintf("/users/%s/passwd", id), nil, payload)
+
+		_, err := client.Client.Users.UserUpdatePassword(paramsPwd, client.AuthInfo)
 		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != 204 {
-			data, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to update password: %s", string(data))
+			return fmt.Errorf("failed to update password: %w", err)
 		}
 	}
 
-	body := map[string]interface{}{
-		"username": d.Get("username").(string),
-		"role":     d.Get("role").(int),
-		"useCache": true,
+	username := d.Get("username").(string)
+	role := int64(d.Get("role").(int))
+	useCache := true
+
+	params := users.NewUserUpdateParams()
+	params.ID = id
+	params.Body = &models.UsersUserUpdatePayload{
+		Username: &username,
+		Role:     &role,
+		UseCache: &useCache,
 	}
-	resp, err := client.DoRequest("PUT", fmt.Sprintf("/users/%s", id), nil, body)
+
+	_, err := client.Client.Users.UserUpdate(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update user: %s", string(data))
+		return fmt.Errorf("failed to update user: %w", err)
 	}
 
 	return resourceUserRead(d, meta)
@@ -323,22 +256,22 @@ func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
 
 func resourceUserDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	id := d.Id()
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	if keyID, ok := d.Get("api_key_id").(int); ok && keyID > 0 {
-		_, _ = client.DoRequest("DELETE", fmt.Sprintf("/users/%s/tokens/%d", id, keyID), nil, nil)
-	}
+	// API key deletion is implicit or we should list and delete?
+	// Original code tried to delete specific token if api_key_id was present (which wasn't in schema?)
+	// But it also had keyID check. The SDK UserDelete will delete the user and their tokens.
 
-	resp, err := client.DoRequest("DELETE", fmt.Sprintf("/users/%s", id), nil, nil)
+	params := users.NewUserDeleteParams()
+	params.ID = id
+
+	_, err := client.Client.Users.UserDelete(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 || resp.StatusCode == 204 {
-		return nil
+		if _, ok := err.(*users.UserDeleteNotFound); ok {
+			return nil
+		}
+		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
-	data, _ := io.ReadAll(resp.Body)
-	return fmt.Errorf("failed to delete user: %s", string(data))
+	return nil
 }

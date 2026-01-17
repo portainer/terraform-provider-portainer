@@ -1,12 +1,12 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/tags"
+	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceTag() *schema.Resource {
@@ -30,75 +30,36 @@ func resourceTag() *schema.Resource {
 
 func resourceTagCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	name := d.Get("name").(string)
 
-	payload := map[string]interface{}{
-		"name": d.Get("name").(string),
+	params := tags.NewTagCreateParams()
+	params.Body = &models.TagsTagCreatePayload{
+		Name: &name,
 	}
 
-	resp, err := client.DoRequest("POST", "/tags", nil, payload)
+	resp, err := client.Client.Tags.TagCreate(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to create tag: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create tag: %s", string(data))
-	}
-
-	var result struct {
-		ID int `json:"Id"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	d.SetId(strconv.Itoa(result.ID))
+	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
 	return resourceTagRead(d, meta)
 }
 
 func resourceTagRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
-	resp, err := client.DoRequest("GET", fmt.Sprintf("/tags/%s", d.Id()), nil, nil)
+	// SDK does not expose GetTagByID, so we list and filter.
+	// This matches the fallback logic of the previous implementation.
+	params := tags.NewTagListParams()
+	resp, err := client.Client.Tags.TagList(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 {
-		d.SetId("")
-		return nil
-	} else if resp.StatusCode == 200 {
-		var tag struct {
-			Name string `json:"Name"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&tag); err == nil && tag.Name != "" {
-			d.Set("name", tag.Name)
-			return nil
-		}
+		return fmt.Errorf("failed to list tags: %w", err)
 	}
 
-	respList, err := client.DoRequest("GET", "/tags", nil, nil)
-	if err != nil {
-		return err
-	}
-	defer respList.Body.Close()
-
-	if respList.StatusCode != 200 {
-		return fmt.Errorf("failed to fallback to GET /tags list")
-	}
-
-	var tags []struct {
-		ID   int    `json:"Id"`
-		Name string `json:"Name"`
-	}
-	if err := json.NewDecoder(respList.Body).Decode(&tags); err != nil {
-		return fmt.Errorf("failed to decode fallback tag list: %s", err)
-	}
-
-	for _, tag := range tags {
-		if strconv.Itoa(tag.ID) == d.Id() {
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
+	for _, tag := range resp.Payload {
+		if tag.ID == id {
 			d.Set("name", tag.Name)
 			return nil
 		}
@@ -110,17 +71,18 @@ func resourceTagRead(d *schema.ResourceData, meta interface{}) error {
 
 func resourceTagDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	resp, err := client.DoRequest("DELETE", fmt.Sprintf("/tags/%s", d.Id()), nil, nil)
+	params := tags.NewTagDeleteParams()
+	params.ID = id
+
+	_, err := client.Client.Tags.TagDelete(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 204 || resp.StatusCode == 404 {
-		return nil
+		if _, ok := err.(*tags.TagDeleteNotFound); ok {
+			return nil
+		}
+		return fmt.Errorf("failed to delete tag: %w", err)
 	}
 
-	data, _ := io.ReadAll(resp.Body)
-	return fmt.Errorf("failed to delete tag: %s", string(data))
+	return nil
 }

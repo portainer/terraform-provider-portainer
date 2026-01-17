@@ -1,12 +1,11 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/teams"
 )
 
 func dataSourceTeam() *schema.Resource {
@@ -26,28 +25,15 @@ func dataSourceTeamRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	teamName := d.Get("name").(string)
 
-	resp, err := client.DoRequest("GET", "/teams", nil, nil)
+	params := teams.NewTeamListParams()
+	resp, err := client.Client.Teams.TeamList(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to list teams: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list teams, status %d: %s", resp.StatusCode, string(data))
-	}
-
-	var teams []struct {
-		ID   int    `json:"Id"`
-		Name string `json:"Name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&teams); err != nil {
-		return fmt.Errorf("failed to decode team list: %w", err)
-	}
-
-	for _, t := range teams {
+	for _, t := range resp.Payload {
 		if t.Name == teamName {
-			d.SetId(strconv.Itoa(t.ID))
+			d.SetId(strconv.FormatInt(t.ID, 10))
 			return nil
 		}
 	}

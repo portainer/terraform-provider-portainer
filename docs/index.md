@@ -138,6 +138,7 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_open_amt_devices_action`            | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_open_amt_devices_features`          | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_registry`                           | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_registry_access`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_resource_control`                   | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_settings`                           | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_settings_experimental`              | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
