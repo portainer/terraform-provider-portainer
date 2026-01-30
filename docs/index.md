@@ -106,6 +106,7 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `portainer_edge_update_schedules`              | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_endpoint_association`               | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_endpoint_group`                     | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_endpoint_group_access`              | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_endpoint_service_update`            | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_endpoint_settings`                  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_endpoint_snapshot`                  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |

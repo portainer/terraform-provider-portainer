@@ -14,6 +14,8 @@
 | [portainer_team.your_team](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/team) | resource |
 | [portainer_team_membership.your_membership](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/team_membership) | resource |
 | [portainer_user.your_user](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/user) | resource |
+| [portainer_team.test_lookup](https://registry.terraform.io/providers/portainer/portainer/latest/docs/data-sources/team) | data source |
+| [portainer_user.test_lookup](https://registry.terraform.io/providers/portainer/portainer/latest/docs/data-sources/user) | data source |
 
 ## Inputs
 
@@ -27,4 +29,11 @@
 | <a name="input_portainer_user_role"></a> [portainer\_user\_role](#input\_portainer\_user\_role) | Role to assign to the Portainer user | `number` | `2` | no |
 | <a name="input_portainer_user_username"></a> [portainer\_user\_username](#input\_portainer\_user\_username) | Portainer username used for resource provisioning | `string` | `"your-user"` | no |
 | <a name="input_team_membership_role"></a> [team\_membership\_role](#input\_team\_membership\_role) | Membership role in the team: 1 = leader, 2 = member | `number` | `2` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| <a name="output_found_team_id"></a> [found\_team\_id](#output\_found\_team\_id) | n/a |
+| <a name="output_found_user_id"></a> [found\_user\_id](#output\_found\_user\_id) | n/a |
 <!-- END_TF_DOCS -->

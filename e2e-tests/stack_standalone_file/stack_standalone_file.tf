@@ -1,3 +1,7 @@
+resource "portainer_team" "access_test" {
+  name = "stack-access-team"
+}
+
 resource "portainer_stack" "standalone_file" {
   name            = var.stack_name
   deployment_type = var.stack_deployment_type
@@ -10,4 +14,7 @@ resource "portainer_stack" "standalone_file" {
     name  = var.stack_env_name
     value = var.stack_env_value
   }
+
+  ownership        = "restricted"
+  authorized_teams = [portainer_team.access_test.id]
 }

@@ -229,6 +229,33 @@ func resourcePortainerStack() *schema.Resource {
 				Description: "List of registry IDs allowed for this stack.",
 				Elem:        &schema.Schema{Type: schema.TypeInt},
 			},
+			"ownership": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
+				Description: "Ownership level: 'public', 'administrators' or 'restricted'.",
+				ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
+					v := val.(string)
+					switch v {
+					case "public", "administrators", "restricted", "private":
+						return
+					}
+					errs = append(errs, fmt.Errorf("%q must be one of 'public', 'private', 'administrators', or 'restricted'", key))
+					return
+				},
+			},
+			"authorized_teams": {
+				Type:        schema.TypeSet,
+				Optional:    true,
+				Elem:        &schema.Schema{Type: schema.TypeInt},
+				Description: "List of team IDs authorized to access this stack (only if ownership is restricted).",
+			},
+			"authorized_users": {
+				Type:        schema.TypeSet,
+				Optional:    true,
+				Elem:        &schema.Schema{Type: schema.TypeInt},
+				Description: "List of user IDs authorized to access this stack (only if ownership is restricted).",
+			},
 		},
 	}
 }
@@ -427,6 +454,12 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 			_ = d.Set("webhook_url", webhookURL)
 		}
 	}
+
+	// ACCESS CONTROL UPDATE
+	if err := updateStackAccessControl(d, client, d.Id()); err != nil {
+		return fmt.Errorf("failed to update stack access control: %w", err)
+	}
+
 	return resourcePortainerStackRead(d, meta)
 }
 
@@ -579,6 +612,12 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 
 	if stack.Portainer.ResourceControl.Id != 0 {
 		_ = d.Set("resource_control_id", stack.Portainer.ResourceControl.Id)
+
+		// Read Access Control
+		rcID := strconv.Itoa(stack.Portainer.ResourceControl.Id)
+		if err := readStackAccessControl(d, client, rcID); err != nil {
+			return fmt.Errorf("failed to read stack access control: %w", err)
+		}
 	}
 
 	return nil
@@ -779,6 +818,10 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		}
 
 		return resourcePortainerStackRead(d, meta)
+	}
+
+	if err := updateStackAccessControl(d, client, stackID); err != nil {
+		return fmt.Errorf("failed to update stack access control: %w", err)
 	}
 
 	// ---------------- NON-REPOSITORY STACKS ----------------
@@ -1330,4 +1373,128 @@ func createStackK8sURL(d *schema.ResourceData, client *APIClient) error {
 	json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
 	return nil
+}
+
+func updateStackAccessControl(d *schema.ResourceData, client *APIClient, stackID string) error {
+	// If ownership is not set, we might default to something or just return
+	// But if d.Get("ownership") is set, it might be "", which is default.
+	// But "ownership" is computed so default is likely not "".
+
+	// Check if ownership is set in TF config
+	ownership := d.Get("ownership").(string)
+	if ownership == "" {
+		// No ownership change requested or managed
+		return nil
+	}
+
+	// Retrieve the ResourceControlID for this stack
+	rcIDString, _, err := lookupResourceControlID(client, 6, stackID) // 6 = stack
+	if err != nil {
+		// If resource control doesn't exist, we can't update it.
+		// But stacks usually have one created by default.
+		return fmt.Errorf("failed to lookup resource control for stack %s: %w", stackID, err)
+	}
+
+	rcID := rcIDString
+
+	// Prepare update payload
+	payload := map[string]interface{}{}
+
+	switch ownership {
+	case "public":
+		payload["public"] = true
+		payload["administratorsOnly"] = false
+		payload["users"] = []int{}
+		payload["teams"] = []int{}
+	case "administrators":
+		payload["public"] = false
+		payload["administratorsOnly"] = true
+		payload["users"] = []int{}
+		payload["teams"] = []int{}
+	case "restricted", "private":
+		payload["public"] = false
+		payload["administratorsOnly"] = false
+		// Only set users/teams if restricted
+		if v, ok := d.GetOk("authorized_users"); ok {
+			payload["users"] = expandIntSet(v.(*schema.Set))
+		} else {
+			payload["users"] = []int{}
+		}
+
+		if v, ok := d.GetOk("authorized_teams"); ok {
+			payload["teams"] = expandIntSet(v.(*schema.Set))
+		} else {
+			payload["teams"] = []int{}
+		}
+	}
+
+	resp, err := client.DoRequest("PUT", fmt.Sprintf("/resource_controls/%s", rcID), nil, payload)
+	if err != nil {
+		return fmt.Errorf("failed to update resource control: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update resource control %s: %s", rcID, string(data))
+	}
+
+	return nil
+}
+
+func readStackAccessControl(d *schema.ResourceData, client *APIClient, rcID string) error {
+	resp, err := client.DoRequest("GET", fmt.Sprintf("/resource_controls/%s", rcID), nil, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("failed to fetch resource control %s", rcID)
+	}
+
+	var rc struct {
+		AdministratorsOnly bool `json:"AdministratorsOnly"`
+		Public             bool `json:"Public"`
+		TeamAccesses       []struct {
+			TeamID int `json:"TeamId"`
+		} `json:"TeamAccesses"`
+		UserAccesses []struct {
+			UserID int `json:"UserId"`
+		} `json:"UserAccesses"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&rc); err != nil {
+		return err
+	}
+
+	if rc.Public {
+		d.Set("ownership", "public")
+	} else if rc.AdministratorsOnly {
+		d.Set("ownership", "administrators")
+	} else {
+		d.Set("ownership", "restricted")
+	}
+
+	users := []int{}
+	for _, u := range rc.UserAccesses {
+		users = append(users, u.UserID)
+	}
+	d.Set("authorized_users", users)
+
+	teams := []int{}
+	for _, t := range rc.TeamAccesses {
+		teams = append(teams, t.TeamID)
+	}
+	d.Set("authorized_teams", teams)
+
+	return nil
+}
+
+func expandIntSet(set *schema.Set) []int {
+	result := []int{}
+	for _, v := range set.List() {
+		result = append(result, v.(int))
+	}
+	return result
 }

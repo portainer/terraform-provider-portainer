@@ -5,13 +5,14 @@
 
 | Name | Version |
 |------|---------|
-| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | n/a |
+| <a name="provider_portainer"></a> [portainer](#provider\_portainer) | 0.1.0 |
 
 ## Resources
 
 | Name | Type |
 |------|------|
 | [portainer_stack.standalone_file](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/stack) | resource |
+| [portainer_team.access_test](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/team) | resource |
 
 ## Inputs
 

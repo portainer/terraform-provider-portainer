@@ -135,6 +135,7 @@ func Provider() *schema.Provider {
 			"portainer_cloud_provider_provision":                resourcePortainerCloudProvision(),
 			"portainer_kubernetes_namespace_access":             resourceKubernetesNamespaceAccess(),
 			"portainer_registry_access":                         resourceRegistryAccess(),
+			"portainer_endpoint_group_access":                   resourceEndpointGroupAccess(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"portainer_user":               dataSourceUser(),
