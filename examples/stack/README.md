@@ -12,6 +12,7 @@
 | Name | Type |
 |------|------|
 | [portainer_stack.stanadlone_string](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/stack) | resource |
+| [portainer_team.access_test](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/team) | resource |
 
 ## Inputs
 

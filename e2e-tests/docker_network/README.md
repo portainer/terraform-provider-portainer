@@ -12,6 +12,7 @@
 | Name | Type |
 |------|------|
 | [portainer_docker_network.test_bridge](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/docker_network) | resource |
+| [portainer_docker_network.test_lookup](https://registry.terraform.io/providers/portainer/portainer/latest/docs/data-sources/docker_network) | data source |
 
 ## Inputs
 
@@ -32,4 +33,10 @@
 | <a name="input_portainer_api_key"></a> [portainer\_api\_key](#input\_portainer\_api\_key) | Default Portainer Admin API Key | `string` | `"ptr_xrP7XWqfZEOoaCJRu5c8qKaWuDtVc2Zb07Q5g22YpS8="` | no |
 | <a name="input_portainer_skip_ssl_verify"></a> [portainer\_skip\_ssl\_verify](#input\_portainer\_skip\_ssl\_verify) | Set to true to skip TLS certificate verification (useful for self-signed certs) | `bool` | `true` | no |
 | <a name="input_portainer_url"></a> [portainer\_url](#input\_portainer\_url) | Default Portainer URL | `string` | `"https://localhost:9443"` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| <a name="output_found_network_id"></a> [found\_network\_id](#output\_found\_network\_id) | n/a |
 <!-- END_TF_DOCS -->

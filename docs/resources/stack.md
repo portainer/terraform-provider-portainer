@@ -121,6 +121,28 @@ resource "portainer_stack" "app_with_registries" {
 }
 ```
 
+### Deploy Stack with Access Control
+```hcl
+resource "portainer_stack" "restricted_stack" {
+  name             = "restricted-stack"
+  deployment_type  = "standalone"
+  method           = "string"
+  endpoint_id      = 1
+  
+  stack_file_content = <<-EOT
+    version: "3"
+    services:
+      web:
+        image: nginx
+  EOT
+
+  # Access Control
+  ownership        = "restricted"
+  authorized_teams = [1, 2] # IDs of authorized teams
+  authorized_users = [5]    # IDs of authorized users
+}
+```
+
 ### Deploy from Git Repository using existing Credentials
 ```hcl
 resource "portainer_stack" "repo_with_creds" {
@@ -317,6 +339,9 @@ terraform apply
 | `prune`           | bool         | 🚫 optional | Remove services no longer in stack definition (default: `false`)     |
 | `pull_image`      | bool         | 🚫 optional | Pull latest image during update (default: `false`)                   |
 | `registries`      | list(int)    | 🚫 optional | List of registry IDs allowed for this stack                          |
+| `ownership`       | string       | 🚫 optional | Ownership level: `public`, `administrators`, `restricted`, or `private`|
+| `authorized_teams`| set(int)     | 🚫 optional | List of team IDs authorized to access this stack (only if restricted)|
+| `authorized_users`| set(int)     | 🚫 optional | List of user IDs authorized to access this stack (only if restricted)|
 
 ---
 ### 🐳 Docker Stack (standalone/swarm)
