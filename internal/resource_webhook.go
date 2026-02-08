@@ -1,29 +1,13 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/webhooks"
+	"github.com/portainer/client-api-go/v2/pkg/models"
 )
-
-type WebhookPayload struct {
-	EndpointID  int    `json:"endpointID"`
-	RegistryID  int    `json:"registryID,omitempty"`
-	ResourceID  string `json:"resourceID"`
-	WebhookType int    `json:"webhookType"`
-}
-
-type WebhookResponse struct {
-	ID         int    `json:"Id"`
-	EndpointID int    `json:"EndpointId"`
-	RegistryID int    `json:"RegistryId"`
-	ResourceID string `json:"ResourceId"`
-	Token      string `json:"Token"`
-	Type       int    `json:"Type"`
-}
 
 func resourceWebhook() *schema.Resource {
 	return &schema.Resource{
@@ -63,31 +47,21 @@ func resourceWebhook() *schema.Resource {
 func resourceWebhookCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
-	payload := WebhookPayload{
-		EndpointID:  d.Get("endpoint_id").(int),
-		RegistryID:  d.Get("registry_id").(int),
+	params := webhooks.NewPostWebhooksParams()
+	params.Body = &models.WebhooksWebhookCreatePayload{
+		EndpointID:  int64(d.Get("endpoint_id").(int)),
+		RegistryID:  int64(d.Get("registry_id").(int)),
 		ResourceID:  d.Get("resource_id").(string),
-		WebhookType: d.Get("webhook_type").(int),
+		WebhookType: int64(d.Get("webhook_type").(int)),
 	}
 
-	resp, err := client.DoRequest("POST", "/webhooks", nil, payload)
+	resp, err := client.Client.Webhooks.PostWebhooks(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to create webhook: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create webhook: %s", string(body))
-	}
-
-	var result WebhookResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	d.SetId(strconv.Itoa(result.ID))
-	d.Set("token", result.Token)
+	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
+	d.Set("token", resp.Payload.Token)
 	return nil
 }
 
@@ -97,22 +71,18 @@ func resourceWebhookRead(d *schema.ResourceData, meta interface{}) error {
 
 func resourceWebhookUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	webhookID := d.Id()
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
 	if d.HasChange("registry_id") {
-		payload := map[string]interface{}{
-			"registryID": d.Get("registry_id").(int),
+		params := webhooks.NewPutWebhooksIDParams()
+		params.ID = id
+		params.Body = &models.WebhooksWebhookUpdatePayload{
+			RegistryID: int64(d.Get("registry_id").(int)),
 		}
 
-		resp, err := client.DoRequest("PUT", fmt.Sprintf("/webhooks/%s", webhookID), nil, payload)
+		_, err := client.Client.Webhooks.PutWebhooksID(params, client.AuthInfo)
 		if err != nil {
 			return fmt.Errorf("failed to update webhook: %w", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode >= 400 {
-			body, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to update webhook: %s", string(body))
 		}
 	}
 
@@ -121,17 +91,14 @@ func resourceWebhookUpdate(d *schema.ResourceData, meta interface{}) error {
 
 func resourceWebhookDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	webhookID := d.Id()
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	resp, err := client.DoRequest("DELETE", fmt.Sprintf("/webhooks/%s", webhookID), nil, nil)
+	params := webhooks.NewDeleteWebhooksIDParams()
+	params.ID = id
+
+	_, err := client.Client.Webhooks.DeleteWebhooksID(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to delete webhook: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete webhook: %s", string(body))
 	}
 
 	d.SetId("")

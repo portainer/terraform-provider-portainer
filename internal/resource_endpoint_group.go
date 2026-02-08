@@ -1,14 +1,12 @@
 package internal
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/endpoint_groups"
+	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceEndpointGroup() *schema.Resource {
@@ -51,97 +49,43 @@ func resourceEndpointGroupCreate(d *schema.ResourceData, meta interface{}) error
 		return resourceEndpointGroupUpdate(d, meta)
 	}
 
-	payload := map[string]interface{}{
-		"name": name,
+	params := endpoint_groups.NewPostEndpointGroupsParams()
+	params.Body = &models.EndpointgroupsEndpointGroupCreatePayload{
+		Name: &name,
 	}
 
 	if v, ok := d.GetOk("description"); ok {
-		payload["description"] = v.(string)
+		desc := v.(string)
+		params.Body.Description = desc
 	}
 
 	if v, ok := d.GetOk("tag_ids"); ok {
-		tagIDs := []int{}
+		tagIDs := []int64{}
 		for _, id := range v.([]interface{}) {
-			tagIDs = append(tagIDs, id.(int))
+			tagIDs = append(tagIDs, int64(id.(int)))
 		}
-		payload["tagIDs"] = tagIDs
+		params.Body.TagIDs = tagIDs
 	}
 
-	jsonBody, err := json.Marshal(payload)
+	resp, err := client.Client.EndpointGroups.PostEndpointGroups(params, client.AuthInfo)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create endpoint group: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/endpoint_groups", client.Endpoint), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return err
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create endpoint group: %s", string(data))
-	}
-
-	var result struct {
-		ID int `json:"Id"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	d.SetId(strconv.Itoa(result.ID))
+	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
 	return resourceEndpointGroupRead(d, meta)
 }
 
 func findExistingEndpointGroupByName(client *APIClient, name string) (int, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/endpoint_groups", client.Endpoint), nil)
+	params := endpoint_groups.NewEndpointGroupListParams()
+	resp, err := client.Client.EndpointGroups.EndpointGroupList(params, client.AuthInfo)
 	if err != nil {
-		return 0, err
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return 0, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return 0, fmt.Errorf("failed to list endpoint groups: %w", err)
 	}
 
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return 0, fmt.Errorf("failed to list endpoint groups: %s", string(data))
-	}
-
-	var groups []struct {
-		ID   int    `json:"Id"`
-		Name string `json:"Name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&groups); err != nil {
-		return 0, err
-	}
-
-	for _, g := range groups {
+	for _, g := range resp.Payload {
 		if g.Name == name {
-			return g.ID, nil
+			return int(g.ID), nil
 		}
 	}
 	return 0, nil
@@ -149,92 +93,58 @@ func findExistingEndpointGroupByName(client *APIClient, name string) (int, error
 
 func resourceEndpointGroupRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/endpoint_groups/%s", client.Endpoint, d.Id()), nil)
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
+	params := endpoint_groups.NewGetEndpointGroupsIDParams()
+	params.ID = id
 
-	resp, err := client.HTTPClient.Do(req)
+	resp, err := client.Client.EndpointGroups.GetEndpointGroupsID(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to read endpoint group")
+		if _, ok := err.(*endpoint_groups.GetEndpointGroupsIDNotFound); ok {
+			d.SetId("")
+			return nil
+		}
+		return fmt.Errorf("failed to read endpoint group: %w", err)
 	}
 
-	var group struct {
-		Name        string `json:"Name"`
-		Description string `json:"Description"`
-		TagIDs      []int  `json:"TagIds"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&group); err != nil {
-		return err
-	}
+	d.Set("name", resp.Payload.Name)
+	d.Set("description", resp.Payload.Description)
 
-	d.Set("name", group.Name)
-	d.Set("description", group.Description)
-	d.Set("tag_ids", group.TagIDs)
+	tagIDs := []int{}
+	for _, tid := range resp.Payload.TagIds {
+		tagIDs = append(tagIDs, int(tid))
+	}
+	d.Set("tag_ids", tagIDs)
 
 	return nil
 }
 
 func resourceEndpointGroupUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
+	name := d.Get("name").(string)
 
-	payload := map[string]interface{}{
-		"name": d.Get("name").(string),
+	params := endpoint_groups.NewEndpointGroupUpdateParams()
+	params.ID = id
+	params.Body = &models.EndpointgroupsEndpointGroupUpdatePayload{
+		Name: name,
 	}
 
 	if v, ok := d.GetOk("description"); ok {
-		payload["description"] = v.(string)
+		params.Body.Description = v.(string)
 	}
 
 	if v, ok := d.GetOk("tag_ids"); ok {
-		tagIDs := []int{}
-		for _, id := range v.([]interface{}) {
-			tagIDs = append(tagIDs, id.(int))
+		tagIDs := []int64{}
+		for _, tid := range v.([]interface{}) {
+			tagIDs = append(tagIDs, int64(tid.(int)))
 		}
-		payload["tagIDs"] = tagIDs
+		params.Body.TagIDs = tagIDs
 	}
 
-	jsonBody, err := json.Marshal(payload)
+	_, err := client.Client.EndpointGroups.EndpointGroupUpdate(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/endpoint_groups/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return err
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update endpoint group: %s", string(data))
+		return fmt.Errorf("failed to update endpoint group: %w", err)
 	}
 
 	return resourceEndpointGroupRead(d, meta)
@@ -242,26 +152,18 @@ func resourceEndpointGroupUpdate(d *schema.ResourceData, meta interface{}) error
 
 func resourceEndpointGroupDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/endpoint_groups/%s", client.Endpoint, d.Id()), nil)
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
+	params := endpoint_groups.NewEndpointGroupDeleteParams()
+	params.ID = id
 
-	resp, err := client.HTTPClient.Do(req)
+	_, err := client.Client.EndpointGroups.EndpointGroupDelete(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 204 || resp.StatusCode == 404 {
-		return nil
+		if _, ok := err.(*endpoint_groups.EndpointGroupDeleteNotFound); ok {
+			return nil
+		}
+		return fmt.Errorf("failed to delete endpoint group: %w", err)
 	}
 
-	data, _ := io.ReadAll(resp.Body)
-	return fmt.Errorf("failed to delete endpoint group: %s", string(data))
+	return nil
 }

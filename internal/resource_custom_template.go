@@ -1,15 +1,13 @@
 package internal
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/custom_templates"
+	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceCustomTemplate() *schema.Resource {
@@ -53,39 +51,15 @@ func resourceCustomTemplate() *schema.Resource {
 }
 
 func findExistingCustomTemplateByTitle(client *APIClient, title string) (int, error) {
-	req, err := http.NewRequest("GET", client.Endpoint+"/custom_templates", nil)
+	params := custom_templates.NewCustomTemplateListParams()
+	resp, err := client.Client.CustomTemplates.CustomTemplateList(params, client.AuthInfo)
 	if err != nil {
-		return 0, err
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return 0, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return 0, fmt.Errorf("failed to list custom templates: %w", err)
 	}
 
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return 0, fmt.Errorf("failed to list custom templates: %s", string(body))
-	}
-
-	var templates []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&templates); err != nil {
-		return 0, err
-	}
-
-	for _, tmpl := range templates {
-		if tmpl["Title"] == title {
-			if id, ok := tmpl["Id"].(float64); ok {
-				return int(id), nil
-			}
+	for _, tmpl := range resp.Payload {
+		if tmpl.Title == title {
+			return int(tmpl.ID), nil
 		}
 	}
 
@@ -126,76 +100,68 @@ func resourceCustomTemplateCreate(d *schema.ResourceData, meta interface{}) erro
 }
 
 func createTemplateFromString(d *schema.ResourceData, client *APIClient, content string) error {
-	payload := map[string]interface{}{
-		"title":           d.Get("title").(string),
-		"description":     d.Get("description").(string),
-		"note":            d.Get("note").(string),
-		"platform":        d.Get("platform").(int),
-		"type":            d.Get("type").(int),
-		"logo":            d.Get("logo").(string),
-		"edgeTemplate":    d.Get("edge_template").(bool),
-		"isComposeFormat": d.Get("is_compose_format").(bool),
-		"fileContent":     content,
-		"variables":       getVariables(d),
+	title := d.Get("title").(string)
+	description := d.Get("description").(string)
+	templateType := int64(d.Get("type").(int))
+
+	params := custom_templates.NewCustomTemplateCreateStringParams()
+	params.Body = &models.CustomtemplatesCustomTemplateFromFileContentPayload{
+		Title:        &title,
+		Description:  &description,
+		Note:         d.Get("note").(string),
+		Platform:     int64(d.Get("platform").(int)),
+		Type:         &templateType,
+		Logo:         d.Get("logo").(string),
+		EdgeTemplate: d.Get("edge_template").(bool),
+		FileContent:  &content,
+		Variables:    getVariablesSDK(d),
 	}
-	return postTemplateJSON(d, client, payload, "/custom_templates/create/string")
+
+	resp, err := client.Client.CustomTemplates.CustomTemplateCreateString(params, client.AuthInfo)
+	if err != nil {
+		return fmt.Errorf("failed to create custom template from string: %w", err)
+	}
+
+	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
+	return nil
 }
 
 func createTemplateFromRepository(d *schema.ResourceData, client *APIClient, repoURL string) error {
+	title := d.Get("title").(string)
+	description := d.Get("description").(string)
+	templateType := int64(d.Get("type").(int))
 	useAuth := d.Get("repository_authentication").(bool)
-	payload := map[string]interface{}{
-		"title":                       d.Get("title").(string),
-		"description":                 d.Get("description").(string),
-		"note":                        d.Get("note").(string),
-		"platform":                    d.Get("platform").(int),
-		"type":                        d.Get("type").(int),
-		"logo":                        d.Get("logo").(string),
-		"edgeTemplate":                d.Get("edge_template").(bool),
-		"isComposeFormat":             d.Get("is_compose_format").(bool),
-		"repositoryURL":               repoURL,
-		"repositoryAuthentication":    useAuth,
-		"repositoryReferenceName":     d.Get("repository_reference").(string),
-		"composeFilePathInRepository": d.Get("compose_file_path").(string),
-		"tlsskipVerify":               d.Get("tlsskip_verify").(bool),
-		"variables":                   getVariables(d),
+
+	params := custom_templates.NewCustomTemplateCreateRepositoryParams()
+	composePath := d.Get("compose_file_path").(string)
+	params.Body = &models.CustomtemplatesCustomTemplateFromGitRepositoryPayload{
+		Title:                       &title,
+		Description:                 &description,
+		Note:                        d.Get("note").(string),
+		Platform:                    int64(d.Get("platform").(int)),
+		Type:                        &templateType,
+		Logo:                        d.Get("logo").(string),
+		EdgeTemplate:                d.Get("edge_template").(bool),
+		IsComposeFormat:             d.Get("is_compose_format").(bool),
+		RepositoryURL:               &repoURL,
+		RepositoryAuthentication:    useAuth,
+		RepositoryReferenceName:     d.Get("repository_reference").(string),
+		ComposeFilePathInRepository: &composePath,
+		TlsskipVerify:               d.Get("tlsskip_verify").(bool),
+		Variables:                   getVariablesSDK(d),
 	}
 
 	if useAuth {
-		payload["repositoryUsername"] = d.Get("repository_username").(string)
-		payload["repositoryPassword"] = d.Get("repository_password").(string)
+		params.Body.RepositoryUsername = d.Get("repository_username").(string)
+		params.Body.RepositoryPassword = d.Get("repository_password").(string)
 	}
 
-	return postTemplateJSON(d, client, payload, "/custom_templates/create/repository")
-}
-
-func postTemplateJSON(d *schema.ResourceData, client *APIClient, payload map[string]interface{}, endpoint string) error {
-	jsonBody, _ := json.Marshal(payload)
-	req, _ := http.NewRequest("POST", client.Endpoint+endpoint, bytes.NewBuffer(jsonBody))
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
+	resp, err := client.Client.CustomTemplates.CustomTemplateCreateRepository(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create custom template: %s", string(data))
+		return fmt.Errorf("failed to create custom template from repository: %w", err)
 	}
 
-	var result struct {
-		Id int `json:"Id"`
-	}
-	json.NewDecoder(resp.Body).Decode(&result)
-	d.SetId(strconv.Itoa(result.Id))
+	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
 	return nil
 }
 
@@ -206,139 +172,125 @@ func getVariables(d *schema.ResourceData) []interface{} {
 	return []interface{}{}
 }
 
+func getVariablesSDK(d *schema.ResourceData) []*models.PortainerCustomTemplateVariableDefinition {
+	if v, ok := d.GetOk("variables"); ok {
+		vars := v.([]interface{})
+		result := make([]*models.PortainerCustomTemplateVariableDefinition, 0, len(vars))
+		for _, varItem := range vars {
+			if varMap, ok := varItem.(map[string]interface{}); ok {
+				varDef := &models.PortainerCustomTemplateVariableDefinition{}
+				if name, exists := varMap["name"]; exists {
+					varDef.Name = name.(string)
+				}
+				if label, exists := varMap["label"]; exists {
+					varDef.Label = label.(string)
+				}
+				if defaultValue, exists := varMap["default_value"]; exists {
+					varDef.DefaultValue = defaultValue.(string)
+				}
+				if desc, exists := varMap["description"]; exists {
+					varDef.Description = desc.(string)
+				}
+				result = append(result, varDef)
+			}
+		}
+		return result
+	}
+	return nil
+}
+
 func resourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/custom_templates/%s", client.Endpoint, d.Id()), nil)
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
+	params := custom_templates.NewCustomTemplateInspectParams()
+	params.ID = id
 
-	resp, err := client.HTTPClient.Do(req)
+	resp, err := client.Client.CustomTemplates.CustomTemplateInspect(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 {
-		d.SetId("")
-		return nil
-	} else if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to read custom template")
+		if _, ok := err.(*custom_templates.CustomTemplateInspectNotFound); ok {
+			d.SetId("")
+			return nil
+		}
+		return fmt.Errorf("failed to read custom template: %w", err)
 	}
 
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	d.Set("title", result["Title"])
-	d.Set("description", result["Description"])
-	d.Set("note", result["Note"])
-	d.Set("platform", result["Platform"])
-	d.Set("type", result["Type"])
-	d.Set("logo", result["Logo"])
-	d.Set("edge_template", result["EdgeTemplate"])
-	d.Set("is_compose_format", result["IsComposeFormat"])
+	d.Set("title", resp.Payload.Title)
+	d.Set("description", resp.Payload.Description)
+	d.Set("note", resp.Payload.Note)
+	d.Set("platform", int(resp.Payload.Platform))
+	d.Set("type", int(resp.Payload.Type))
+	d.Set("logo", resp.Payload.Logo)
+	d.Set("edge_template", resp.Payload.EdgeTemplate)
+	d.Set("is_compose_format", resp.Payload.IsComposeFormat)
 
 	return nil
 }
 
 func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	payload := map[string]interface{}{
-		"title":                       d.Get("title").(string),
-		"description":                 d.Get("description").(string),
-		"note":                        d.Get("note").(string),
-		"platform":                    d.Get("platform").(int),
-		"type":                        d.Get("type").(int),
-		"logo":                        d.Get("logo").(string),
-		"edgeTemplate":                d.Get("edge_template").(bool),
-		"isComposeFormat":             d.Get("is_compose_format").(bool),
-		"composeFilePathInRepository": d.Get("compose_file_path").(string),
-		"tlsskipVerify":               d.Get("tlsskip_verify").(bool),
-		"variables":                   getVariables(d),
-	}
+	title := d.Get("title").(string)
+	description := d.Get("description").(string)
+	templateType := int64(d.Get("type").(int))
 
-	isGitBased := false
-
+	var fileContent string
 	if v, ok := d.GetOk("file_path"); ok {
 		content, err := os.ReadFile(v.(string))
 		if err != nil {
 			return fmt.Errorf("failed to read template file from path: %w", err)
 		}
-		d.Set("file_content", string(content))
-		payload["fileContent"] = string(content)
+		fileContent = string(content)
+		d.Set("file_content", fileContent)
 	} else if v, ok := d.GetOk("file_content"); ok {
-		payload["fileContent"] = v.(string)
+		fileContent = v.(string)
 	}
 
+	composePath := d.Get("compose_file_path").(string)
 	useAuth := d.Get("repository_authentication").(bool)
+
+	params := custom_templates.NewCustomTemplateUpdateParams()
+	params.ID = id
+	params.Body = &models.CustomtemplatesCustomTemplateUpdatePayload{
+		Title:                       &title,
+		Description:                 &description,
+		Note:                        d.Get("note").(string),
+		Platform:                    int64(d.Get("platform").(int)),
+		Type:                        &templateType,
+		Logo:                        d.Get("logo").(string),
+		EdgeTemplate:                d.Get("edge_template").(bool),
+		IsComposeFormat:             d.Get("is_compose_format").(bool),
+		ComposeFilePathInRepository: &composePath,
+		TlsskipVerify:               d.Get("tlsskip_verify").(bool),
+		FileContent:                 &fileContent,
+		Variables:                   getVariablesSDK(d),
+	}
+
+	isGitBased := false
 	if v, ok := d.GetOk("repository_url"); ok {
 		isGitBased = true
-		payload["repositoryURL"] = v.(string)
-		payload["repositoryReferenceName"] = d.Get("repository_reference").(string)
-		payload["repositoryAuthentication"] = useAuth
+		repoURL := v.(string)
+		params.Body.RepositoryURL = &repoURL
+		params.Body.RepositoryReferenceName = d.Get("repository_reference").(string)
+		params.Body.RepositoryAuthentication = useAuth
 		if useAuth {
-			payload["repositoryUsername"] = d.Get("repository_username").(string)
-			payload["repositoryPassword"] = d.Get("repository_password").(string)
+			params.Body.RepositoryUsername = d.Get("repository_username").(string)
+			params.Body.RepositoryPassword = d.Get("repository_password").(string)
 		}
 	}
 
-	jsonBody, _ := json.Marshal(payload)
-
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/custom_templates/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
+	_, err := client.Client.CustomTemplates.CustomTemplateUpdate(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update custom template: %s", string(data))
+		return fmt.Errorf("failed to update custom template: %w", err)
 	}
 
 	if isGitBased {
-		u := fmt.Sprintf("%s/custom_templates/%s/git_fetch", client.Endpoint, d.Id())
-		req, err := http.NewRequest("PUT", u, nil)
+		gitParams := custom_templates.NewCustomTemplateGitFetchParams()
+		gitParams.ID = id
+		_, err := client.Client.CustomTemplates.CustomTemplateGitFetch(gitParams, client.AuthInfo)
 		if err != nil {
-			return err
-		}
-		if client.APIKey != "" {
-			req.Header.Set("X-API-Key", client.APIKey)
-		} else if client.JWTToken != "" {
-			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-		}
-
-		resp, err := client.HTTPClient.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != 200 {
-			data, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to git_fetch template: %s", string(data))
+			return fmt.Errorf("failed to git_fetch template: %w", err)
 		}
 	}
 
@@ -347,24 +299,17 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 
 func resourceCustomTemplateDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/custom_templates/%s", client.Endpoint, d.Id()), nil)
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	resp, err := client.HTTPClient.Do(req)
+	params := custom_templates.NewCustomTemplateDeleteParams()
+	params.ID = id
+
+	_, err := client.Client.CustomTemplates.CustomTemplateDelete(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 404 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete custom template: %s", string(data))
+		if _, ok := err.(*custom_templates.CustomTemplateDeleteNotFound); ok {
+			return nil
+		}
+		return fmt.Errorf("failed to delete custom template: %w", err)
 	}
 	return nil
 }

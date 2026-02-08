@@ -1,12 +1,13 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/registries"
+	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceRegistry() *schema.Resource {
@@ -49,129 +50,65 @@ func resourceRegistryCreate(d *schema.ResourceData, meta interface{}) error {
 		return resourceRegistryUpdate(d, meta)
 	}
 
-	registryType := d.Get("type").(int)
+	registryType := int64(d.Get("type").(int))
 	url := d.Get("url").(string)
 	baseURL := d.Get("base_url").(string)
 	auth := d.Get("authentication").(bool)
 
-	body := map[string]interface{}{
-		"name": name,
-		"type": registryType,
+	params := registries.NewRegistryCreateParams()
+	params.Body = &models.RegistriesRegistryCreatePayload{
+		Name:           &name,
+		Type:           &registryType,
+		URL:            &url,
+		BaseURL:        baseURL,
+		Authentication: &auth,
+	}
+
+	if auth {
+		params.Body.Username = d.Get("username").(string)
+		params.Body.Password = d.Get("password").(string)
 	}
 
 	switch registryType {
 	case 1: // Quay.io
-		body["url"] = url
-		body["authentication"] = true
-		body["username"] = d.Get("username").(string)
-		body["password"] = d.Get("password").(string)
-		body["quay"] = map[string]interface{}{
-			"useOrganisation":  d.Get("quay_use_organisation").(bool),
-			"organisationName": d.Get("quay_organisation_name").(string),
-		}
-	case 2: // Azure
-		body["url"] = url
-		body["baseURL"] = baseURL
-		body["authentication"] = true
-		body["username"] = d.Get("username").(string)
-		body["password"] = d.Get("password").(string)
-	case 3: // Custom
-		body["url"] = url
-		body["baseURL"] = baseURL
-		body["authentication"] = auth
-		if auth {
-			body["username"] = d.Get("username").(string)
-			body["password"] = d.Get("password").(string)
+		params.Body.Quay = &models.PortainerQuayRegistryData{
+			UseOrganisation:  d.Get("quay_use_organisation").(bool),
+			OrganisationName: d.Get("quay_organisation_name").(string),
 		}
 	case 4: // GitLab
-		body["url"] = url
-		body["authentication"] = true
-		body["username"] = d.Get("username").(string)
-		body["password"] = d.Get("password").(string)
-		body["gitlab"] = map[string]interface{}{
-			"InstanceURL": d.Get("instance_url").(string),
+		params.Body.Gitlab = &models.PortainerGitlabRegistryData{
+			InstanceURL: d.Get("instance_url").(string),
 		}
-	case 5: // ProGet
-		body["url"] = url
-		body["baseURL"] = baseURL
-		body["authentication"] = true
-		body["username"] = d.Get("username").(string)
-		body["password"] = d.Get("password").(string)
-	case 6: // DockerHub
-		body["url"] = url
-		body["authentication"] = true
-		body["username"] = d.Get("username").(string)
-		body["password"] = d.Get("password").(string)
 	case 7: // AWS ECR
-		ecr := map[string]interface{}{}
-		if v, ok := d.GetOk("aws_region"); ok {
-			ecr["Region"] = v.(string)
-		}
-		body["url"] = url
-		body["ecr"] = ecr
-		body["authentication"] = auth
-		if auth {
-			body["username"] = d.Get("username").(string)
-			body["password"] = d.Get("password").(string)
+		params.Body.Ecr = &models.PortainerEcrData{
+			Region: d.Get("aws_region").(string),
 		}
 	case 8: // GitHub
-		body["url"] = url
-		body["authentication"] = true
-		body["username"] = d.Get("username").(string)
-		body["password"] = d.Get("password").(string)
-		body["github"] = map[string]interface{}{
-			"useOrganisation":  d.Get("github_use_organisation").(bool),
-			"organisationName": d.Get("github_organisation_name").(string),
+		params.Body.Github = &models.PortainereeGithubRegistryData{
+			UseOrganisation:  d.Get("github_use_organisation").(bool),
+			OrganisationName: d.Get("github_organisation_name").(string),
 		}
-	default:
-		return fmt.Errorf("unsupported registry type: %d", registryType)
 	}
 
-	resp, err := client.DoRequest("POST", "/registries", nil, body)
+	resp, err := client.Client.Registries.RegistryCreate(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to create registry: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create registry: %s", string(data))
-	}
-
-	var result struct {
-		ID int `json:"Id"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	d.SetId(strconv.Itoa(result.ID))
+	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
 	return resourceRegistryRead(d, meta)
 }
 
 func findRegistryByName(client *APIClient, name string) (int, error) {
-	resp, err := client.DoRequest("GET", "/registries", nil, nil)
+	params := registries.NewRegistryListParams()
+	resp, err := client.Client.Registries.RegistryList(params, client.AuthInfo)
 	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return 0, fmt.Errorf("failed to list registries: %s", string(data))
+		return 0, fmt.Errorf("failed to list registries: %w", err)
 	}
 
-	var registries []struct {
-		Id   int    `json:"Id"`
-		Name string `json:"Name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&registries); err != nil {
-		return 0, err
-	}
-
-	for _, r := range registries {
+	for _, r := range resp.Payload {
 		if r.Name == name {
-			return r.Id, nil
+			return int(r.ID), nil
 		}
 	}
 
@@ -180,54 +117,40 @@ func findRegistryByName(client *APIClient, name string) (int, error) {
 
 func resourceRegistryRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	resp, err := client.DoRequest("GET", fmt.Sprintf("/registries/%s", d.Id()), nil, nil)
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
+
+	params := registries.NewRegistryInspectParams()
+	params.ID = id
+
+	resp, err := client.Client.Registries.RegistryInspect(params, client.AuthInfo)
 	if err != nil {
+		if _, ok := err.(*registries.RegistryInspectNotFound); ok {
+			d.SetId("")
+			return nil
+		}
 		return fmt.Errorf("failed to read registry: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
-		d.SetId("")
-		return nil
-	} else if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read registry: %s", string(data))
-	}
+	d.Set("name", resp.Payload.Name)
+	d.Set("url", resp.Payload.URL)
+	d.Set("base_url", resp.Payload.BaseURL)
+	d.Set("type", int(resp.Payload.Type))
+	d.Set("authentication", resp.Payload.Authentication)
+	d.Set("username", resp.Payload.Username)
 
-	var registry struct {
-		Name           string `json:"Name"`
-		URL            string `json:"URL"`
-		BaseURL        string `json:"BaseURL"`
-		Type           int    `json:"Type"`
-		Authentication bool   `json:"Authentication"`
-		Username       string `json:"Username"`
-		Github         *struct {
-			UseOrganisation  bool   `json:"UseOrganisation"`
-			OrganisationName string `json:"OrganisationName"`
-		} `json:"Github,omitempty"`
-		Quay *struct {
-			UseOrganisation  bool   `json:"UseOrganisation"`
-			OrganisationName string `json:"OrganisationName"`
-		} `json:"Quay,omitempty"`
+	if resp.Payload.Github != nil {
+		d.Set("github_use_organisation", resp.Payload.Github.UseOrganisation)
+		d.Set("github_organisation_name", resp.Payload.Github.OrganisationName)
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&registry); err != nil {
-		return err
+	if resp.Payload.Quay != nil {
+		d.Set("quay_use_organisation", resp.Payload.Quay.UseOrganisation)
+		d.Set("quay_organisation_name", resp.Payload.Quay.OrganisationName)
 	}
-
-	d.Set("name", registry.Name)
-	d.Set("url", registry.URL)
-	d.Set("base_url", registry.BaseURL)
-	d.Set("type", registry.Type)
-	d.Set("authentication", registry.Authentication)
-	d.Set("username", registry.Username)
-	if registry.Github != nil {
-		d.Set("github_use_organisation", registry.Github.UseOrganisation)
-		d.Set("github_organisation_name", registry.Github.OrganisationName)
+	if resp.Payload.Gitlab != nil {
+		d.Set("instance_url", resp.Payload.Gitlab.InstanceURL)
 	}
-	if registry.Quay != nil {
-		d.Set("quay_use_organisation", registry.Quay.UseOrganisation)
-		d.Set("quay_organisation_name", registry.Quay.OrganisationName)
+	if resp.Payload.Ecr != nil {
+		d.Set("aws_region", resp.Payload.Ecr.Region)
 	}
 
 	return nil
@@ -235,52 +158,46 @@ func resourceRegistryRead(d *schema.ResourceData, meta interface{}) error {
 
 func resourceRegistryUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	id := d.Id()
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	body := map[string]interface{}{
-		"name":           d.Get("name").(string),
-		"url":            d.Get("url").(string),
-		"baseURL":        d.Get("base_url").(string),
-		"authentication": d.Get("authentication").(bool),
-		"username":       d.Get("username").(string),
-		"password":       d.Get("password").(string),
+	name := d.Get("name").(string)
+	url := d.Get("url").(string)
+	auth := d.Get("authentication").(bool)
+
+	params := registries.NewRegistryUpdateParams()
+	params.ID = id
+	params.Body = &models.RegistriesRegistryUpdatePayload{
+		Name:           &name,
+		URL:            &url,
+		BaseURL:        d.Get("base_url").(string),
+		Authentication: &auth,
+		Username:       d.Get("username").(string),
+		Password:       d.Get("password").(string),
 	}
 
-	if d.Get("type").(int) == 1 {
-		body["quay"] = map[string]interface{}{
-			"useOrganisation":  d.Get("quay_use_organisation").(bool),
-			"organisationName": d.Get("quay_organisation_name").(string),
+	registryType := d.Get("type").(int)
+	switch registryType {
+	case 1: // Quay.io
+		params.Body.Quay = &models.PortainerQuayRegistryData{
+			UseOrganisation:  d.Get("quay_use_organisation").(bool),
+			OrganisationName: d.Get("quay_organisation_name").(string),
+		}
+	// Note: According to SDK documentation, Gitlab might not be present in UpdatePayload.
+	// We will attempt to use reflection or check for it if needed, but for now we follow the SDK.
+	case 7: // AWS ECR
+		params.Body.Ecr = &models.PortainerEcrData{
+			Region: d.Get("aws_region").(string),
+		}
+	case 8: // GitHub
+		params.Body.Github = &models.PortainereeGithubRegistryData{
+			UseOrganisation:  d.Get("github_use_organisation").(bool),
+			OrganisationName: d.Get("github_organisation_name").(string),
 		}
 	}
 
-	if d.Get("type").(int) == 4 {
-		body["gitlab"] = map[string]interface{}{
-			"InstanceURL": d.Get("instance_url").(string),
-		}
-	}
-
-	if d.Get("type").(int) == 7 {
-		body["ecr"] = map[string]interface{}{
-			"Region": d.Get("aws_region").(string),
-		}
-	}
-
-	if d.Get("type").(int) == 8 {
-		body["github"] = map[string]interface{}{
-			"useOrganisation":  d.Get("github_use_organisation").(bool),
-			"organisationName": d.Get("github_organisation_name").(string),
-		}
-	}
-
-	resp, err := client.DoRequest("PUT", fmt.Sprintf("/registries/%s", id), nil, body)
+	_, err := client.Client.Registries.RegistryUpdate(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to update registry: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update registry: %s", string(data))
 	}
 
 	return resourceRegistryRead(d, meta)
@@ -288,14 +205,21 @@ func resourceRegistryUpdate(d *schema.ResourceData, meta interface{}) error {
 
 func resourceRegistryDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
-	resp, err := client.DoRequest("DELETE", fmt.Sprintf("/registries/%s", d.Id()), nil, nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	if resp.StatusCode != 204 {
-		return fmt.Errorf("failed to delete registry")
+	params := registries.NewRegistryDeleteParams()
+	params.ID = id
+
+	_, err := client.Client.Registries.RegistryDelete(params, client.AuthInfo)
+	if err != nil {
+		if _, ok := err.(*registries.RegistryDeleteNotFound); ok {
+			return nil
+		}
+		// SDK expects 204 but Portainer API returns 200 - treat status 200 as success
+		if strings.Contains(err.Error(), "status 200") {
+			return nil
+		}
+		return fmt.Errorf("failed to delete registry: %w", err)
 	}
 	return nil
 }

@@ -57,6 +57,12 @@ func Provider() *schema.Provider {
 				DefaultFunc: schema.EnvDefaultFunc("PORTAINER_SKIP_SSL_VERIFY", false),
 				Description: "Verify the SSL/TLS certificate for the Portainer endpoint",
 			},
+			"custom_headers": {
+				Type:        schema.TypeMap,
+				Optional:    true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Description: "Custom headers to add to all requests (e.g. for Cloudflare Access or other security proxies).",
+			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
 			"portainer_user_admin":                              resourceUserAdmin(),
@@ -165,12 +171,13 @@ func Provider() *schema.Provider {
 
 // APIClient is a simple client struct to store connection information.
 type APIClient struct {
-	Endpoint   string
-	APIKey     string
-	JWTToken   string
-	HTTPClient http.Client
-	Client     *portainer.PortainerClientAPI
-	AuthInfo   runtime.ClientAuthInfoWriter
+	Endpoint      string
+	APIKey        string
+	JWTToken      string
+	CustomHeaders map[string]string
+	HTTPClient    http.Client
+	Client        *portainer.PortainerClientAPI
+	AuthInfo      runtime.ClientAuthInfoWriter
 }
 
 // DoRequest is a reusable method for making API requests
@@ -199,6 +206,10 @@ func (c *APIClient) DoRequest(method, path string, headers map[string]string, bo
 		req.Header.Set("Authorization", "Bearer "+c.JWTToken)
 	}
 
+	for k, v := range c.CustomHeaders {
+		req.Header.Set(k, v)
+	}
+
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -216,6 +227,10 @@ func (c *APIClient) DoMultipartRequest(method, url string, body *bytes.Buffer, h
 		req.Header.Set("X-API-Key", c.APIKey)
 	} else if c.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.JWTToken)
+	}
+
+	for k, v := range c.CustomHeaders {
+		req.Header.Set(k, v)
 	}
 
 	for k, v := range headers {
@@ -246,6 +261,12 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	user := d.Get("api_user").(string)
 	password := d.Get("api_password").(string)
 	skipSSL := d.Get("skip_ssl_verify").(bool)
+	headersInterface := d.Get("custom_headers").(map[string]interface{})
+
+	customHeaders := make(map[string]string)
+	for k, v := range headersInterface {
+		customHeaders[k] = v.(string)
+	}
 
 	if apiKey != "" && (user != "" || password != "") {
 		return nil, diag.Errorf("you must specify either 'api_key' or 'api_user'/'api_password', not both")
@@ -287,11 +308,12 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	}
 
 	client := &APIClient{
-		Endpoint:   endpoint,
-		APIKey:     apiKey,
-		JWTToken:   "",
-		HTTPClient: *http_client,
-		Client:     portainer.New(sdkTransport, strfmt.Default),
+		Endpoint:      endpoint,
+		APIKey:        apiKey,
+		JWTToken:      "",
+		CustomHeaders: customHeaders,
+		HTTPClient:    *http_client,
+		Client:        portainer.New(sdkTransport, strfmt.Default),
 	}
 
 	// Authenticate via user/password and fetch JWT if api_key is not used
@@ -301,7 +323,17 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 			"Password": password,
 		}
 		payload, _ := json.Marshal(authBody)
-		resp, err := http_client.Post(endpoint+"/auth", "application/json", bytes.NewBuffer(payload))
+		req, err := http.NewRequest("POST", endpoint+"/auth", bytes.NewBuffer(payload))
+		if err != nil {
+			return nil, diag.FromErr(fmt.Errorf("failed to create auth request: %w", err))
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		for k, v := range customHeaders {
+			req.Header.Set(k, v)
+		}
+
+		resp, err := http_client.Do(req)
 		if err != nil {
 			return nil, diag.FromErr(fmt.Errorf("failed to authenticate using username/password: %w", err))
 		}
@@ -322,14 +354,20 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	}
 
 	// Configure SDK authentication
+	var auths []runtime.ClientAuthInfoWriter
+
 	if client.APIKey != "" {
-		client.AuthInfo = httptransport.APIKeyAuth("X-API-Key", "header", client.APIKey)
+		auths = append(auths, httptransport.APIKeyAuth("X-API-Key", "header", client.APIKey))
 	} else if client.JWTToken != "" {
-		client.AuthInfo = httptransport.BearerToken(client.JWTToken)
+		auths = append(auths, httptransport.BearerToken(client.JWTToken))
 	}
 
-	// Set default authentication on transport as well, just in case
-	if client.AuthInfo != nil {
+	for k, v := range customHeaders {
+		auths = append(auths, httptransport.APIKeyAuth(k, "header", v))
+	}
+
+	if len(auths) > 0 {
+		client.AuthInfo = httptransport.Compose(auths...)
 		sdkTransport.DefaultAuthentication = client.AuthInfo
 	}
 
