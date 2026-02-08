@@ -3,6 +3,7 @@ package internal
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/portainer/client-api-go/v2/pkg/client/registries"
@@ -212,6 +213,10 @@ func resourceRegistryDelete(d *schema.ResourceData, meta interface{}) error {
 	_, err := client.Client.Registries.RegistryDelete(params, client.AuthInfo)
 	if err != nil {
 		if _, ok := err.(*registries.RegistryDeleteNotFound); ok {
+			return nil
+		}
+		// SDK expects 204 but Portainer API returns 200 - treat status 200 as success
+		if strings.Contains(err.Error(), "status 200") {
 			return nil
 		}
 		return fmt.Errorf("failed to delete registry: %w", err)
