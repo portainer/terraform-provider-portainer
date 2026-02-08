@@ -65,6 +65,12 @@ provider "portainer" {
   # api_password = "your-password"
 
   skip_ssl_verify  = true # optional (default value is `false`)
+
+  # Optional: add custom headers to ALL requests (e.g. Cloudflare Access / auth proxy)
+  # custom_headers = {
+  #   "CF-Access-Client-Id"     = "..."
+  #   "CF-Access-Client-Secret" = "..."
+  # }
 }
 ```
 
@@ -117,6 +123,7 @@ $ export PORTAINER_SKIP_SSL_VERIFY=true
 | `api_user`        | string  | ❌ no    | Username for authentication (must be used with `api_password`). Mutually exclusive with `api_key`.  |
 | `api_password`    | string  | ❌ no    | Password for authentication (must be used with `api_user`). Mutually exclusive with `api_key`.      |
 | `skip_ssl_verify` | boolean | ❌ no    | Skip TLS certificate verification (useful for self-signed certs). Default: `false`.                 |
+| `custom_headers`  | map(string) | ❌ no | Custom headers added to all requests (e.g. Cloudflare Access / security proxy headers).            |
 
 
 ## Usage
