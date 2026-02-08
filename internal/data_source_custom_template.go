@@ -1,12 +1,11 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/custom_templates"
 )
 
 func dataSourceCustomTemplate() *schema.Resource {
@@ -34,32 +33,17 @@ func dataSourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) erro
 	client := meta.(*APIClient)
 	title := d.Get("title").(string)
 
-	resp, err := client.DoRequest("GET", "/custom_templates", nil, nil)
+	params := custom_templates.NewCustomTemplateListParams()
+	resp, err := client.Client.CustomTemplates.CustomTemplateList(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to list custom templates: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list custom templates, status %d: %s", resp.StatusCode, string(data))
-	}
-
-	var templates []struct {
-		ID          int    `json:"Id"`
-		Title       string `json:"Title"`
-		Description string `json:"Description"`
-		Type        int    `json:"Type"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&templates); err != nil {
-		return fmt.Errorf("failed to decode custom template list: %w", err)
-	}
-
-	for _, t := range templates {
+	for _, t := range resp.Payload {
 		if t.Title == title {
-			d.SetId(strconv.Itoa(t.ID))
+			d.SetId(strconv.FormatInt(t.ID, 10))
 			d.Set("description", t.Description)
-			d.Set("type", t.Type)
+			d.Set("type", int(t.Type))
 			return nil
 		}
 	}

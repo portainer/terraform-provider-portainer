@@ -1,12 +1,11 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/endpoint_groups"
 )
 
 func dataSourceEndpointGroup() *schema.Resource {
@@ -30,29 +29,15 @@ func dataSourceEndpointGroupRead(d *schema.ResourceData, meta interface{}) error
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	resp, err := client.DoRequest("GET", "/endpoint_groups", nil, nil)
+	params := endpoint_groups.NewEndpointGroupListParams()
+	resp, err := client.Client.EndpointGroups.EndpointGroupList(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to list endpoint groups: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list endpoint groups, status %d: %s", resp.StatusCode, string(data))
-	}
-
-	var groups []struct {
-		ID          int    `json:"Id"`
-		Name        string `json:"Name"`
-		Description string `json:"Description"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&groups); err != nil {
-		return fmt.Errorf("failed to decode endpoint group list: %w", err)
-	}
-
-	for _, g := range groups {
+	for _, g := range resp.Payload {
 		if g.Name == name {
-			d.SetId(strconv.Itoa(g.ID))
+			d.SetId(strconv.FormatInt(g.ID, 10))
 			d.Set("description", g.Description)
 			return nil
 		}

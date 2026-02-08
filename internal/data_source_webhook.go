@@ -1,12 +1,11 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/webhooks"
 )
 
 func dataSourceWebhook() *schema.Resource {
@@ -37,34 +36,18 @@ func dataSourceWebhook() *schema.Resource {
 func dataSourceWebhookRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	resourceID := d.Get("resource_id").(string)
-	endpointID := d.Get("endpoint_id").(int)
+	endpointID := int64(d.Get("endpoint_id").(int))
 
-	resp, err := client.DoRequest("GET", "/webhooks", nil, nil)
+	params := webhooks.NewGetWebhooksParams()
+	resp, err := client.Client.Webhooks.GetWebhooks(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to list webhooks: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list webhooks, status %d: %s", resp.StatusCode, string(data))
-	}
-
-	var webhooks []struct {
-		ID         int    `json:"Id"`
-		EndpointID int    `json:"EndpointId"`
-		ResourceID string `json:"ResourceId"`
-		Token      string `json:"Token"`
-		Type       int    `json:"Type"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&webhooks); err != nil {
-		return fmt.Errorf("failed to decode webhook list: %w", err)
-	}
-
-	for _, w := range webhooks {
+	for _, w := range resp.Payload {
 		if w.ResourceID == resourceID && w.EndpointID == endpointID {
-			d.SetId(strconv.Itoa(w.ID))
-			d.Set("webhook_type", w.Type)
+			d.SetId(strconv.FormatInt(w.ID, 10))
+			d.Set("webhook_type", int(w.Type))
 			d.Set("token", w.Token)
 			return nil
 		}

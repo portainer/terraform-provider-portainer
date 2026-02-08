@@ -1,19 +1,12 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/ssl"
+	"github.com/portainer/client-api-go/v2/pkg/models"
 )
-
-type sslSettings struct {
-	Cert        string `json:"cert"`
-	Key         string `json:"key"`
-	ClientCert  string `json:"clientCert"`
-	HTTPEnabled bool   `json:"httpenabled"`
-}
 
 func resourceSSLSettings() *schema.Resource {
 	return &schema.Resource{
@@ -55,22 +48,17 @@ func resourceSSLSettings() *schema.Resource {
 func resourceSSLSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
-	payload := sslSettings{
+	params := ssl.NewSSLUpdateParams()
+	params.Body = &models.SslSslUpdatePayload{
 		Cert:        d.Get("cert").(string),
 		Key:         d.Get("key").(string),
 		ClientCert:  d.Get("client_cert").(string),
-		HTTPEnabled: d.Get("http_enabled").(bool),
+		Httpenabled: d.Get("http_enabled").(bool),
 	}
 
-	resp, err := client.DoRequest("PUT", "/ssl", nil, payload)
+	_, err := client.Client.Ssl.SSLUpdate(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to update SSL settings: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update SSL settings: %s", string(body))
 	}
 
 	d.SetId("portainer-ssl")
@@ -80,25 +68,13 @@ func resourceSSLSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
 func resourceSSLSettingsRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
-	resp, err := client.DoRequest("GET", "/ssl", nil, nil)
+	params := ssl.NewSSLInspectParams()
+	resp, err := client.Client.Ssl.SSLInspect(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to read SSL settings: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read SSL settings: %s", string(body))
-	}
-
-	var result struct {
-		HTTPEnabled bool `json:"httpEnabled"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	d.Set("http_enabled", result.HTTPEnabled)
+	d.Set("http_enabled", resp.Payload.HTTPEnabled)
 	d.SetId("portainer-ssl")
 	return nil
 }

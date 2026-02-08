@@ -1,13 +1,14 @@
 package internal
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/endpoints"
+	"github.com/portainer/client-api-go/v2/pkg/client/registries"
+	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 var ErrRegistryNotFound = errors.New("registry not found")
@@ -49,49 +50,32 @@ func resourceRegistryAccess() *schema.Resource {
 	}
 }
 
-type RegistryAccessPolicies struct {
-	UserAccessPolicies map[string]map[string]int `json:"UserAccessPolicies"`
-	TeamAccessPolicies map[string]map[string]int `json:"TeamAccessPolicies"`
-	Namespaces         []string                  `json:"Namespaces"`
-}
+func getRegistryPolicies(client *APIClient, registryID int, endpointID int) (*models.PortainerRegistryAccessPolicies, error) {
+	params := registries.NewRegistryInspectParams()
+	params.ID = int64(registryID)
 
-func getRegistryPolicies(client *APIClient, registryID int, endpointID int) (*RegistryAccessPolicies, error) {
-	resp, err := client.DoRequest("GET", fmt.Sprintf("/registries/%d", registryID), nil, nil)
+	resp, err := client.Client.Registries.RegistryInspect(params, client.AuthInfo)
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 {
-		return nil, ErrRegistryNotFound
-	}
-
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch registry: %s", string(data))
-	}
-
-	var registry struct {
-		RegistryAccesses map[string]RegistryAccessPolicies `json:"RegistryAccesses"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&registry); err != nil {
-		return nil, err
+		if _, ok := err.(*registries.RegistryInspectNotFound); ok {
+			return nil, ErrRegistryNotFound
+		}
+		return nil, fmt.Errorf("failed to fetch registry: %w", err)
 	}
 
 	eidStr := strconv.Itoa(endpointID)
-	policies, ok := registry.RegistryAccesses[eidStr]
+	policies, ok := resp.Payload.RegistryAccesses[eidStr]
 	if !ok {
-		return &RegistryAccessPolicies{
-			UserAccessPolicies: make(map[string]map[string]int),
-			TeamAccessPolicies: make(map[string]map[string]int),
+		return &models.PortainerRegistryAccessPolicies{
+			UserAccessPolicies: make(models.PortainerUserAccessPolicies),
+			TeamAccessPolicies: make(models.PortainerTeamAccessPolicies),
 		}, nil
 	}
 
 	if policies.UserAccessPolicies == nil {
-		policies.UserAccessPolicies = make(map[string]map[string]int)
+		policies.UserAccessPolicies = make(models.PortainerUserAccessPolicies)
 	}
 	if policies.TeamAccessPolicies == nil {
-		policies.TeamAccessPolicies = make(map[string]map[string]int)
+		policies.TeamAccessPolicies = make(models.PortainerTeamAccessPolicies)
 	}
 
 	return &policies, nil
@@ -103,7 +87,7 @@ func resourceRegistryAccessCreate(d *schema.ResourceData, meta interface{}) erro
 	endpointID := d.Get("endpoint_id").(int)
 	teamID, hasTeam := d.GetOk("team_id")
 	userID, hasUser := d.GetOk("user_id")
-	roleID := d.Get("role_id").(int)
+	roleID := int64(d.Get("role_id").(int))
 
 	if !hasTeam && !hasUser {
 		return fmt.Errorf("either team_id or user_id must be provided")
@@ -116,22 +100,25 @@ func resourceRegistryAccessCreate(d *schema.ResourceData, meta interface{}) erro
 
 	if hasTeam {
 		tidStr := strconv.Itoa(teamID.(int))
-		policies.TeamAccessPolicies[tidStr] = map[string]int{"RoleId": roleID}
+		policies.TeamAccessPolicies[tidStr] = models.PortainerAccessPolicy{RoleID: roleID}
 	}
 	if hasUser {
 		uidStr := strconv.Itoa(userID.(int))
-		policies.UserAccessPolicies[uidStr] = map[string]int{"RoleId": roleID}
+		policies.UserAccessPolicies[uidStr] = models.PortainerAccessPolicy{RoleID: roleID}
 	}
 
-	resp, err := client.DoRequest("PUT", fmt.Sprintf("/endpoints/%d/registries/%d", endpointID, registryID), nil, policies)
+	params := endpoints.NewEndpointRegistryAccessParams()
+	params.ID = int64(endpointID)
+	params.RegistryID = int64(registryID)
+	params.Body = &models.EndpointsRegistryAccessPayload{
+		UserAccessPolicies: policies.UserAccessPolicies,
+		TeamAccessPolicies: policies.TeamAccessPolicies,
+		Namespaces:         policies.Namespaces,
+	}
+
+	_, err = client.Client.Endpoints.EndpointRegistryAccess(params, client.AuthInfo)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update registry access: %s", string(data))
+		return fmt.Errorf("failed to update registry access: %w", err)
 	}
 
 	id := fmt.Sprintf("%d/%d/", registryID, endpointID)
@@ -165,13 +152,13 @@ func resourceRegistryAccessRead(d *schema.ResourceData, meta interface{}) error 
 	if hasTeam {
 		tidStr := strconv.Itoa(teamID.(int))
 		if p, ok := policies.TeamAccessPolicies[tidStr]; ok {
-			d.Set("role_id", p["RoleId"])
+			d.Set("role_id", int(p.RoleID))
 			found = true
 		}
 	} else if hasUser {
 		uidStr := strconv.Itoa(userID.(int))
 		if p, ok := policies.UserAccessPolicies[uidStr]; ok {
-			d.Set("role_id", p["RoleId"])
+			d.Set("role_id", int(p.RoleID))
 			found = true
 		}
 	}
@@ -209,15 +196,18 @@ func resourceRegistryAccessDelete(d *schema.ResourceData, meta interface{}) erro
 		delete(policies.UserAccessPolicies, strconv.Itoa(userID.(int)))
 	}
 
-	resp, err := client.DoRequest("PUT", fmt.Sprintf("/endpoints/%d/registries/%d", endpointID, registryID), nil, policies)
-	if err != nil {
-		return err
+	params := endpoints.NewEndpointRegistryAccessParams()
+	params.ID = int64(endpointID)
+	params.RegistryID = int64(registryID)
+	params.Body = &models.EndpointsRegistryAccessPayload{
+		UserAccessPolicies: policies.UserAccessPolicies,
+		TeamAccessPolicies: policies.TeamAccessPolicies,
+		Namespaces:         policies.Namespaces,
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete registry access: %s", string(data))
+	_, err = client.Client.Endpoints.EndpointRegistryAccess(params, client.AuthInfo)
+	if err != nil {
+		return fmt.Errorf("failed to delete registry access: %w", err)
 	}
 
 	return nil

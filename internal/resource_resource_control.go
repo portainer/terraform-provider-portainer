@@ -123,10 +123,17 @@ func resourceResourceControlRead(d *schema.ResourceData, meta interface{}) error
 
 	d.SetId(rcId)
 
-	// uložíme resource_control_id, pokud ho server vrátí
-	if v, ok := rcData["Id"].(float64); ok {
-		_ = d.Set("resource_control_id", int(v))
-	}
+	// Note: We intentionally do NOT set resource_control_id here.
+	// When using lookup mode (resource_id + type), the resource_control_id
+	// may change if Portainer regenerates the resource control internally.
+	// Since resource_control_id has ForceNew: true, updating it would cause
+	// Terraform to destroy and recreate the resource unnecessarily.
+	// The Terraform resource ID (d.SetId) is updated to track the current
+	// backend ID, which is sufficient for subsequent Update/Delete operations.
+	// save resource_control_id
+	// if v, ok := rcData["Id"].(float64); ok {
+	// 	_ = d.Set("resource_control_id", int(v))
+	// }
 
 	if v, ok := rcData["AdministratorsOnly"].(bool); ok {
 		_ = d.Set("administrators_only", v)

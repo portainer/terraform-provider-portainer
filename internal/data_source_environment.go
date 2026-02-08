@@ -1,12 +1,11 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/portainer/client-api-go/v2/pkg/client/endpoints"
 )
 
 func dataSourceEnvironment() *schema.Resource {
@@ -38,34 +37,18 @@ func dataSourceEnvironmentRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	resp, err := client.DoRequest("GET", "/endpoints", nil, nil)
+	params := endpoints.NewEndpointListParams()
+	resp, err := client.Client.Endpoints.EndpointList(params, client.AuthInfo)
 	if err != nil {
 		return fmt.Errorf("failed to list environments: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list environments, status %d: %s", resp.StatusCode, string(data))
-	}
-
-	var environments []struct {
-		ID      int    `json:"Id"`
-		Name    string `json:"Name"`
-		Type    int    `json:"Type"`
-		URL     string `json:"URL"`
-		GroupID int    `json:"GroupId"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&environments); err != nil {
-		return fmt.Errorf("failed to decode environment list: %w", err)
-	}
-
-	for _, e := range environments {
+	for _, e := range resp.Payload {
 		if e.Name == name {
-			d.SetId(strconv.Itoa(e.ID))
-			d.Set("type", e.Type)
+			d.SetId(strconv.FormatInt(e.ID, 10))
+			d.Set("type", int(e.Type))
 			d.Set("environment_address", e.URL)
-			d.Set("group_id", e.GroupID)
+			d.Set("group_id", int(e.GroupID))
 			return nil
 		}
 	}
