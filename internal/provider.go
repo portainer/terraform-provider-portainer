@@ -180,6 +180,18 @@ type APIClient struct {
 	AuthInfo      runtime.ClientAuthInfoWriter
 }
 
+type headerTransport struct {
+	Transport http.RoundTripper
+	Headers   map[string]string
+}
+
+func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	for k, v := range t.Headers {
+		req.Header.Set(k, v)
+	}
+	return t.Transport.RoundTrip(req)
+}
+
 // DoRequest is a reusable method for making API requests
 func (c *APIClient) DoRequest(method, path string, headers map[string]string, body interface{}) (*http.Response, error) {
 	var buf io.Reader
@@ -206,10 +218,6 @@ func (c *APIClient) DoRequest(method, path string, headers map[string]string, bo
 		req.Header.Set("Authorization", "Bearer "+c.JWTToken)
 	}
 
-	for k, v := range c.CustomHeaders {
-		req.Header.Set(k, v)
-	}
-
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -227,10 +235,6 @@ func (c *APIClient) DoMultipartRequest(method, url string, body *bytes.Buffer, h
 		req.Header.Set("X-API-Key", c.APIKey)
 	} else if c.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.JWTToken)
-	}
-
-	for k, v := range c.CustomHeaders {
-		req.Header.Set(k, v)
 	}
 
 	for k, v := range headers {
@@ -281,8 +285,18 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 			InsecureSkipVerify: skipSSL,
 		},
 	}
+
+	// Wrap transport with custom headers if provided
+	var transportWithCustomHeaders http.RoundTripper = transport
+	if len(customHeaders) > 0 {
+		transportWithCustomHeaders = &headerTransport{
+			Transport: transport,
+			Headers:   customHeaders,
+		}
+	}
+
 	http_client := &http.Client{
-		Transport: transport,
+		Transport: transportWithCustomHeaders,
 	}
 
 	// Prepare SDK transport
@@ -301,7 +315,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	schemes := []string{u.Scheme}
 
 	sdkTransport := httptransport.New(host, basePath, schemes)
-	sdkTransport.Transport = transport
+	sdkTransport.Transport = transportWithCustomHeaders
 
 	if !strings.HasSuffix(endpoint, "/api") {
 		endpoint = strings.TrimRight(endpoint, "/") + "/api"
@@ -328,10 +342,6 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 			return nil, diag.FromErr(fmt.Errorf("failed to create auth request: %w", err))
 		}
 		req.Header.Set("Content-Type", "application/json")
-
-		for k, v := range customHeaders {
-			req.Header.Set(k, v)
-		}
 
 		resp, err := http_client.Do(req)
 		if err != nil {
@@ -360,10 +370,6 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		auths = append(auths, httptransport.APIKeyAuth("X-API-Key", "header", client.APIKey))
 	} else if client.JWTToken != "" {
 		auths = append(auths, httptransport.BearerToken(client.JWTToken))
-	}
-
-	for k, v := range customHeaders {
-		auths = append(auths, httptransport.APIKeyAuth(k, "header", v))
 	}
 
 	if len(auths) > 0 {
