@@ -20,7 +20,7 @@ func resourceUser() *schema.Resource {
 		Update: resourceUserUpdate,
 
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			State: resourceUserImport,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -188,7 +188,55 @@ func resourceUserRead(d *schema.ResourceData, meta interface{}) error {
 
 	d.Set("username", resp.Payload.Username)
 	d.Set("role", resp.Payload.Role)
+
+	// Attempt to find team_id for standard users
+	if resp.Payload.Role == 2 {
+		paramsTM := team_memberships.NewTeamMembershipListParams()
+		respTM, err := client.Client.TeamMemberships.TeamMembershipList(paramsTM, client.AuthInfo)
+		if err == nil {
+			for _, m := range respTM.Payload {
+				if m.UserID == id {
+					d.Set("team_id", int(m.TeamID))
+					break
+				}
+			}
+		}
+	}
+
 	return nil
+}
+
+func resourceUserImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	client := meta.(*APIClient)
+
+	// Check if the ID is a numeric ID
+	if _, err := strconv.ParseInt(d.Id(), 10, 64); err == nil {
+		// It's a numeric ID, so just read it
+		if err := resourceUserRead(d, meta); err != nil {
+			return nil, err
+		}
+		return []*schema.ResourceData{d}, nil
+	}
+
+	// It's not a numeric ID, so treat it as a username
+	username := d.Id()
+	params := users.NewUserListParams()
+	resp, err := client.Client.Users.UserList(params, client.AuthInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users for import: %w", err)
+	}
+
+	for _, u := range resp.Payload {
+		if u.Username == username {
+			d.SetId(strconv.FormatInt(u.ID, 10))
+			if err := resourceUserRead(d, meta); err != nil {
+				return nil, err
+			}
+			return []*schema.ResourceData{d}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("user %s not found", username)
 }
 
 func resourceUserReadByUsername(d *schema.ResourceData, meta interface{}) error {

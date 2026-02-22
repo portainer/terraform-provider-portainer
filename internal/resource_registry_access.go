@@ -207,6 +207,9 @@ func resourceRegistryAccessDelete(d *schema.ResourceData, meta interface{}) erro
 
 	_, err = client.Client.Endpoints.EndpointRegistryAccess(params, client.AuthInfo)
 	if err != nil {
+		if _, ok := err.(*endpoints.EndpointRegistryAccessNotFound); ok {
+			return nil
+		}
 		return fmt.Errorf("failed to delete registry access: %w", err)
 	}
 

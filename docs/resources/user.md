@@ -46,6 +46,23 @@ resource "portainer_user" "your-user" {
   ldap_user = true
 }
 ```
+
+### Import
+
+- You can import an existing user by its numeric ID or by its username.
+
+#### Import by ID
+
+```bash
+terraform import portainer_user.your_user 123
+```
+
+#### Import by Username
+
+```bash
+terraform import portainer_user.your_user youruser
+```
+
 ## Lifecycle & Behavior
 
 Users are updated if any of the attributes change (e.g., username, password, role).

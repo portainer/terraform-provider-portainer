@@ -370,7 +370,7 @@ terraform apply
 | `repository_password_wo`            | string | 🚫 optional | **Write-only** repository password or token (supports ephemeral values; not stored in Terraform state). |
 | `repository_credentials_wo_version` | int    | 🚫 optional | Version flag for write-only credentials; must be set when using `_wo` fields to trigger redeployment.   |
 | `stack_webhook`                     | bool   | 🚫 optional | Enable GitOps webhook (default: `false`)                                                                |
-| `update_interval`                   | string | 🚫 optional | Polling interval (e.g. `30m`, `1h`)                                                                     |
+| `update_interval`                   | string | 🚫 optional | Polling interval (enables GitOps polling, e.g. `30m`, `1h`)                                             |
 | `force_update`                      | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                                                            |
 | `support_relative_path`             | bool   | 🚫 optional | Enable resolving of relative paths (default: `false`)                                                   |
 | `filesystem_path`                   | string | 🚫 optional | Base path on disk to resolve relative paths from                                                        |
@@ -408,7 +408,7 @@ terraform apply
 | `repository_password_wo`            | string | 🚫 optional | **Write-only** repository password or token (supports ephemeral values; not stored in Terraform state). |
 | `repository_credentials_wo_version` | int    | 🚫 optional | Version flag for write-only credentials; must be set when using `_wo` fields to trigger redeployment.   |
 | `stack_webhook`                     | bool   | 🚫 optional | Enable GitOps webhook (default: `false`)                                                                |
-| `update_interval`                   | string | 🚫 optional | Polling interval (e.g. `30m`, `1h`)                                                                     |
+| `update_interval`                   | string | 🚫 optional | Polling interval (enables GitOps polling, e.g. `30m`, `1h`)                                             |
 | `force_update`                      | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                                                            |
 | `compose_format`                    | bool   | 🚫 optional | Compose format support (default: `false`)                                                               |
 | `additional_files`                  | string | 🚫 optional | List of additional YAML/manifest file paths                                                             |

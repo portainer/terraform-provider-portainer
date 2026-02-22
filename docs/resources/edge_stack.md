@@ -122,7 +122,7 @@ terraform apply
 | `repository_username`       | string | 🚫 optional | Git username (if auth is enabled)                                    |
 | `repository_password`       | string | 🚫 optional | Git password/token (if auth is enabled)                              |
 | `stack_webhook`             | bool   | 🚫 optional | Enable GitOps webhook (default: `false`)                             |
-| `update_interval`           | string | 🚫 optional | Polling interval (e.g. `30m`, `1h`)                                  |
+| `update_interval`           | string | 🚫 optional | Polling interval (enables GitOps polling, e.g. `30m`, `1h`)          |
 | `force_update`              | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                         |
 | `pull_image`                | bool   | 🚫 optional | Pull latest image during update (default: `false`)                   |
 | `relative_path`             | string | 🚫 optional | Enables relative path volumes (from Compose) and sets the `filesystemPath` |
