@@ -359,8 +359,11 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 		}
 
 		stackWebhook := d.Get("stack_webhook").(bool)
-		if stackWebhook {
-			webhookID := uuid.New().String()
+		if stackWebhook || d.Get("update_interval").(string) != "" {
+			webhookID := ""
+			if stackWebhook {
+				webhookID = uuid.New().String()
+			}
 			autoUpdate := map[string]interface{}{
 				"forcePullImage": d.Get("pull_image").(bool),
 				"forceUpdate":    d.Get("force_update").(bool),
@@ -368,10 +371,12 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 				"webhook":        webhookID,
 			}
 			payload["autoUpdate"] = autoUpdate
-			d.Set("webhook_id", webhookID)
-			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
-			webhookURL := fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, webhookID)
-			d.Set("webhook_url", webhookURL)
+			if webhookID != "" {
+				d.Set("webhook_id", webhookID)
+				baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+				webhookURL := fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, webhookID)
+				d.Set("webhook_url", webhookURL)
+			}
 		}
 		return createEdgeStackFromJSON(client, d, payload, "/edge_stacks/create/repository")
 	}
@@ -453,8 +458,11 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 			}
 		}
 
-		if d.Get("stack_webhook").(bool) {
-			webhookID := uuid.New().String()
+		if d.Get("stack_webhook").(bool) || d.Get("update_interval").(string) != "" {
+			webhookID := ""
+			if d.Get("stack_webhook").(bool) {
+				webhookID = uuid.New().String()
+			}
 			autoUpdate := map[string]interface{}{
 				"forcePullImage": d.Get("pull_image").(bool),
 				"forceUpdate":    d.Get("force_update").(bool),
@@ -463,10 +471,12 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 			}
 			payload["autoUpdate"] = autoUpdate
 
-			d.Set("webhook_id", webhookID)
-			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
-			webhookURL := fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, webhookID)
-			d.Set("webhook_url", webhookURL)
+			if webhookID != "" {
+				d.Set("webhook_id", webhookID)
+				baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+				webhookURL := fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, webhookID)
+				d.Set("webhook_url", webhookURL)
+			}
 		}
 
 		jsonBody, err := json.Marshal(payload)
@@ -578,6 +588,11 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 				GitCredentialID int `json:"GitCredentialID"`
 			} `json:"Authentication"`
 		} `json:"GitConfig"`
+		AutoUpdate *struct {
+			Interval       string `json:"Interval"`
+			Webhook        string `json:"Webhook"`
+			ForcePullImage bool   `json:"ForcePullImage"`
+		} `json:"AutoUpdate,omitempty"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
@@ -595,6 +610,10 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 
 	if stack.GitConfig != nil {
 		d.Set("repository_git_credential_id", stack.GitConfig.Authentication.GitCredentialID)
+	}
+	if stack.AutoUpdate != nil {
+		d.Set("pull_image", stack.AutoUpdate.ForcePullImage)
+		d.Set("update_interval", stack.AutoUpdate.Interval)
 	}
 
 	return nil

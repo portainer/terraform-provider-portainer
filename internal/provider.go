@@ -144,26 +144,29 @@ func Provider() *schema.Provider {
 			"portainer_endpoint_group_access":                   resourceEndpointGroupAccess(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
-			"portainer_user":               dataSourceUser(),
-			"portainer_team":               dataSourceTeam(),
-			"portainer_environment":        dataSourceEnvironment(),
-			"portainer_endpoint_group":     dataSourceEndpointGroup(),
-			"portainer_tag":                dataSourceTag(),
-			"portainer_registry":           dataSourceRegistry(),
-			"portainer_stack":              dataSourceStack(),
-			"portainer_edge_group":         dataSourceEdgeGroup(),
-			"portainer_custom_template":    dataSourceCustomTemplate(),
-			"portainer_cloud_credentials":  dataSourceCloudCredentials(),
-			"portainer_edge_stack":         dataSourceEdgeStack(),
-			"portainer_edge_job":           dataSourceEdgeJob(),
-			"portainer_edge_configuration": dataSourceEdgeConfiguration(),
-			"portainer_webhook":            dataSourceWebhook(),
-			"portainer_docker_network":     dataSourceDockerNetwork(),
-			"portainer_docker_volume":      dataSourceDockerVolume(),
-			"portainer_docker_config":      dataSourceDockerConfig(),
-			"portainer_docker_secret":      dataSourceDockerSecret(),
-			"portainer_docker_image":       dataSourceDockerImage(),
-			"portainer_docker_node":        dataSourceDockerNode(),
+			"portainer_user":                  dataSourceUser(),
+			"portainer_team":                  dataSourceTeam(),
+			"portainer_environment":           dataSourceEnvironment(),
+			"portainer_endpoint_group":        dataSourceEndpointGroup(),
+			"portainer_tag":                   dataSourceTag(),
+			"portainer_registry":              dataSourceRegistry(),
+			"portainer_stack":                 dataSourceStack(),
+			"portainer_edge_group":            dataSourceEdgeGroup(),
+			"portainer_custom_template":       dataSourceCustomTemplate(),
+			"portainer_cloud_credentials":     dataSourceCloudCredentials(),
+			"portainer_edge_stack":            dataSourceEdgeStack(),
+			"portainer_edge_job":              dataSourceEdgeJob(),
+			"portainer_edge_configuration":    dataSourceEdgeConfiguration(),
+			"portainer_webhook":               dataSourceWebhook(),
+			"portainer_team_membership":       dataSourceTeamMembership(),
+			"portainer_endpoint_group_access": dataSourceEndpointGroupAccess(),
+			"portainer_registry_access":       dataSourceRegistryAccess(),
+			"portainer_docker_network":        dataSourceDockerNetwork(),
+			"portainer_docker_volume":         dataSourceDockerVolume(),
+			"portainer_docker_config":         dataSourceDockerConfig(),
+			"portainer_docker_secret":         dataSourceDockerSecret(),
+			"portainer_docker_image":          dataSourceDockerImage(),
+			"portainer_docker_node":           dataSourceDockerNode(),
 		},
 		ConfigureContextFunc: configureProvider,
 	}
@@ -178,6 +181,18 @@ type APIClient struct {
 	HTTPClient    http.Client
 	Client        *portainer.PortainerClientAPI
 	AuthInfo      runtime.ClientAuthInfoWriter
+}
+
+type headerTransport struct {
+	Transport http.RoundTripper
+	Headers   map[string]string
+}
+
+func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	for k, v := range t.Headers {
+		req.Header.Set(k, v)
+	}
+	return t.Transport.RoundTrip(req)
 }
 
 // DoRequest is a reusable method for making API requests
@@ -206,10 +221,6 @@ func (c *APIClient) DoRequest(method, path string, headers map[string]string, bo
 		req.Header.Set("Authorization", "Bearer "+c.JWTToken)
 	}
 
-	for k, v := range c.CustomHeaders {
-		req.Header.Set(k, v)
-	}
-
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -227,10 +238,6 @@ func (c *APIClient) DoMultipartRequest(method, url string, body *bytes.Buffer, h
 		req.Header.Set("X-API-Key", c.APIKey)
 	} else if c.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.JWTToken)
-	}
-
-	for k, v := range c.CustomHeaders {
-		req.Header.Set(k, v)
 	}
 
 	for k, v := range headers {
@@ -281,8 +288,18 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 			InsecureSkipVerify: skipSSL,
 		},
 	}
+
+	// Wrap transport with custom headers if provided
+	var transportWithCustomHeaders http.RoundTripper = transport
+	if len(customHeaders) > 0 {
+		transportWithCustomHeaders = &headerTransport{
+			Transport: transport,
+			Headers:   customHeaders,
+		}
+	}
+
 	http_client := &http.Client{
-		Transport: transport,
+		Transport: transportWithCustomHeaders,
 	}
 
 	// Prepare SDK transport
@@ -301,7 +318,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	schemes := []string{u.Scheme}
 
 	sdkTransport := httptransport.New(host, basePath, schemes)
-	sdkTransport.Transport = transport
+	sdkTransport.Transport = transportWithCustomHeaders
 
 	if !strings.HasSuffix(endpoint, "/api") {
 		endpoint = strings.TrimRight(endpoint, "/") + "/api"
@@ -328,10 +345,6 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 			return nil, diag.FromErr(fmt.Errorf("failed to create auth request: %w", err))
 		}
 		req.Header.Set("Content-Type", "application/json")
-
-		for k, v := range customHeaders {
-			req.Header.Set(k, v)
-		}
 
 		resp, err := http_client.Do(req)
 		if err != nil {
@@ -360,10 +373,6 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		auths = append(auths, httptransport.APIKeyAuth("X-API-Key", "header", client.APIKey))
 	} else if client.JWTToken != "" {
 		auths = append(auths, httptransport.BearerToken(client.JWTToken))
-	}
-
-	for k, v := range customHeaders {
-		auths = append(auths, httptransport.APIKeyAuth(k, "header", v))
 	}
 
 	if len(auths) > 0 {

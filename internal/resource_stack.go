@@ -502,8 +502,9 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 		EndpointID          int    `json:"EndpointId"`
 		SupportRelativePath bool   `json:"supportRelativePath"`
 		AutoUpdate          *struct {
-			Webhook        string `json:"webhook"`
-			ForcePullImage bool   `json:"forcePullImage"`
+			Interval       string `json:"Interval"`
+			Webhook        string `json:"Webhook"`
+			ForcePullImage bool   `json:"ForcePullImage"`
 		} `json:"AutoUpdate,omitempty"`
 		Env []struct {
 			Name  string `json:"name"`
@@ -608,6 +609,7 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	}
 	if stack.AutoUpdate != nil {
 		_ = d.Set("pull_image", stack.AutoUpdate.ForcePullImage)
+		_ = d.Set("update_interval", stack.AutoUpdate.Interval)
 	}
 
 	if stack.Portainer.ResourceControl.Id != 0 {
@@ -722,8 +724,9 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			payload["filesystemPath"] = v.(string)
 		}
 
+		webhookID := ""
 		if d.Get("stack_webhook").(bool) {
-			webhookID := d.Get("webhook_id").(string)
+			webhookID = d.Get("webhook_id").(string)
 			if webhookID == "" {
 				webhookID = uuid.New().String()
 			}
@@ -735,12 +738,23 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 				"webhook":        webhookID,
 			}
 			payload["autoUpdate"] = autoUpdate
+		} else if v, ok := d.GetOk("update_interval"); ok && v.(string) != "" {
+			payload["autoUpdate"] = map[string]interface{}{
+				"forcePullImage": d.Get("pull_image").(bool),
+				"forceUpdate":    d.Get("force_update").(bool),
+				"interval":       v.(string),
+			}
+		}
+
+		if payload["autoUpdate"] != nil {
 			payload["registries"] = expandIntList(d.Get("registries").([]interface{}))
 			_ = d.Set("webhook_id", webhookID)
 
-			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
-			webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
-			_ = d.Set("webhook_url", webhookURL)
+			if webhookID != "" {
+				baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+				webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
+				_ = d.Set("webhook_url", webhookURL)
+			}
 
 			jsonBody, err := json.Marshal(payload)
 			if err != nil {
@@ -1024,8 +1038,11 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 	}
 
 	stackWebhook := d.Get("stack_webhook").(bool)
-	if stackWebhook {
-		webhookID := uuid.New().String()
+	if stackWebhook || d.Get("update_interval").(string) != "" {
+		webhookID := ""
+		if stackWebhook {
+			webhookID = uuid.New().String()
+		}
 		autoUpdate := map[string]interface{}{
 			"forcePullImage": d.Get("pull_image").(bool),
 			"forceUpdate":    d.Get("force_update").(bool),
@@ -1033,10 +1050,12 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 			"webhook":        webhookID,
 		}
 		payload["autoUpdate"] = autoUpdate
-		d.Set("webhook_id", webhookID)
-		baseURL := strings.TrimSuffix(client.Endpoint, "/api")
-		webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
-		d.Set("webhook_url", webhookURL)
+		if webhookID != "" {
+			d.Set("webhook_id", webhookID)
+			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+			webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
+			d.Set("webhook_url", webhookURL)
+		}
 	}
 
 	payload["registries"] = expandIntList(d.Get("registries").([]interface{}))
@@ -1153,8 +1172,11 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	stackWebhook := d.Get("stack_webhook").(bool)
-	if stackWebhook {
-		webhookID := uuid.New().String()
+	if stackWebhook || d.Get("update_interval").(string) != "" {
+		webhookID := ""
+		if stackWebhook {
+			webhookID = uuid.New().String()
+		}
 		autoUpdate := map[string]interface{}{
 			"forcePullImage": d.Get("pull_image").(bool),
 			"forceUpdate":    d.Get("force_update").(bool),
@@ -1162,10 +1184,12 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 			"webhook":        webhookID,
 		}
 		payload["autoUpdate"] = autoUpdate
-		d.Set("webhook_id", webhookID)
-		baseURL := strings.TrimSuffix(client.Endpoint, "/api")
-		webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
-		d.Set("webhook_url", webhookURL)
+		if webhookID != "" {
+			d.Set("webhook_id", webhookID)
+			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+			webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
+			d.Set("webhook_url", webhookURL)
+		}
 	}
 
 	payload["registries"] = expandIntList(d.Get("registries").([]interface{}))
@@ -1287,8 +1311,11 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	stackWebhook := d.Get("stack_webhook").(bool)
-	if stackWebhook {
-		webhookID := uuid.New().String()
+	if stackWebhook || d.Get("update_interval").(string) != "" {
+		webhookID := ""
+		if stackWebhook {
+			webhookID = uuid.New().String()
+		}
 		autoUpdate := map[string]interface{}{
 			"forcePullImage": d.Get("pull_image").(bool),
 			"forceUpdate":    d.Get("force_update").(bool),
@@ -1296,10 +1323,12 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 			"webhook":        webhookID,
 		}
 		payload["autoUpdate"] = autoUpdate
-		d.Set("webhook_id", webhookID)
-		baseURL := strings.TrimSuffix(client.Endpoint, "/api")
-		webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
-		d.Set("webhook_url", webhookURL)
+		if webhookID != "" {
+			d.Set("webhook_id", webhookID)
+			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+			webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
+			d.Set("webhook_url", webhookURL)
+		}
 	}
 
 	payload["registries"] = expandIntList(d.Get("registries").([]interface{}))
