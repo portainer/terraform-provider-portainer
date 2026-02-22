@@ -327,6 +327,9 @@ func resourceEndpointGroupAccessDelete(d *schema.ResourceData, meta interface{})
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == 404 {
+		return nil
+	}
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to delete endpoint group access: %s", string(data))
