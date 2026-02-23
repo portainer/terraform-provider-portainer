@@ -732,59 +732,57 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			}
 
 			autoUpdate := map[string]interface{}{
-				"forcePullImage": d.Get("pull_image").(bool),
-				"forceUpdate":    d.Get("force_update").(bool),
-				"interval":       d.Get("update_interval").(string),
-				"webhook":        webhookID,
+				"ForcePullImage": d.Get("pull_image").(bool),
+				"ForceUpdate":    d.Get("force_update").(bool),
+				"Interval":       d.Get("update_interval").(string),
+				"Webhook":        webhookID,
 			}
-			payload["autoUpdate"] = autoUpdate
+			payload["AutoUpdate"] = autoUpdate
 		} else if v, ok := d.GetOk("update_interval"); ok && v.(string) != "" {
-			payload["autoUpdate"] = map[string]interface{}{
-				"forcePullImage": d.Get("pull_image").(bool),
-				"forceUpdate":    d.Get("force_update").(bool),
-				"interval":       v.(string),
+			payload["AutoUpdate"] = map[string]interface{}{
+				"ForcePullImage": d.Get("pull_image").(bool),
+				"ForceUpdate":    d.Get("force_update").(bool),
+				"Interval":       v.(string),
 			}
 		}
 
-		if payload["autoUpdate"] != nil {
-			payload["registries"] = expandIntList(d.Get("registries").([]interface{}))
-			_ = d.Set("webhook_id", webhookID)
+		// Always update git settings via POST /stacks/{id}/git
+		// This ensures autoUpdate interval changes are applied
+		_ = d.Set("webhook_id", webhookID)
+		if webhookID != "" {
+			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+			webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
+			_ = d.Set("webhook_url", webhookURL)
+		}
 
-			if webhookID != "" {
-				baseURL := strings.TrimSuffix(client.Endpoint, "/api")
-				webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
-				_ = d.Set("webhook_url", webhookURL)
-			}
+		jsonBody, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("failed to marshal git update payload: %w", err)
+		}
 
-			jsonBody, err := json.Marshal(payload)
-			if err != nil {
-				return fmt.Errorf("failed to marshal git webhook payload: %w", err)
-			}
+		url := fmt.Sprintf("%s/stacks/%s/git?endpointId=%d", client.Endpoint, stackID, endpointID)
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+		if err != nil {
+			return fmt.Errorf("failed to build git update request: %w", err)
+		}
+		if client.APIKey != "" {
+			req.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
+		req.Header.Set("Content-Type", "application/json")
 
-			url := fmt.Sprintf("%s/stacks/%s/git?endpointId=%d", client.Endpoint, stackID, endpointID)
-			req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-			if err != nil {
-				return fmt.Errorf("failed to build git webhook update request: %w", err)
-			}
-			if client.APIKey != "" {
-				req.Header.Set("X-API-Key", client.APIKey)
-			} else if client.JWTToken != "" {
-				req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-			} else {
-				return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-			}
-			req.Header.Set("Content-Type", "application/json")
+		resp, err := client.HTTPClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to perform git update request: %w", err)
+		}
+		defer resp.Body.Close()
 
-			resp, err := client.HTTPClient.Do(req)
-			if err != nil {
-				return fmt.Errorf("failed to perform git webhook update request: %w", err)
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != 200 {
-				body, _ := io.ReadAll(resp.Body)
-				return fmt.Errorf("failed to update git stack webhook: %s", string(body))
-			}
+		if resp.StatusCode != 200 {
+			body, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("failed to update git stack settings: %s", string(body))
 		}
 
 		redeployPayload := map[string]interface{}{
