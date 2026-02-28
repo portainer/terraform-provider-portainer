@@ -517,8 +517,12 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 		} `json:"Option"`
 
 		GitConfig *struct {
-			TLSSkipVerify  bool `json:"tlsskipVerify"`
-			Authentication struct {
+			URL             string   `json:"URL"`
+			ReferenceName   string   `json:"ReferenceName"`
+			ConfigFilePath  string   `json:"ConfigFilePath"`
+			AdditionalFiles []string `json:"AdditionalFiles"`
+			TLSSkipVerify   bool     `json:"tlsskipVerify"`
+			Authentication  struct {
 				GitCredentialID int `json:"GitCredentialID"`
 			} `json:"Authentication"`
 		} `json:"gitConfig,omitempty"`
@@ -606,6 +610,18 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	if method == "repository" && stack.GitConfig != nil {
 		_ = d.Set("tlsskip_verify", stack.GitConfig.TLSSkipVerify)
 		_ = d.Set("repository_git_credential_id", stack.GitConfig.Authentication.GitCredentialID)
+		if stack.GitConfig.URL != "" {
+			_ = d.Set("repository_url", stack.GitConfig.URL)
+		}
+		if stack.GitConfig.ReferenceName != "" {
+			_ = d.Set("repository_reference_name", stack.GitConfig.ReferenceName)
+		}
+		if stack.GitConfig.ConfigFilePath != "" {
+			_ = d.Set("file_path_in_repository", stack.GitConfig.ConfigFilePath)
+		}
+		if len(stack.GitConfig.AdditionalFiles) > 0 {
+			_ = d.Set("additional_files", stack.GitConfig.AdditionalFiles)
+		}
 	}
 	if stack.AutoUpdate != nil {
 		_ = d.Set("pull_image", stack.AutoUpdate.ForcePullImage)
