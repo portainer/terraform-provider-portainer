@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -85,7 +86,7 @@ func resourceLicensesCreate(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("failed to set conflicting_keys: %w", err)
 	}
 
-	d.SetId(licenseKey)
+	d.SetId(fmt.Sprintf("%x", sha256.Sum256([]byte(licenseKey))))
 	return nil
 }
 
@@ -110,7 +111,7 @@ func resourceLicensesRead(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("failed to decode licenses list: %w", err)
 	}
 
-	currentKey := d.Id()
+	currentKey := d.Get("key").(string)
 	found := false
 	for _, lic := range licenses {
 		if lic.LicenseKey == currentKey {
@@ -129,7 +130,7 @@ func resourceLicensesDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
 	payload := map[string]interface{}{
-		"licenseKeys": []string{d.Id()},
+		"licenseKeys": []string{d.Get("key").(string)},
 	}
 
 	resp, err := client.DoRequest("POST", "/licenses/remove", nil, payload)
