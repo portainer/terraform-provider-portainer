@@ -1,0 +1,24 @@
+services:
+  portainer_edge_agent:
+    image: portainer/agent
+    container_name: portainer_edge_agent
+    restart: always
+    environment:
+      - EDGE=1
+      - EDGE_ID=${EDGE_ID}
+      - EDGE_KEY=${EDGE_KEY}
+      - EDGE_INSECURE_POLL=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+      - /:/host
+      - portainer_edge_agent_data:/data
+    networks:
+      - terraform-provider-portainer_default
+
+networks:
+  terraform-provider-portainer_default:
+    external: true
+
+volumes:
+  portainer_edge_agent_data:

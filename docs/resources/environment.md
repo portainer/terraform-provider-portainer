@@ -47,8 +47,7 @@ resource "portainer_environment" "your-host" {
 ```hcl
 resource "portainer_environment" "edge_env" {
   name                   = "Edge Device"
-  environment_address    = "edge-device.local"
-  public_ip              = "edge.public.example.com"
+  environment_address    = "https://portainer.example.com:9443"
   type                   = 4
   tls_enabled            = true
   tls_skip_verify        = true

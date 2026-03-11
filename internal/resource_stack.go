@@ -193,8 +193,14 @@ func resourcePortainerStack() *schema.Resource {
 				Optional: true,
 				Default:  "docker-compose.yml",
 			},
-			"manifest_url":          {Type: schema.TypeString, Optional: true, ForceNew: true},
-			"compose_format":        {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
+			"manifest_url":   {Type: schema.TypeString, Optional: true, ForceNew: true},
+			"compose_format": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
+			"helm_chart_path": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Path to a Helm chart folder in the Git repository (must contain Chart.yaml). Only used when deployment_type is 'kubernetes' and method is 'repository'.",
+			},
 			"support_relative_path": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
 			"filesystem_path":       {Type: schema.TypeString, Optional: true},
 			"env": {
@@ -527,6 +533,10 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 			} `json:"Authentication"`
 		} `json:"gitConfig,omitempty"`
 
+		HelmConfig *struct {
+			ChartPath string `json:"chartPath"`
+		} `json:"helmConfig,omitempty"`
+
 		Portainer struct {
 			ResourceControl struct {
 				Id int `json:"Id"`
@@ -622,6 +632,9 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 		if len(stack.GitConfig.AdditionalFiles) > 0 {
 			_ = d.Set("additional_files", stack.GitConfig.AdditionalFiles)
 		}
+	}
+	if stack.HelmConfig != nil && stack.HelmConfig.ChartPath != "" {
+		_ = d.Set("helm_chart_path", stack.HelmConfig.ChartPath)
 	}
 	if stack.AutoUpdate != nil {
 		_ = d.Set("pull_image", stack.AutoUpdate.ForcePullImage)
@@ -1322,6 +1335,12 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 		"tlsskipVerify":             d.Get("tlsskip_verify").(bool),
 		"fromAppTemplate":           false,
 		"additionalFiles":           expandStringList(d.Get("additional_files").([]interface{})),
+	}
+
+	if v, ok := d.GetOk("helm_chart_path"); ok {
+		payload["helmConfig"] = map[string]interface{}{
+			"chartPath": v.(string),
+		}
 	}
 
 	stackWebhook := d.Get("stack_webhook").(bool)

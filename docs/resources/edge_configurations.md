@@ -35,7 +35,7 @@ resource "portainer_edge_configurations" "example_edge_configuration" {
 | Name             | Type   | Required | Description                                                             |
 |------------------|--------|----------|-------------------------------------------------------------------------|
 | `name`           | string | ✅ yes   | Name of the Edge Configuration                                          |
-| `type`           | string | ✅ yes   | Type of configuration (e.g., `general` or `device`)                     |
+| `type`           | string | ✅ yes   | Type of configuration. Allowed values: `general`, `filename`, or `foldername` |
 | `edge_group_ids` | list(number) | ✅ yes | List of Edge Group IDs                                              |
 | `file_path`      | string | ✅ yes   | Path to the configuration file to upload                                |
 | `category`       | string | 🚫 no    | Optional category                                                       |

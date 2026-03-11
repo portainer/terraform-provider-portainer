@@ -42,7 +42,6 @@ func resourceUser() *schema.Resource {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  false,
-				ForceNew: true,
 			},
 			"team_id": {
 				Type:        schema.TypeInt,
@@ -269,16 +268,20 @@ func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
 		oldPwString := oldPw.(string)
 		newPwString := newPw.(string)
 
-		paramsPwd := users.NewUserUpdatePasswordParams()
-		paramsPwd.ID = id
-		paramsPwd.Body = &models.UsersUserUpdatePasswordPayload{
-			Password:    &oldPwString,
-			NewPassword: &newPwString,
-		}
+		// Skip password update when old password is unknown (e.g. after import).
+		// The Portainer API requires the current password to change it.
+		if oldPwString != "" && newPwString != "" {
+			paramsPwd := users.NewUserUpdatePasswordParams()
+			paramsPwd.ID = id
+			paramsPwd.Body = &models.UsersUserUpdatePasswordPayload{
+				Password:    &oldPwString,
+				NewPassword: &newPwString,
+			}
 
-		_, err := client.Client.Users.UserUpdatePassword(paramsPwd, client.AuthInfo)
-		if err != nil {
-			return fmt.Errorf("failed to update password: %w", err)
+			_, err := client.Client.Users.UserUpdatePassword(paramsPwd, client.AuthInfo)
+			if err != nil {
+				return fmt.Errorf("failed to update password: %w", err)
+			}
 		}
 	}
 

@@ -299,6 +299,21 @@ resource "portainer_stack" "k8s_repo_ephemeral" {
 }
 ```
 
+### Deploy Kubernetes Stack from Repository (Helm Chart)
+```hcl
+resource "portainer_stack" "k8s_helm_repo" {
+  name                      = "kube-helm-stack"
+  deployment_type           = "kubernetes"
+  method                    = "repository"
+  endpoint_id               = 2
+  repository_url            = "https://github.com/example/repo"
+  repository_reference_name = "refs/heads/main"
+  file_path_in_repository   = "kube.yaml"
+  namespace                 = "default"
+  helm_chart_path           = "charts/my-chart"
+}
+```
+
 ### Deploy Kubernetes Stack from URL
 ```hcl
 resource "portainer_stack" "k8s_url" {
@@ -412,6 +427,7 @@ terraform apply
 | `force_update`                      | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                                                            |
 | `compose_format`                    | bool   | 🚫 optional | Compose format support (default: `false`)                                                               |
 | `additional_files`                  | string | 🚫 optional | List of additional YAML/manifest file paths                                                             |
+| `helm_chart_path`                   | string | 🚫 optional | Path to a Helm chart folder in the Git repository (must contain `Chart.yaml`)                           |
 
 #### Method: `url`
 | Name             | Type   | Required    | Description                |
