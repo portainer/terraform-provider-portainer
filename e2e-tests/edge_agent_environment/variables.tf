@@ -28,9 +28,3 @@ variable "edge_agent_address" {
   type        = string
   default     = "tcp://localhost"
 }
-
-variable "edge_tunnel_server_address" {
-  description = "URL of the Portainer tunnel server for Edge Agent connection"
-  type        = string
-  default     = "portainer:8000"
-}

@@ -46,14 +46,12 @@ resource "portainer_environment" "your-host" {
 
 ```hcl
 resource "portainer_environment" "edge_env" {
-  name                       = "Edge Device"
-  environment_address        = "tcp://localhost"
-  type                       = 4
-  edge_tunnel_server_address = "portainer-server:8000"
-  edge_checkin_interval      = 5
-  tls_enabled                = true
-  tls_skip_verify            = true
-  tls_skip_client_verify     = true
+  name                   = "Edge Device"
+  environment_address    = "tcp://localhost"
+  type                   = 4
+  tls_enabled            = true
+  tls_skip_verify        = true
+  tls_skip_client_verify = true
 }
 
 output "edge_key" {
@@ -101,9 +99,6 @@ resource "meu_portainer_environment" "docker_tls" {
 | `type`                   | int                           | ✅ yes                       | Environment type: `1` = Docker, `2` = Agent, `3` = Azure, `4` = Edge Agent, `5` = Kubernetes, `6` = Kubernetes via Agent, `7` = Kubernetes Edge Agent. Note: when using type `4` for Kubernetes Edge Agent, Portainer may automatically change the type to `7` after the agent connects. This is expected behavior and will not cause Terraform drift. |
 | `group_id`               | int                           | 🚫 optional (default `1`)    | ID of the Portainer endpoint group. Default is `1` (Unassigned).                                                        |
 | `tag_ids`                | list(int)                     | 🚫 optional                  | List of Portainer tag IDs to assign to the environment. Only used during creation.                                      |
-| `container_engine`       | string                        | 🚫 optional (default `docker`) | Container engine used by the environment. Allowed values: `docker` or `podman`.                                       |
-| `edge_tunnel_server_address` | string                    | 🚫 optional                  | URL or IP address of the Portainer tunnel server for Edge Agent reverse tunnel. Required for Edge Agent (type 4/7) when Edge Compute features are not enabled in Portainer settings. |
-| `edge_checkin_interval`  | int                           | 🚫 optional                  | The check-in interval for the Edge Agent in seconds.                                                                    |
 | `tls_enabled`            | bool                          | 🚫 optional (default `true`) | Enable TLS for connection to the agent. Must be `true` for agent-based environments.                                    |
 | `tls_skip_verify`        | bool                          | 🚫 optional (default `true`) | Skip server certificate verification. Useful for self-signed certificates.                                              |
 | `tls_skip_client_verify` | bool                          | 🚫 optional (default `true`) | Skip client certificate verification. Used when mutual TLS is not required.                                             |

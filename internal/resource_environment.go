@@ -96,25 +96,6 @@ func resourceEnvironment() *schema.Resource {
 				Optional: true,
 				Default:  true,
 			},
-			"container_engine": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Default:     "docker",
-				Description: "Container engine used by the environment. Allowed values: 'docker' or 'podman'. Default is 'docker'.",
-			},
-			"edge_tunnel_server_address": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Description: "URL or IP address used to establish a reverse tunnel for Edge Agent. Required for Edge Agent (type 4/7) when Edge Compute features are not enabled in Portainer settings.",
-			},
-			"edge_checkin_interval": {
-				Type:        schema.TypeInt,
-				Optional:    true,
-				ForceNew:    true,
-				Description: "The check-in interval for the Edge Agent in seconds.",
-			},
 			"edge_key": {
 				Type:     schema.TypeString,
 				Computed: true,
@@ -164,9 +145,6 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 	params.SetName(name)
 	params.SetEndpointCreationType(endpointCreationType)
 
-	containerEngine := d.Get("container_engine").(string)
-	params.SetContainerEngine(&containerEngine)
-
 	url := strings.TrimSpace(d.Get("environment_address").(string))
 	params.SetURL(&url)
 
@@ -176,15 +154,6 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 	if v, ok := d.GetOk("public_ip"); ok && v.(string) != "" {
 		purl := v.(string)
 		params.SetPublicURL(&purl)
-	}
-
-	if v, ok := d.GetOk("edge_tunnel_server_address"); ok && v.(string) != "" {
-		addr := v.(string)
-		params.SetEdgeTunnelServerAddress(&addr)
-	}
-	if v, ok := d.GetOk("edge_checkin_interval"); ok {
-		interval := int64(v.(int))
-		params.SetEdgeCheckinInterval(&interval)
 	}
 
 	// Edge Agent environments (type 4, 7) do not support TagIds in the
