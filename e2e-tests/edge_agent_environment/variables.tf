@@ -24,7 +24,7 @@ variable "edge_agent_name" {
 }
 
 variable "edge_agent_address" {
-  description = "Address of the edge agent environment"
+  description = "Address of the edge agent environment (empty for Edge Agents)"
   type        = string
-  default     = "edge-agent.local"
+  default     = ""
 }

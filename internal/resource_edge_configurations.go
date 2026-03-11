@@ -15,16 +15,16 @@ import (
 )
 
 type EdgeConfiguration struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	Type         int    `json:"type"`
-	Category     string `json:"category"`
-	BaseDir      string `json:"baseDir"`
-	EdgeGroupIDs []int  `json:"edgeGroupIDs"`
-	Created      int64  `json:"created"`
-	CreatedBy    int    `json:"createdBy"`
-	Updated      int64  `json:"updated"`
-	UpdatedBy    int    `json:"updatedBy"`
+	ID           int         `json:"id"`
+	Name         string      `json:"name"`
+	Type         int         `json:"type"`
+	Category     string      `json:"category"`
+	BaseDir      string      `json:"baseDir"`
+	EdgeGroupIDs []int       `json:"edgeGroupIDs"`
+	Created      int64       `json:"created"`
+	CreatedBy    int         `json:"createdBy"`
+	Updated      int64       `json:"updated"`
+	UpdatedBy    int         `json:"updatedBy"`
 	Prev         interface{} `json:"prev"`
 }
 

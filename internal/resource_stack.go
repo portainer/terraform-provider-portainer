@@ -193,8 +193,8 @@ func resourcePortainerStack() *schema.Resource {
 				Optional: true,
 				Default:  "docker-compose.yml",
 			},
-			"manifest_url":          {Type: schema.TypeString, Optional: true, ForceNew: true},
-			"compose_format":        {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
+			"manifest_url":   {Type: schema.TypeString, Optional: true, ForceNew: true},
+			"compose_format": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
 			"helm_chart_path": {
 				Type:        schema.TypeString,
 				Optional:    true,
