@@ -159,6 +159,7 @@ jobs:
 
       - name: 🐳 Start Edge Agent
         run: |
+          docker swarm leave --force 2>/dev/null || true
           cd e2e-tests/edge_agent_environment
           export EDGE_ID=$(terraform output -raw edge_id)
           export EDGE_KEY=$(terraform output -raw edge_key)
