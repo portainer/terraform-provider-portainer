@@ -24,7 +24,7 @@ variable "edge_agent_name" {
 }
 
 variable "edge_agent_address" {
-  description = "Address of the edge agent environment"
+  description = "Address of the edge agent environment (Portainer server URL reachable from the agent)"
   type        = string
-  default     = "tcp://edge"
+  default     = "http://portainer:9000"
 }
