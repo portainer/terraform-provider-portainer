@@ -24,7 +24,13 @@ variable "edge_agent_name" {
 }
 
 variable "edge_agent_address" {
-  description = "Address of the edge agent environment (empty for Edge Agents)"
+  description = "Address of the edge agent environment"
   type        = string
-  default     = ""
+  default     = "tcp://localhost"
+}
+
+variable "edge_tunnel_server_address" {
+  description = "URL of the Portainer tunnel server for Edge Agent connection"
+  type        = string
+  default     = "portainer:8000"
 }
