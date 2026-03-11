@@ -24,6 +24,8 @@ help:
 	@echo "  swarm-leave            Leave Docker Swarm (forcefully, if active)"
 	@echo "  up-agent               Start Portainer Agent via docker-compose.agent.yml"
 	@echo "  down-agent             Stop Portainer Agent"
+	@echo "  up-edge-agent          Start Portainer Edge Agent (requires EDGE_ID and EDGE_KEY env vars)"
+	@echo "  down-edge-agent        Stop Portainer Edge Agent"
 	@echo "  install-k3d            Install k3d CLI"
 	@echo "  k3d-up                 Create local K3d cluster with 1 agent"
 	@echo "  k3d-status             Show Kubernetes nodes"
@@ -162,6 +164,14 @@ up-agent:
 .PHONY: down-agent
 down-agent:
 	docker compose -f docker-compose.agent.yml down
+
+.PHONY: up-edge-agent
+up-edge-agent:
+	docker compose -f docker-compose.edge-agent.yml up -d
+
+.PHONY: down-edge-agent
+down-edge-agent:
+	docker compose -f docker-compose.edge-agent.yml down
 
 .PHONY: swarm-init
 swarm-init:

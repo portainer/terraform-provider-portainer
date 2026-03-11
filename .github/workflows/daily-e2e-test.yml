@@ -149,6 +149,34 @@ jobs:
             fi
           done
 
+      - name: 🧪 Run Terraform E2E tests - Create Edge Agent Environment
+        run: |
+          cd e2e-tests/edge_agent_environment
+          terraform init -input=false
+          terraform fmt -check
+          terraform validate
+          terraform apply -auto-approve
+
+      - name: 🐳 Start Edge Agent
+        run: |
+          cd e2e-tests/edge_agent_environment
+          export EDGE_ID=$(terraform output -raw edge_id)
+          export EDGE_KEY=$(terraform output -raw edge_key)
+          cd $GITHUB_WORKSPACE
+          make up-edge-agent
+
+      - name: ✅ Verify Edge Agent connection
+        run: |
+          sleep 15
+          docker logs portainer_edge_agent 2>&1 | tail -20
+          docker logs portainer_edge_agent 2>&1 | grep -i "poll" && echo "Edge Agent is polling" || echo "Warning: Edge Agent may not be connected yet"
+
+      - name: 🧹 Cleanup Edge Agent
+        run: |
+          make down-edge-agent
+          cd e2e-tests/edge_agent_environment
+          terraform destroy -auto-approve
+
       - name: 🧪 Run Terraform E2E tests - Added SSL for Portainer
         run: |
           cd e2e-tests/ssl

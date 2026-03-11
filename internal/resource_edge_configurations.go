@@ -25,7 +25,7 @@ type EdgeConfiguration struct {
 	CreatedBy    int    `json:"createdBy"`
 	Updated      int64  `json:"updated"`
 	UpdatedBy    int    `json:"updatedBy"`
-	Prev         string `json:"prev"`
+	Prev         interface{} `json:"prev"`
 }
 
 func resourcePortainerEdgeConfigurations() *schema.Resource {

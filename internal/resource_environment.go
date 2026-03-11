@@ -156,7 +156,10 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 		params.SetPublicURL(&purl)
 	}
 
-	if v, ok := d.GetOk("tag_ids"); ok {
+	// Edge Agent environments (type 4, 7) do not support TagIds in the
+	// multipart Create request. Tags are applied via a follow-up Update call.
+	isEdgeAgent := envType == 4 || envType == 7
+	if v, ok := d.GetOk("tag_ids"); ok && !isEdgeAgent {
 		tagIDs := []int64{}
 		for _, id := range v.([]interface{}) {
 			tagIDs = append(tagIDs, int64(id.(int)))
@@ -195,6 +198,15 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 	}
 	if resp.Payload.EdgeID != "" {
 		_ = d.Set("edge_id", resp.Payload.EdgeID)
+	}
+
+	// For edge agents, tags must be applied via Update after creation
+	if isEdgeAgent {
+		if _, ok := d.GetOk("tag_ids"); ok {
+			if err := resourceEnvironmentUpdate(d, meta); err != nil {
+				return fmt.Errorf("failed to apply tag_ids after edge agent creation: %w", err)
+			}
+		}
 	}
 
 	if _, ok := d.GetOk("user_access_policies"); ok {
