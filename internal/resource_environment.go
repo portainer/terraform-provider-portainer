@@ -96,6 +96,13 @@ func resourceEnvironment() *schema.Resource {
 				Optional: true,
 				Default:  true,
 			},
+			"container_engine": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				ForceNew:    true,
+				Default:     "docker",
+				Description: "Container engine used by the environment. Allowed values: 'docker' or 'podman'. Default is 'docker'.",
+			},
 			"edge_tunnel_server_address": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -156,6 +163,9 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 	params := endpoints.NewEndpointCreateParams()
 	params.SetName(name)
 	params.SetEndpointCreationType(endpointCreationType)
+
+	containerEngine := d.Get("container_engine").(string)
+	params.SetContainerEngine(&containerEngine)
 
 	url := strings.TrimSpace(d.Get("environment_address").(string))
 	params.SetURL(&url)
