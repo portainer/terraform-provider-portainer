@@ -282,19 +282,26 @@ func resourceEnvironmentUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	params := endpoints.NewEndpointUpdateParams()
 	params.ID = id
-	params.Body = &models.EndpointsEndpointUpdatePayload{
-		Name:                d.Get("name").(string),
-		URL:                 d.Get("environment_address").(string),
-		GroupID:             int64(d.Get("group_id").(int)),
-		TLS:                 d.Get("tls_enabled").(bool),
-		TlsskipVerify:       d.Get("tls_skip_verify").(bool),
-		TlsskipClientVerify: d.Get("tls_skip_client_verify").(bool),
-	}
+	params.Body = &models.EndpointsEndpointUpdatePayload{}
 
-	if v, ok := d.GetOk("public_ip"); ok && v.(string) != "" {
-		params.Body.PublicURL = v.(string)
-	} else {
-		params.Body.PublicURL = d.Get("environment_address").(string)
+	// Edge Agent environments (type 4, 7) trigger proxy/tunnel registration on
+	// update when URL or TLS fields are included, which fails when the agent is
+	// not yet connected. Only send metadata fields for edge agents.
+	envType := d.Get("type").(int)
+	isEdgeAgent := envType == 4 || envType == 7
+	if !isEdgeAgent {
+		params.Body.Name = d.Get("name").(string)
+		params.Body.URL = d.Get("environment_address").(string)
+		params.Body.GroupID = int64(d.Get("group_id").(int))
+		params.Body.TLS = d.Get("tls_enabled").(bool)
+		params.Body.TlsskipVerify = d.Get("tls_skip_verify").(bool)
+		params.Body.TlsskipClientVerify = d.Get("tls_skip_client_verify").(bool)
+
+		if v, ok := d.GetOk("public_ip"); ok && v.(string) != "" {
+			params.Body.PublicURL = v.(string)
+		} else {
+			params.Body.PublicURL = d.Get("environment_address").(string)
+		}
 	}
 
 	if v, ok := d.GetOk("tag_ids"); ok {
