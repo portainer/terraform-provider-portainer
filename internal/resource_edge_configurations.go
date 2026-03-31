@@ -191,64 +191,6 @@ func resourcePortainerEdgeConfigurationsRead(d *schema.ResourceData, meta interf
 	return nil
 }
 
-func resourcePortainerEdgeConfigurationsUpdate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*APIClient)
-
-	rawID := filepath.Base(d.Id())
-	filePath := d.Get("file_path").(string)
-	file, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
-	}
-	defer file.Close()
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	_ = writer.WriteField("type", d.Get("type").(string))
-	for _, id := range d.Get("edge_group_ids").([]interface{}) {
-		_ = writer.WriteField("edgeGroupIDs", strconv.Itoa(id.(int)))
-	}
-
-	part, err := writer.CreateFormFile("File", filepath.Base(filePath))
-	if err != nil {
-		return fmt.Errorf("failed to create form file: %w", err)
-	}
-	_, err = io.Copy(part, file)
-	if err != nil {
-		return fmt.Errorf("failed to copy file content: %w", err)
-	}
-
-	writer.Close()
-
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/edge_configurations/%s", client.Endpoint, rawID), body)
-	if err != nil {
-		return err
-	}
-
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		responseBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update edge configuration: %s", string(responseBody))
-	}
-
-	return nil
-}
-
 func resourcePortainerEdgeConfigurationsDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 

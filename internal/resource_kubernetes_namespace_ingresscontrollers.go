@@ -117,8 +117,3 @@ func resourceKubernetesNamespaceIngressControllersCreate(d *schema.ResourceData,
 func resourceKubernetesNamespaceIngressControllersRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
-
-func resourceKubernetesNamespaceIngressControllersDelete(d *schema.ResourceData, meta interface{}) error {
-	d.SetId("")
-	return nil
-}

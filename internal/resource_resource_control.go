@@ -117,8 +117,8 @@ func resourceResourceControlRead(d *schema.ResourceData, meta interface{}) error
 
 	rcId, rcData, err := lookupResourceControlID(client, resourceType, resourceId)
 	if err != nil {
-		d.SetId("")
-		return nil
+		d.SetId("") // resource not found, remove from state
+		return nil  //nolint:nilerr // Terraform pattern: resource gone → clear ID, return nil
 	}
 
 	d.SetId(rcId)

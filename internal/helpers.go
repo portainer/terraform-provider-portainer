@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -123,6 +124,81 @@ func apiPOSTWithCode(url string, apiKey string, client *APIClient, payload []byt
 
 func apiPUTWithCode(url string, apiKey string, client *APIClient, payload []byte) ([]byte, int, error) {
 	req, _ := http.NewRequest("PUT", url, bytes.NewBuffer(payload))
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return nil, 0, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return body, resp.StatusCode, nil
+}
+
+// Context-aware API helpers (used by resources that support timeouts).
+
+func apiGETCtx(ctx context.Context, url string, apiKey string, client *APIClient) ([]byte, error) {
+	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return nil, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+func apiGETWithCodeCtx(ctx context.Context, url string, apiKey string, client *APIClient) ([]byte, int, error) {
+	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return nil, 0, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return body, resp.StatusCode, nil
+}
+
+func apiPOSTWithCodeCtx(ctx context.Context, url string, apiKey string, client *APIClient, payload []byte) ([]byte, int, error) {
+	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(payload))
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return nil, 0, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return body, resp.StatusCode, nil
+}
+
+func apiPUTWithCodeCtx(ctx context.Context, url string, apiKey string, client *APIClient, payload []byte) ([]byte, int, error) {
+	req, _ := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(payload))
 	if apiKey != "" {
 		req.Header.Set("X-API-Key", apiKey)
 	} else if client.JWTToken != "" {

@@ -42,8 +42,8 @@ func dataSourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) erro
 	for _, t := range resp.Payload {
 		if t.Title == title {
 			d.SetId(strconv.FormatInt(t.ID, 10))
-			d.Set("description", t.Description)
-			d.Set("type", int(t.Type))
+			_ = d.Set("description", t.Description)
+			_ = d.Set("type", int(t.Type))
 			return nil
 		}
 	}

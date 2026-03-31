@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -124,7 +125,8 @@ func resourceRegistryRead(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.Client.Registries.RegistryInspect(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*registries.RegistryInspectNotFound); ok {
+		var notFound *registries.RegistryInspectNotFound
+		if errors.As(err, &notFound) {
 			d.SetId("")
 			return nil
 		}
@@ -212,7 +214,8 @@ func resourceRegistryDelete(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Registries.RegistryDelete(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*registries.RegistryDeleteNotFound); ok {
+		var notFound *registries.RegistryDeleteNotFound
+		if errors.As(err, &notFound) {
 			return nil
 		}
 		// SDK expects 204 but Portainer API returns 200 - treat status 200 as success

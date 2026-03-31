@@ -83,7 +83,7 @@ func resourceKubernetesClusterRolesCreate(d *schema.ResourceData, meta interface
 		return fmt.Errorf("failed to create Job (%d): %s", resp.StatusCode, string(body))
 	}
 
-	d.SetId(fmt.Sprintf("%d:%s:%s", endpointID, name))
+	d.SetId(fmt.Sprintf("%d:%s", endpointID, name))
 	return nil
 }
 
@@ -134,7 +134,7 @@ func resourceKubernetesClusterRolesRead(d *schema.ResourceData, meta interface{}
 
 func parseClusterRolesID(id string) (endpointID int, name string) {
 	parts := strings.SplitN(id, ":", 3)
-	if len(parts) != 3 {
+	if len(parts) < 2 {
 		return 0, ""
 	}
 	fmt.Sscanf(parts[0], "%d", &endpointID)

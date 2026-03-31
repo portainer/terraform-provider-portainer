@@ -36,6 +36,13 @@ help:
 	@echo "  go-fmt-check           Check formatting of Go source files"
 	@echo "  go-fmt                 Format Go source files"
 	@echo ""
+	@echo "Security targets:"
+	@echo "  sec                    Run all security scans (trivy + govulncheck + golangci-lint)"
+	@echo "  trivy                  Run Trivy vulnerability scan on dependencies"
+	@echo "  trivy-iac              Run Trivy IaC misconfig scan on Terraform files"
+	@echo "  govulncheck            Run Go vulnerability check (analyzes actual call graph)"
+	@echo "  lint                   Run golangci-lint (includes gosec)"
+	@echo ""
 	@echo "Environment:"
 	@echo "  TDIR                   Directory to run Terraform/OpenTofu in (set internally)"
 	@echo "  TCMD                   Terraform/OpenTofu command (init, validate, fmt, etc.)"
@@ -232,6 +239,36 @@ install-kubectl:
 	install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl; \
 	rm -f kubectl; \
 	echo "✅ kubectl installed to /usr/local/bin"
+
+### Security
+.PHONY: sec
+sec: trivy trivy-iac govulncheck lint
+
+.PHONY: trivy
+trivy:
+	@echo "Running Trivy dependency scan..."
+	docker run --rm -v $(CURDIR):/workspace:ro aquasec/trivy:latest fs --scanners vuln --severity CRITICAL,HIGH --exit-code 1 /workspace
+
+.PHONY: trivy-iac
+trivy-iac:
+	@echo "Running Trivy IaC scan..."
+	docker run --rm -v $(CURDIR):/workspace:ro aquasec/trivy:latest fs --scanners misconfig --severity CRITICAL,HIGH --exit-code 1 --ignorefile /workspace/.trivyignore /workspace
+
+GOBIN := $(shell go env GOPATH)/bin
+
+.PHONY: govulncheck
+govulncheck: build
+	@echo "Install govulncheck..."
+	go install golang.org/x/vuln/cmd/govulncheck@latest
+	@echo "Running govulncheck..."
+	$(GOBIN)/govulncheck -mode binary terraform-provider-portainer
+
+.PHONY: lint
+lint:
+	@echo "Install golangci-lint..."
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@echo "Running golangci-lint..."
+	$(GOBIN)/golangci-lint run ./internal/ .
 
 ### Go
 .PHONY: go-fmt-check

@@ -43,6 +43,29 @@ terraform destroy
 
 > 🔐 If registry_auth is not set, the provider sends an empty authentication object ({}), which works for public registries like Docker Hub.
 
+## Timeouts
+
+This resource supports the following timeout configuration options:
+
+| Timeout  | Default   | Description                          |
+|----------|-----------|--------------------------------------|
+| `create` | 10 minutes | Time to wait for the image to be pulled |
+| `delete` | 5 minutes  | Time to wait for the image to be deleted |
+
+### Example: Custom Timeouts
+
+```hcl
+resource "portainer_docker_image" "large_image" {
+  endpoint_id = 1
+  image       = "myregistry.example.com/large-image:latest"
+
+  timeouts {
+    create = "20m"
+    delete = "10m"
+  }
+}
+```
+
 ## Attributes Reference
 
 | Name | Description              |

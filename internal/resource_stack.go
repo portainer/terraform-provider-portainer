@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/go-cty/cty"
 
@@ -22,6 +24,11 @@ func resourcePortainerStack() *schema.Resource {
 		Read:   resourcePortainerStackRead,
 		Delete: resourcePortainerStackDelete,
 		Update: resourcePortainerStackUpdate,
+		Timeouts: &schema.ResourceTimeout{
+			Create: schema.DefaultTimeout(30 * time.Minute),
+			Update: schema.DefaultTimeout(30 * time.Minute),
+			Delete: schema.DefaultTimeout(10 * time.Minute),
+		},
 		Importer: &schema.ResourceImporter{
 			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 				// "<endpoint_id>-<stack_id>-<deployment_type>"
@@ -189,9 +196,10 @@ func resourcePortainerStack() *schema.Resource {
 				Default:  "refs/heads/main",
 			},
 			"file_path_in_repository": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Default:  "docker-compose.yml",
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "docker-compose.yml",
+				Description: "Path to Compose/manifest file in the repository. Not required when helm_chart_path is set.",
 			},
 			"manifest_url":   {Type: schema.TypeString, Optional: true, ForceNew: true},
 			"compose_format": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
@@ -200,6 +208,12 @@ func resourcePortainerStack() *schema.Resource {
 				Optional:    true,
 				ForceNew:    true,
 				Description: "Path to a Helm chart folder in the Git repository (must contain Chart.yaml). Only used when deployment_type is 'kubernetes' and method is 'repository'.",
+			},
+			"additional_helm_values_files": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Description: "List of additional Helm values files (e.g. values-prod.yaml). Only used with helm_chart_path.",
 			},
 			"support_relative_path": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
 			"filesystem_path":       {Type: schema.TypeString, Optional: true},
@@ -261,6 +275,12 @@ func resourcePortainerStack() *schema.Resource {
 				Optional:    true,
 				Elem:        &schema.Schema{Type: schema.TypeInt},
 				Description: "List of user IDs authorized to access this stack (only if ownership is restricted).",
+			},
+			"active": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     true,
+				Description: "Whether the stack should be running. Set to false to stop the stack.",
 			},
 		},
 	}
@@ -500,6 +520,7 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 
 	var stack struct {
 		Name                string `json:"Name"`
+		Status              int    `json:"Status"`
 		Type                int    `json:"Type"`
 		SwarmID             string `json:"SwarmId"`
 		Namespace           string `json:"namespace"`
@@ -534,7 +555,8 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 		} `json:"gitConfig,omitempty"`
 
 		HelmConfig *struct {
-			ChartPath string `json:"chartPath"`
+			ChartPath   string   `json:"chartPath"`
+			ValuesFiles []string `json:"valuesFiles"`
 		} `json:"helmConfig,omitempty"`
 
 		Portainer struct {
@@ -548,6 +570,8 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	}
 
 	d.Set("name", stack.Name)
+	// Portainer API: Status 1 = active, 2 = inactive
+	d.Set("active", stack.Status == 1)
 	d.Set("swarm_id", stack.SwarmID)
 	d.Set("namespace", stack.Namespace)
 	d.Set("compose_format", stack.ComposeFmt)
@@ -635,6 +659,9 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	}
 	if stack.HelmConfig != nil && stack.HelmConfig.ChartPath != "" {
 		_ = d.Set("helm_chart_path", stack.HelmConfig.ChartPath)
+		if len(stack.HelmConfig.ValuesFiles) > 0 {
+			_ = d.Set("additional_helm_values_files", stack.HelmConfig.ValuesFiles)
+		}
 	}
 	if stack.AutoUpdate != nil {
 		_ = d.Set("pull_image", stack.AutoUpdate.ForcePullImage)
@@ -690,31 +717,53 @@ func resourcePortainerStackDelete(d *schema.ResourceData, meta interface{}) erro
 	id := d.Id()
 	endpointID := d.Get("endpoint_id").(int)
 
-	url := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, id, endpointID)
-	req, err := http.NewRequest("DELETE", url, nil)
-	if err != nil {
-		return err
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
+	timeout := d.Timeout(schema.TimeoutDelete)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+	retryInterval := 15 * time.Second
 
-	if resp.StatusCode == 204 || resp.StatusCode == 404 {
-		return nil
-	}
+	for {
+		deleteURL := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, id, endpointID)
+		req, err := http.NewRequest("DELETE", deleteURL, nil)
+		if err != nil {
+			return err
+		}
+		if client.APIKey != "" {
+			req.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
 
-	data, _ := io.ReadAll(resp.Body)
-	return fmt.Errorf("failed to delete stack: %s", string(data))
+		resp, err := client.HTTPClient.Do(req)
+		if err != nil {
+			return err
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode == 204 || resp.StatusCode == 404 {
+			return nil
+		}
+
+		if resp.StatusCode == 200 {
+			return nil
+		}
+
+		// Retry on server errors (5xx)
+		if resp.StatusCode >= 500 {
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("timeout deleting stack %s after %s: last error: %s", id, timeout, string(body))
+			case <-time.After(retryInterval):
+				continue
+			}
+		}
+
+		return fmt.Errorf("failed to delete stack: %s", string(body))
+	}
 }
 
 func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) error {
@@ -722,6 +771,40 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 	stackID := d.Id()
 	endpointID := d.Get("endpoint_id").(int)
 	method := d.Get("method").(string)
+
+	// Handle start/stop
+	if d.HasChange("active") {
+		active := d.Get("active").(bool)
+		var action string
+		if active {
+			action = "start"
+		} else {
+			action = "stop"
+		}
+		actionURL := fmt.Sprintf("%s/stacks/%s/%s?endpointId=%d", client.Endpoint, stackID, action, endpointID)
+		req, err := http.NewRequest("POST", actionURL, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create %s request: %w", action, err)
+		}
+		if client.APIKey != "" {
+			req.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		} else {
+			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		}
+
+		resp, err := client.HTTPClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to %s stack: %w", action, err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			body, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("failed to %s stack: %s", action, string(body))
+		}
+	}
 
 	if method == "file" {
 		path := d.Get("stack_file_path").(string)
@@ -971,20 +1054,6 @@ func flattenEnvList(envList []interface{}) []map[string]string {
 	return out
 }
 
-func firstNonEmpty(values ...interface{}) string {
-	for _, v := range values {
-		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-			return s
-		}
-	}
-	return ""
-}
-
-func mustJSON(data interface{}) []byte {
-	out, _ := json.Marshal(data)
-	return out
-}
-
 // --------------------- STANDALONE ----------------------
 
 func createStackStandaloneString(d *schema.ResourceData, client *APIClient) error {
@@ -1022,7 +1091,9 @@ func createStackStandaloneString(d *schema.ResourceData, client *APIClient) erro
 	var result struct {
 		ID int `json:"Id"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode stack response: %w", err)
+	}
 	d.SetId(strconv.Itoa(result.ID))
 	return nil
 }
@@ -1113,7 +1184,9 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 	var result struct {
 		ID int `json:"Id"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode stack response: %w", err)
+	}
 	d.SetId(strconv.Itoa(result.ID))
 	return nil
 }
@@ -1156,7 +1229,9 @@ func createStackSwarmString(d *schema.ResourceData, client *APIClient) error {
 	var result struct {
 		ID int `json:"Id"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode stack response: %w", err)
+	}
 	d.SetId(strconv.Itoa(result.ID))
 	return nil
 }
@@ -1247,7 +1322,9 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 	var result struct {
 		ID int `json:"Id"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode stack response: %w", err)
+	}
 	d.SetId(strconv.Itoa(result.ID))
 
 	if d.Get("prune").(bool) {
@@ -1300,7 +1377,9 @@ func createStackK8sString(d *schema.ResourceData, client *APIClient) error {
 	var result struct {
 		ID int `json:"Id"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode stack response: %w", err)
+	}
 	d.SetId(strconv.Itoa(result.ID))
 	return nil
 }
@@ -1321,9 +1400,20 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 			repoPass = raw.AsString()
 		}
 	}
+	helmChartPath := ""
+	if v, ok := d.GetOk("helm_chart_path"); ok {
+		helmChartPath = v.(string)
+	}
+
+	manifestFile := d.Get("file_path_in_repository").(string)
+	if helmChartPath != "" {
+		// When deploying via Helm chart, manifestFile is not needed
+		manifestFile = ""
+	}
+
 	payload := map[string]interface{}{
 		"stackName":                 d.Get("name").(string),
-		"manifestFile":              d.Get("file_path_in_repository").(string),
+		"manifestFile":              manifestFile,
 		"namespace":                 d.Get("namespace").(string),
 		"composeFormat":             d.Get("compose_format").(bool),
 		"repositoryURL":             repoURL,
@@ -1337,10 +1427,14 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 		"additionalFiles":           expandStringList(d.Get("additional_files").([]interface{})),
 	}
 
-	if v, ok := d.GetOk("helm_chart_path"); ok {
-		payload["helmConfig"] = map[string]interface{}{
-			"chartPath": v.(string),
+	if helmChartPath != "" {
+		helmConfig := map[string]interface{}{
+			"chartPath": helmChartPath,
 		}
+		if valuesFiles, ok := d.GetOk("additional_helm_values_files"); ok {
+			helmConfig["valuesFiles"] = expandStringList(valuesFiles.([]interface{}))
+		}
+		payload["helmConfig"] = helmConfig
 	}
 
 	stackWebhook := d.Get("stack_webhook").(bool)
@@ -1392,7 +1486,9 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 	var result struct {
 		ID int `json:"Id"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode stack response: %w", err)
+	}
 	d.SetId(strconv.Itoa(result.ID))
 	return nil
 }
@@ -1432,7 +1528,9 @@ func createStackK8sURL(d *schema.ResourceData, client *APIClient) error {
 	var result struct {
 		ID int `json:"Id"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode stack response: %w", err)
+	}
 	d.SetId(strconv.Itoa(result.ID))
 	return nil
 }

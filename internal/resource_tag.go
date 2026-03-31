@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -78,7 +79,8 @@ func resourceTagDelete(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Tags.TagDelete(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*tags.TagDeleteNotFound); ok {
+		var notFound *tags.TagDeleteNotFound
+		if errors.As(err, &notFound) {
 			return nil
 		}
 		return fmt.Errorf("failed to delete tag: %w", err)

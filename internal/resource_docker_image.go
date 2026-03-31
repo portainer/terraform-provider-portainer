@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -25,6 +27,10 @@ func resourceDockerImage() *schema.Resource {
 		Read:   resourceDockerImageRead,
 		Delete: resourceDockerImageDelete,
 		Update: nil,
+		Timeouts: &schema.ResourceTimeout{
+			Create: schema.DefaultTimeout(10 * time.Minute),
+			Delete: schema.DefaultTimeout(5 * time.Minute),
+		},
 		Schema: map[string]*schema.Schema{
 			"endpoint_id":   {Type: schema.TypeInt, Required: true, ForceNew: true},
 			"image":         {Type: schema.TypeString, Required: true, ForceNew: true},
@@ -39,13 +45,26 @@ func resourceDockerImageCreate(d *schema.ResourceData, meta interface{}) error {
 	endpointID := d.Get("endpoint_id").(int)
 	auth := d.Get("registry_auth").(string)
 
+	timeout := d.Timeout(schema.TimeoutCreate)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	params := url.Values{}
 	params.Add("fromImage", image)
-	path := fmt.Sprintf("/endpoints/%d/docker/images/create?%s", endpointID, params.Encode())
+	urlPath := fmt.Sprintf("%s/endpoints/%d/docker/images/create?%s", client.Endpoint, endpointID, params.Encode())
 
-	headers := map[string]string{
-		"Content-Type":   "application/json",
-		"Content-Length": "0",
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, urlPath, nil)
+	if err != nil {
+		return fmt.Errorf("failed to build request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Length", "0")
+
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	}
 
 	if auth != "" {
@@ -61,14 +80,14 @@ func resourceDockerImageCreate(d *schema.ResourceData, meta interface{}) error {
 		}
 		jsonData, _ := json.Marshal(payload)
 		encoded := base64.StdEncoding.EncodeToString(jsonData)
-		headers["X-Registry-Auth"] = encoded
+		req.Header.Set("X-Registry-Auth", encoded)
 	} else {
-		headers["X-Registry-Auth"] = base64.StdEncoding.EncodeToString([]byte(`{}`))
+		req.Header.Set("X-Registry-Auth", base64.StdEncoding.EncodeToString([]byte(`{}`)))
 	}
 
-	resp, err := client.DoRequest(http.MethodPost, path, headers, nil)
+	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -92,10 +111,28 @@ func resourceDockerImageDelete(d *schema.ResourceData, meta interface{}) error {
 	endpointID := d.Get("endpoint_id").(int)
 	image := d.Get("image").(string)
 
-	path := fmt.Sprintf("/endpoints/%d/docker/images/%s", endpointID, url.PathEscape(image))
-	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
+	timeout := d.Timeout(schema.TimeoutDelete)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	urlPath := fmt.Sprintf("%s/endpoints/%d/docker/images/%s", client.Endpoint, endpointID, url.PathEscape(image))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, urlPath, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to build request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 

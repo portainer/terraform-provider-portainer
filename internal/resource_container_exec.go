@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,17 +14,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-type execEnv struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
 func resourceContainerExec() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceContainerExecCreate,
 		Read:   resourceContainerExecRead,
 		Delete: resourceContainerExecDelete,
 		Update: nil,
+		Timeouts: &schema.ResourceTimeout{
+			Create: schema.DefaultTimeout(5 * time.Minute),
+		},
 		Schema: map[string]*schema.Schema{
 			"endpoint_id":  {Type: schema.TypeInt, Required: true, ForceNew: true},
 			"service_name": {Type: schema.TypeString, Required: true, ForceNew: true},
@@ -51,6 +50,10 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 	user := d.Get("user").(string)
 	command := d.Get("command").(string)
 	wait := d.Get("wait").(int)
+
+	timeout := d.Timeout(schema.TimeoutCreate)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
 	if wait > 0 {
 		time.Sleep(time.Duration(wait) * time.Second)
@@ -81,7 +84,7 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 
 	execReqBody, _ := json.Marshal(execBody)
 	execURL := fmt.Sprintf("%s/endpoints/%d/docker/containers/%s/exec", client.Endpoint, endpointID, containerID)
-	execReq, _ := http.NewRequest("POST", execURL, bytes.NewBuffer(execReqBody))
+	execReq, _ := http.NewRequestWithContext(ctx, "POST", execURL, bytes.NewBuffer(execReqBody))
 	if client.APIKey != "" {
 		execReq.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -99,7 +102,9 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 	var execResult struct {
 		ID string `json:"Id"`
 	}
-	json.NewDecoder(execResp.Body).Decode(&execResult)
+	if err := json.NewDecoder(execResp.Body).Decode(&execResult); err != nil {
+		return fmt.Errorf("failed to decode exec result: %w", err)
+	}
 
 	startURL := fmt.Sprintf("%s/endpoints/%d/docker/exec/%s/start", client.Endpoint, endpointID, execResult.ID)
 	startBody := map[string]interface{}{
@@ -107,7 +112,7 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 		"Tty":    false,
 	}
 	startReqBody, _ := json.Marshal(startBody)
-	startReq, _ := http.NewRequest("POST", startURL, bytes.NewBuffer(startReqBody))
+	startReq, _ := http.NewRequestWithContext(ctx, "POST", startURL, bytes.NewBuffer(startReqBody))
 	if client.APIKey != "" {
 		startReq.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -122,7 +127,7 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 	}
 	defer startResp.Body.Close()
 	output, _ := io.ReadAll(startResp.Body)
-	d.Set("output", string(output))
+	_ = d.Set("output", string(output))
 	d.SetId(execResult.ID)
 	return nil
 }
@@ -134,6 +139,10 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 	user := d.Get("user").(string)
 	command := d.Get("command").(string)
 	wait := d.Get("wait").(int)
+
+	timeout := d.Timeout(schema.TimeoutCreate)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
 	if wait > 0 {
 		time.Sleep(time.Duration(wait) * time.Second)
@@ -158,7 +167,9 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 	var node map[string]interface{}
-	json.Unmarshal(nodeResp, &node)
+	if err := json.Unmarshal(nodeResp, &node); err != nil {
+		return fmt.Errorf("failed to decode node info: %w", err)
+	}
 	hostname := node["Description"].(map[string]interface{})["Hostname"].(string)
 
 	containerID := tasks[0]["Status"].(map[string]interface{})["ContainerStatus"].(map[string]interface{})["ContainerID"].(string)
@@ -174,7 +185,7 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 
 	execReqBody, _ := json.Marshal(execBody)
 	execURL := fmt.Sprintf("%s/endpoints/%d/docker/containers/%s/exec", client.Endpoint, endpointID, containerID)
-	execReq, _ := http.NewRequest("POST", execURL, bytes.NewBuffer(execReqBody))
+	execReq, _ := http.NewRequestWithContext(ctx, "POST", execURL, bytes.NewBuffer(execReqBody))
 	if client.APIKey != "" {
 		execReq.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -193,7 +204,9 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 	var execResult struct {
 		ID string `json:"Id"`
 	}
-	json.NewDecoder(execResp.Body).Decode(&execResult)
+	if err := json.NewDecoder(execResp.Body).Decode(&execResult); err != nil {
+		return fmt.Errorf("failed to decode exec result: %w", err)
+	}
 
 	startURL := fmt.Sprintf("%s/endpoints/%d/docker/exec/%s/start", client.Endpoint, endpointID, execResult.ID)
 	startBody := map[string]interface{}{
@@ -201,7 +214,7 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 		"Tty":    false,
 	}
 	startReqBody, _ := json.Marshal(startBody)
-	startReq, _ := http.NewRequest("POST", startURL, bytes.NewBuffer(startReqBody))
+	startReq, _ := http.NewRequestWithContext(ctx, "POST", startURL, bytes.NewBuffer(startReqBody))
 	if client.APIKey != "" {
 		startReq.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -217,7 +230,7 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 	}
 	defer startResp.Body.Close()
 	output, _ := io.ReadAll(startResp.Body)
-	d.Set("output", string(output))
+	_ = d.Set("output", string(output))
 	d.SetId(execResult.ID)
 	return nil
 }

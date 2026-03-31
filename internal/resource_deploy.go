@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -18,6 +19,9 @@ func resourceDeploy() *schema.Resource {
 		Read:   resourceDeployRead,   // stateless
 		Delete: resourceDeployDelete, // stateless
 		Update: nil,
+		Timeouts: &schema.ResourceTimeout{
+			Create: schema.DefaultTimeout(15 * time.Minute),
+		},
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:     schema.TypeInt,
@@ -78,6 +82,10 @@ func resourceDeploy() *schema.Resource {
 }
 
 func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
+	timeout := d.Timeout(schema.TimeoutCreate)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	client := meta.(*APIClient)
 	stackEnvVar := d.Get("stack_env_var").(string)
 	endpointID := d.Get("endpoint_id").(int)
@@ -102,7 +110,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 
 	// Detect swarm
 	swURL := fmt.Sprintf("%s/endpoints/%d/docker/swarm", client.Endpoint, endpointID)
-	swBody, swCode, err := apiGETWithCode(swURL, client.APIKey, client)
+	swBody, swCode, err := apiGETWithCodeCtx(ctx, swURL, client.APIKey, client)
 	if err != nil {
 		return err
 	}
@@ -119,7 +127,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 
 		// Get stacks with SwarmID filter and find our stack
 		stacksURL := fmt.Sprintf("%s/stacks?filters=%s", client.Endpoint, url.QueryEscape(fmt.Sprintf(`{"SwarmID": "%s"}`, swarm.ID)))
-		stacksBytes, err := apiGET(stacksURL, client.APIKey, client)
+		stacksBytes, err := apiGETCtx(ctx, stacksURL, client.APIKey, client)
 		if err != nil {
 			return fmt.Errorf("failed to query stacks: %w", err)
 		}
@@ -155,7 +163,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 		// Query services by stack prefix
 		servicesURL := fmt.Sprintf("%s/endpoints/%d/docker/services?filters=%s",
 			client.Endpoint, endpointID, url.QueryEscape(fmt.Sprintf(`{"name":{"%s":true}}`, stackName)))
-		servicesBytes, err := apiGET(servicesURL, client.APIKey, client)
+		servicesBytes, err := apiGETCtx(ctx, servicesURL, client.APIKey, client)
 		if err != nil {
 			return fmt.Errorf("failed to query services: %w", err)
 		}
@@ -206,7 +214,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			postURL := fmt.Sprintf("%s/endpoints/%d/docker/services/%s/update?version=%s",
 				client.Endpoint, endpointID, url.PathEscape(svcName), index)
 			postBody, _ := json.Marshal(spec)
-			respBytes, code, err := apiPOSTWithCode(postURL, client.APIKey, client, postBody)
+			respBytes, code, err := apiPOSTWithCodeCtx(ctx, postURL, client.APIKey, client, postBody)
 			if err != nil {
 				return fmt.Errorf("service %s update request failed: %w", svcName, err)
 			}
@@ -236,7 +244,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 					"serviceID": svcName,
 				}
 				body, _ := json.Marshal(forcePayload)
-				resp, code, err := apiPUTWithCode(forceURL, client.APIKey, client, body)
+				resp, code, err := apiPUTWithCodeCtx(ctx, forceURL, client.APIKey, client, body)
 				if err != nil || code != 200 {
 					out.WriteString(fmt.Sprintf("Force update of %q failed (status %d): %s\n", svcName, code, string(resp)))
 				} else {
@@ -253,7 +261,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 		if updateRevision && stackSpec != nil {
 			// GET stack file
 			sfURL := fmt.Sprintf("%s/stacks/%d/file", client.Endpoint, stackSpec.ID)
-			sfBytes, code, err := apiGETWithCode(sfURL, client.APIKey, client)
+			sfBytes, code, err := apiGETWithCodeCtx(ctx, sfURL, client.APIKey, client)
 			if err != nil || code != 200 {
 				return fmt.Errorf("failed to read stack file (%d): %w", code, err)
 			}
@@ -299,7 +307,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			}
 			body, _ := json.Marshal(putBody)
 			updURL := fmt.Sprintf("%s/stacks/%d?endpointId=%d", client.Endpoint, stackSpec.ID, endpointID)
-			resp, code, err := apiPUTWithCode(updURL, client.APIKey, client, body)
+			resp, code, err := apiPUTWithCodeCtx(ctx, updURL, client.APIKey, client, body)
 			if err != nil || code != 200 {
 				return fmt.Errorf("failed to update stack %s (status %d): %s", stackEnvVar, code, string(resp))
 			}
@@ -312,7 +320,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 
 		// list stacks and find by name
 		stacksURL := fmt.Sprintf("%s/stacks", client.Endpoint)
-		stacksBytes, err := apiGET(stacksURL, client.APIKey, client)
+		stacksBytes, err := apiGETCtx(ctx, stacksURL, client.APIKey, client)
 		if err != nil {
 			return fmt.Errorf("failed to list stacks: %w", err)
 		}
@@ -348,7 +356,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 		// standalone: pouze update stack_env_var v env + pullImage=true, prune=true
 		if updateRevision {
 			sfURL := fmt.Sprintf("%s/stacks/%d/file", client.Endpoint, stackSpec.ID)
-			sfBytes, code, err := apiGETWithCode(sfURL, client.APIKey, client)
+			sfBytes, code, err := apiGETWithCodeCtx(ctx, sfURL, client.APIKey, client)
 			if err != nil || code != 200 {
 				return fmt.Errorf("failed to read stack file (%d): %w", code, err)
 			}
@@ -394,7 +402,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			}
 			body, _ := json.Marshal(putBody)
 			updURL := fmt.Sprintf("%s/stacks/%d?endpointId=%d", client.Endpoint, stackSpec.ID, endpointID)
-			resp, code, err := apiPUTWithCode(updURL, client.APIKey, client, body)
+			resp, code, err := apiPUTWithCodeCtx(ctx, updURL, client.APIKey, client, body)
 			if err != nil || code != 200 {
 				return fmt.Errorf("failed to update stack (standalone) (status %d): %s", code, string(resp))
 			}

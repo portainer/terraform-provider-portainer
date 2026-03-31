@@ -38,6 +38,30 @@ output "exec_output" {
 ```
 ---
 
+## Timeouts
+
+This resource supports the following [timeouts](https://developer.hashicorp.com/terraform/language/resources/syntax#operation-timeouts) configuration options:
+
+| Operation | Default | Description                                    |
+|-----------|---------|------------------------------------------------|
+| `create`  | 5m      | Time to wait for command execution to complete |
+
+### Example
+```hcl
+resource "portainer_container_exec" "standalone" {
+  endpoint_id   = 1
+  service_name  = "my-nginx-container"
+  command       = "nginx -v"
+  user          = "root"
+
+  timeouts {
+    create = "10m"
+  }
+}
+```
+
+---
+
 ## Arguments Reference
 | Name          | Type   | Required    | Description                                                               |
 |---------------|--------|-------------|---------------------------------------------------------------------------|

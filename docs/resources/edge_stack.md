@@ -138,6 +138,40 @@ terraform apply
 
 ---
 
+## Timeouts
+
+`portainer_edge_stack` supports the following [Timeouts](https://developer.hashicorp.com/terraform/language/resources/syntax#operation-timeouts) configuration options:
+
+| Operation | Default  | Description                          |
+|-----------|----------|--------------------------------------|
+| `create`  | 15 minutes | Time limit for creating the edge stack |
+| `update`  | 15 minutes | Time limit for updating the edge stack |
+| `delete`  | 10 minutes | Time limit for deleting the edge stack |
+
+### Example
+
+```hcl
+resource "portainer_edge_stack" "example" {
+  name            = "nginx-edge"
+  deployment_type = 0
+  edge_groups     = [1]
+  stack_file_content = <<-EOT
+    version: "3"
+    services:
+      web:
+        image: nginx
+  EOT
+
+  timeouts {
+    create = "30m"
+    update = "30m"
+    delete = "20m"
+  }
+}
+```
+
+---
+
 ## Attributes Reference
 
 | Name | Description |

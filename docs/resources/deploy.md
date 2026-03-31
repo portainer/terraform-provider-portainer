@@ -220,6 +220,35 @@ When executed:
 
 ---
 
+## Timeouts
+
+The `portainer_deploy` resource supports the following timeout configuration:
+
+| Timeout | Default  | Description                                      |
+| ------- | -------- | ------------------------------------------------ |
+| `create` | `15m`   | Maximum time to wait for the deployment to complete. |
+
+### Example
+
+```hcl
+resource "portainer_deploy" "swarm_deploy" {
+  endpoint_id     = 1
+  stack_name      = "my-swarm-stack"
+  stack_env_var   = "REVISION"
+  services_list   = "web,api"
+  revision        = "1.29"
+  update_revision = true
+  force_update    = true
+  wait            = 15
+
+  timeouts {
+    create = "30m"
+  }
+}
+```
+
+---
+
 ## 📤 Attributes Reference
 
 | Name     | Description                                                                                              |

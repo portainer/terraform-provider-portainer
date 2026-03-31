@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -100,7 +101,8 @@ func resourceEndpointGroupRead(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.Client.EndpointGroups.GetEndpointGroupsID(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*endpoint_groups.GetEndpointGroupsIDNotFound); ok {
+		var notFound *endpoint_groups.GetEndpointGroupsIDNotFound
+		if errors.As(err, &notFound) {
 			d.SetId("")
 			return nil
 		}
@@ -159,7 +161,8 @@ func resourceEndpointGroupDelete(d *schema.ResourceData, meta interface{}) error
 
 	_, err := client.Client.EndpointGroups.EndpointGroupDelete(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*endpoint_groups.EndpointGroupDeleteNotFound); ok {
+		var notFound *endpoint_groups.EndpointGroupDeleteNotFound
+		if errors.As(err, &notFound) {
 			return nil
 		}
 		return fmt.Errorf("failed to delete endpoint group: %w", err)

@@ -1,8 +1,9 @@
 services:
   portainer_edge_agent:
     image: portainer/agent
+    pull_policy: always
     container_name: portainer_edge_agent
-    restart: always
+    restart: unless-stopped
     environment:
       - EDGE=1
       - EDGE_ID=${EDGE_ID}

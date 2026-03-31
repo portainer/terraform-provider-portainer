@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -55,7 +56,8 @@ func resourceUserAdminCreate(d *schema.ResourceData, meta interface{}) error {
 	resp, err := client.Client.Users.UserAdminInit(params)
 	if err != nil {
 		// Treat 409 (admin already initialized) as a successful, idempotent create.
-		if _, ok := err.(*users.UserAdminInitConflict); ok {
+		var conflict *users.UserAdminInitConflict
+		if errors.As(err, &conflict) {
 			if d.Id() == "" {
 				d.SetId("portainer-admin")
 			}

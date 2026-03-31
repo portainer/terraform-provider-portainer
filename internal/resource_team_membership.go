@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -124,7 +125,8 @@ func resourceTeamMembershipDelete(d *schema.ResourceData, meta interface{}) erro
 
 	_, err := client.Client.TeamMemberships.TeamMembershipDelete(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*team_memberships.TeamMembershipDeleteNotFound); ok {
+		var notFound *team_memberships.TeamMembershipDeleteNotFound
+		if errors.As(err, &notFound) {
 			return nil
 		}
 		return fmt.Errorf("failed to delete team membership: %w", err)

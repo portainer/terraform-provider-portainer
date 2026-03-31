@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -178,7 +179,8 @@ func resourceUserRead(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.Client.Users.UserInspect(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*users.UserInspectNotFound); ok {
+		var notFound *users.UserInspectNotFound
+		if errors.As(err, &notFound) {
 			d.SetId("")
 			return nil
 		}
@@ -236,27 +238,6 @@ func resourceUserImport(d *schema.ResourceData, meta interface{}) ([]*schema.Res
 	}
 
 	return nil, fmt.Errorf("user %s not found", username)
-}
-
-func resourceUserReadByUsername(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*APIClient)
-	username := d.Get("username").(string)
-
-	params := users.NewUserListParams()
-	resp, err := client.Client.Users.UserList(params, client.AuthInfo)
-	if err != nil {
-		return fmt.Errorf("failed to list users for lookup: %w", err)
-	}
-
-	for _, u := range resp.Payload {
-		if u.Username == username {
-			d.SetId(strconv.FormatInt(u.ID, 10))
-			d.Set("role", u.Role)
-			return nil
-		}
-	}
-
-	return fmt.Errorf("user created but not found in user list")
 }
 
 func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
@@ -318,7 +299,8 @@ func resourceUserDelete(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Users.UserDelete(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*users.UserDeleteNotFound); ok {
+		var notFoundDel *users.UserDeleteNotFound
+		if errors.As(err, &notFoundDel) {
 			return nil
 		}
 		return fmt.Errorf("failed to delete user: %w", err)
