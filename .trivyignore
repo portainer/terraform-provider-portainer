@@ -1,0 +1,4 @@
+# Kubernetes e2e test manifests - intentionally minimal for testing purposes
+KSV-0014
+KSV-0056
+KSV-0118

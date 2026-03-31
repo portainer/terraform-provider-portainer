@@ -2,11 +2,13 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -17,6 +19,12 @@ func resourceKubernetesApplication() *schema.Resource {
 		Read:   resourceKubernetesApplicationRead,
 		Update: resourceKubernetesApplicationUpdate,
 		Delete: resourceKubernetesApplicationDelete,
+
+		Timeouts: &schema.ResourceTimeout{
+			Create: schema.DefaultTimeout(10 * time.Minute),
+			Update: schema.DefaultTimeout(10 * time.Minute),
+			Delete: schema.DefaultTimeout(5 * time.Minute),
+		},
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
@@ -38,6 +46,10 @@ func resourceKubernetesApplication() *schema.Resource {
 
 func resourceKubernetesApplicationCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
+
+	timeout := d.Timeout(schema.TimeoutCreate)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
 	endpointID := d.Get("endpoint_id").(int)
 	namespace := d.Get("namespace").(string)
@@ -64,7 +76,7 @@ func resourceKubernetesApplicationCreate(d *schema.ResourceData, meta interface{
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/apps/v1/namespaces/%s/deployments", client.Endpoint, endpointID, namespace)
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
@@ -95,11 +107,15 @@ func resourceKubernetesApplicationCreate(d *schema.ResourceData, meta interface{
 func resourceKubernetesApplicationDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
+	timeout := d.Timeout(schema.TimeoutDelete)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	endpointID, namespace, name := parseApllicationsID(d.Id())
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/apps/v1/namespaces/%s/deployments/%s", client.Endpoint, endpointID, namespace, name)
 
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return err
 	}

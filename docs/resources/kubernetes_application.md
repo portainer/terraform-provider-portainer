@@ -41,6 +41,34 @@ terraform destroy
 
 ---
 
+### Timeouts
+
+`portainer_portainer_kubernetes_application` provides the following [Timeouts](https://developer.hashicorp.com/terraform/language/resources/syntax#operation-timeouts) configuration options:
+
+| Operation | Default  | Description                              |
+|-----------|----------|------------------------------------------|
+| `create`  | 10 minutes | Time to wait for application creation.  |
+| `update`  | 10 minutes | Time to wait for application update.    |
+| `delete`  | 5 minutes  | Time to wait for application deletion.  |
+
+#### Example
+
+```hcl
+resource "portainer_portainer_kubernetes_application" "example" {
+  endpoint_id = 4
+  namespace   = "default"
+  manifest    = file("${path.module}/application.yaml")
+
+  timeouts {
+    create = "15m"
+    update = "15m"
+    delete = "10m"
+  }
+}
+```
+
+---
+
 ### Attributes Reference
 | Name | Description                               |
 |------|-------------------------------------------|

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -247,7 +248,8 @@ func resourceEnvironmentRead(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.Client.Endpoints.EndpointInspect(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*endpoints.EndpointInspectNotFound); ok {
+		var notFound *endpoints.EndpointInspectNotFound
+		if errors.As(err, &notFound) {
 			d.SetId("")
 			return nil
 		}
@@ -345,7 +347,8 @@ func resourceEnvironmentDelete(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Endpoints.EndpointDelete(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*endpoints.EndpointDeleteNotFound); ok {
+		var notFound *endpoints.EndpointDeleteNotFound
+		if errors.As(err, &notFound) {
 			return nil
 		}
 		return fmt.Errorf("failed to delete environment: %w", err)

@@ -308,11 +308,17 @@ resource "portainer_stack" "k8s_helm_repo" {
   endpoint_id               = 2
   repository_url            = "https://github.com/example/repo"
   repository_reference_name = "refs/heads/main"
-  file_path_in_repository   = "kube.yaml"
   namespace                 = "default"
   helm_chart_path           = "charts/my-chart"
+
+  # Optional: environment-specific Helm values overrides
+  additional_helm_values_files = [
+    "values-test.yaml",
+    "values-prod.yaml"
+  ]
 }
 ```
+> **Note:** When `helm_chart_path` is set, `file_path_in_repository` is not required.
 
 ### Deploy Kubernetes Stack from URL
 ```hcl
@@ -326,6 +332,63 @@ resource "portainer_stack" "k8s_url" {
   compose_format  = false
 }
 ```
+### Stop/Start a Stack
+```hcl
+resource "portainer_stack" "my_stack" {
+  name            = "my-stack"
+  deployment_type = "swarm"
+  method          = "string"
+  endpoint_id     = 1
+
+  stack_file_content = <<-EOT
+    version: "3"
+    services:
+      web:
+        image: nginx
+  EOT
+
+  # Set to false to stop the stack, true to start it
+  active = false
+}
+```
+
+---
+
+## Timeouts
+
+This resource supports the following [timeouts](https://developer.hashicorp.com/terraform/language/resources/syntax#operation-timeouts) configuration options:
+
+| Operation | Default  | Description                          |
+|-----------|----------|--------------------------------------|
+| `create`  | 30m      | Time to wait for stack creation      |
+| `update`  | 30m      | Time to wait for stack update        |
+| `delete`  | 10m      | Time to wait for stack deletion      |
+
+If the delete operation encounters a server error (5xx), it will automatically retry every 15 seconds until the timeout is reached.
+
+### Example
+```hcl
+resource "portainer_stack" "example" {
+  name            = "my-stack"
+  deployment_type = "standalone"
+  method          = "string"
+  endpoint_id     = 1
+
+  stack_file_content = <<-EOT
+    version: "3"
+    services:
+      web:
+        image: nginx
+  EOT
+
+  timeouts {
+    create = "15m"
+    update = "15m"
+    delete = "3m"
+  }
+}
+```
+
 ---
 
 ## Lifecycle & Behavior
@@ -357,6 +420,7 @@ terraform apply
 | `ownership`       | string       | 🚫 optional | Ownership level: `public`, `administrators`, `restricted`, or `private`|
 | `authorized_teams`| set(int)     | 🚫 optional | List of team IDs authorized to access this stack (only if restricted)|
 | `authorized_users`| set(int)     | 🚫 optional | List of user IDs authorized to access this stack (only if restricted)|
+| `active`          | bool         | 🚫 optional | Whether the stack should be running (default: `true`). Set to `false` to stop the stack.|
 
 ---
 ### 🐳 Docker Stack (standalone/swarm)
@@ -427,7 +491,8 @@ terraform apply
 | `force_update`                      | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                                                            |
 | `compose_format`                    | bool   | 🚫 optional | Compose format support (default: `false`)                                                               |
 | `additional_files`                  | string | 🚫 optional | List of additional YAML/manifest file paths                                                             |
-| `helm_chart_path`                   | string | 🚫 optional | Path to a Helm chart folder in the Git repository (must contain `Chart.yaml`)                           |
+| `helm_chart_path`                   | string | 🚫 optional | Path to a Helm chart folder in the Git repository (must contain `Chart.yaml`). When set, `file_path_in_repository` is not required. |
+| `additional_helm_values_files`      | list(string) | 🚫 optional | List of additional Helm values files (e.g. `values-prod.yaml`). Only used with `helm_chart_path`. |
 
 #### Method: `url`
 | Name             | Type   | Required    | Description                |

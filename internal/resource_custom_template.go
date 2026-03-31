@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -165,13 +166,6 @@ func createTemplateFromRepository(d *schema.ResourceData, client *APIClient, rep
 	return nil
 }
 
-func getVariables(d *schema.ResourceData) []interface{} {
-	if v, ok := d.GetOk("variables"); ok {
-		return v.([]interface{})
-	}
-	return []interface{}{}
-}
-
 func getVariablesSDK(d *schema.ResourceData) []*models.PortainerCustomTemplateVariableDefinition {
 	if v, ok := d.GetOk("variables"); ok {
 		vars := v.([]interface{})
@@ -208,7 +202,8 @@ func resourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) error 
 
 	resp, err := client.Client.CustomTemplates.CustomTemplateInspect(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*custom_templates.CustomTemplateInspectNotFound); ok {
+		var notFound *custom_templates.CustomTemplateInspectNotFound
+		if errors.As(err, &notFound) {
 			d.SetId("")
 			return nil
 		}
@@ -306,7 +301,8 @@ func resourceCustomTemplateDelete(d *schema.ResourceData, meta interface{}) erro
 
 	_, err := client.Client.CustomTemplates.CustomTemplateDelete(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*custom_templates.CustomTemplateDeleteNotFound); ok {
+		var notFound *custom_templates.CustomTemplateDeleteNotFound
+		if errors.As(err, &notFound) {
 			return nil
 		}
 		return fmt.Errorf("failed to delete custom template: %w", err)

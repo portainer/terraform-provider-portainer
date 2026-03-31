@@ -1,8 +1,9 @@
 services:
   portainer_agent:
     image: portainer/agent
+    pull_policy: always
     container_name: portainer_agent
-    restart: always
+    restart: unless-stopped
     networks:
       - terraform-provider-portainer_default
     ports:

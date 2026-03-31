@@ -2,11 +2,13 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -39,6 +41,9 @@ func resourcePortainerCloudProvision() *schema.Resource {
 		Create: resourceCloudProvisionCreate,
 		Read:   schema.Noop,
 		Delete: schema.RemoveFromState,
+		Timeouts: &schema.ResourceTimeout{
+			Create: schema.DefaultTimeout(30 * time.Minute),
+		},
 		Schema: map[string]*schema.Schema{
 			"cloud_provider": {
 				Type:        schema.TypeString,
@@ -61,6 +66,10 @@ func resourceCloudProvisionCreate(d *schema.ResourceData, meta interface{}) erro
 	client := meta.(*APIClient)
 	provider := d.Get("cloud_provider").(string)
 
+	timeout := d.Timeout(schema.TimeoutCreate)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	payload := mapStringInterfaceCloudProviderProvision(d.Get("payload").(map[string]interface{}))
 	jsonBody, err := json.Marshal(payload)
 	if err != nil {
@@ -68,7 +77,7 @@ func resourceCloudProvisionCreate(d *schema.ResourceData, meta interface{}) erro
 	}
 
 	url := fmt.Sprintf("%s/cloud/%s/provision", client.Endpoint, provider)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to build request: %w", err)
 	}

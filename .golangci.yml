@@ -1,0 +1,35 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - gosec
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - bodyclose
+    - nilerr
+    - errorlint
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - fmt.Sscanf # used in ID parse functions, safe to ignore
+      - (*github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema.ResourceData).Set # Terraform SDK d.Set rarely fails
+  gosec:
+    excludes:
+      - G107 # URL provided by user config, not hardcoded
+      - G402 # InsecureSkipVerify is user-configurable via skip_ssl_verify
+    severity: high
+  staticcheck:
+    checks:
+      - "all"
+      - "-SA1019" # ignore deprecated ImportStatePassthrough - migration to context-aware version is out of scope
+
+issues:
+  exclude-dirs:
+    - portainer_data
+    - e2e-tests
+    - examples

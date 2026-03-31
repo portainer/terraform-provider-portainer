@@ -114,6 +114,38 @@ resource "portainer_cloud_provider_provision" "gke_cluster" {
 ```
 ---
 
+## Timeouts
+
+This resource supports the following timeouts:
+
+| Operation | Default | Description                                      |
+|-----------|---------|--------------------------------------------------|
+| `create`  | `30m`   | Time to wait for cloud provisioning to complete  |
+
+### Example
+
+```hcl
+resource "portainer_cloud_provider_provision" "example" {
+  cloud_provider = "digitalocean"
+
+  payload = {
+    credentialID      = 1
+    name              = "do-cluster"
+    region            = "nyc1"
+    nodeCount         = 3
+    nodeSize          = "s-2vcpu-4gb"
+    networkID         = "1234-abcd"
+    kubernetesVersion = "1.25.0"
+  }
+
+  timeouts {
+    create = "45m"
+  }
+}
+```
+
+---
+
 ## ⚙️ Lifecycle Behavior
 
 ---

@@ -56,7 +56,8 @@ func getRegistryPolicies(client *APIClient, registryID int, endpointID int) (*mo
 
 	resp, err := client.Client.Registries.RegistryInspect(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*registries.RegistryInspectNotFound); ok {
+		var notFound *registries.RegistryInspectNotFound
+		if errors.As(err, &notFound) {
 			return nil, ErrRegistryNotFound
 		}
 		return nil, fmt.Errorf("failed to fetch registry: %w", err)
@@ -207,7 +208,8 @@ func resourceRegistryAccessDelete(d *schema.ResourceData, meta interface{}) erro
 
 	_, err = client.Client.Endpoints.EndpointRegistryAccess(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*endpoints.EndpointRegistryAccessNotFound); ok {
+		var notFound *endpoints.EndpointRegistryAccessNotFound
+		if errors.As(err, &notFound) {
 			return nil
 		}
 		return fmt.Errorf("failed to delete registry access: %w", err)

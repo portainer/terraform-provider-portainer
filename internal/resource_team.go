@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -73,7 +74,8 @@ func resourceTeamRead(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.Client.Teams.TeamInspect(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*teams.TeamInspectNotFound); ok {
+		var notFound *teams.TeamInspectNotFound
+		if errors.As(err, &notFound) {
 			d.SetId("")
 			return nil
 		}
@@ -112,7 +114,8 @@ func resourceTeamDelete(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Teams.TeamDelete(params, client.AuthInfo)
 	if err != nil {
-		if _, ok := err.(*teams.TeamDeleteNotFound); ok {
+		var notFoundDel *teams.TeamDeleteNotFound
+		if errors.As(err, &notFoundDel) {
 			return nil
 		}
 		return fmt.Errorf("failed to delete team: %w", err)

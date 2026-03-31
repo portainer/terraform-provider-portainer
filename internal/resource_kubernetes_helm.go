@@ -2,11 +2,13 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -16,6 +18,11 @@ func resourceKubernetesHelm() *schema.Resource {
 		Create: resourceKubernetesHelmCreate,
 		Read:   resourceKubernetesHelmRead,
 		Delete: resourceKubernetesHelmDelete,
+
+		Timeouts: &schema.ResourceTimeout{
+			Create: schema.DefaultTimeout(15 * time.Minute),
+			Delete: schema.DefaultTimeout(10 * time.Minute),
+		},
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
@@ -54,6 +61,10 @@ func resourceKubernetesHelm() *schema.Resource {
 }
 
 func resourceKubernetesHelmCreate(d *schema.ResourceData, meta interface{}) error {
+	timeout := d.Timeout(schema.TimeoutCreate)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	client := meta.(*APIClient)
 	id := d.Get("environment_id").(int)
 
@@ -67,7 +78,7 @@ func resourceKubernetesHelmCreate(d *schema.ResourceData, meta interface{}) erro
 
 	jsonBody, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/helm", client.Endpoint, id)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
@@ -101,6 +112,10 @@ func resourceKubernetesHelmRead(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceKubernetesHelmDelete(d *schema.ResourceData, meta interface{}) error {
+	timeout := d.Timeout(schema.TimeoutDelete)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	client := meta.(*APIClient)
 	idParts := strings.SplitN(d.Id(), ":", 3)
 	if len(idParts) != 3 {
@@ -113,7 +128,7 @@ func resourceKubernetesHelmDelete(d *schema.ResourceData, meta interface{}) erro
 
 	url := fmt.Sprintf("%s/endpoints/%s/kubernetes/helm/%s?namespace=%s", client.Endpoint, envID, release, namespace)
 
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return err
 	}

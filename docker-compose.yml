@@ -1,6 +1,7 @@
 services:
   portainer:
     image: portainer/portainer-ce
+    pull_policy: always
     container_name: portainer
     restart: unless-stopped
     ports:

@@ -32,6 +32,35 @@ resource "portainer_kubernetes_helm" "example" {
 
 ---
 
+### Timeouts
+
+`portainer_kubernetes_helm` provides the following [Timeouts](https://developer.hashicorp.com/terraform/language/resources/syntax#operation-timeouts) configuration options:
+
+| Operation | Default  | Description                              |
+|-----------|----------|------------------------------------------|
+| `create`  | 15 minutes | Time to wait for Helm chart installation |
+| `delete`  | 10 minutes | Time to wait for Helm release deletion   |
+
+#### Example
+
+```hcl
+resource "portainer_kubernetes_helm" "example" {
+  environment_id = 4
+  chart          = "nginx"
+  name           = "my-nginx"
+  namespace      = "default"
+  repo           = "https://charts.bitnami.com/bitnami"
+  values         = ""
+
+  timeouts {
+    create = "20m"
+    delete = "15m"
+  }
+}
+```
+
+---
+
 ### Attributes Reference
 
 | Name | Description                               |

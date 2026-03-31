@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -22,6 +24,11 @@ func resourceEdgeStack() *schema.Resource {
 		Read:   resourceEdgeStackRead,
 		Delete: resourceEdgeStackDelete,
 		Update: resourceEdgeStackUpdate,
+		Timeouts: &schema.ResourceTimeout{
+			Create: schema.DefaultTimeout(15 * time.Minute),
+			Update: schema.DefaultTimeout(15 * time.Minute),
+			Delete: schema.DefaultTimeout(10 * time.Minute),
+		},
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
 		},
@@ -221,6 +228,10 @@ func findExistingEdgeStackByName(client *APIClient, name string) (int, error) {
 }
 
 func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
+	timeout := d.Timeout(schema.TimeoutCreate)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	client := meta.(*APIClient)
 	edgeGroups := toIntSlice(d.Get("edge_groups").([]interface{}))
 	registries := toIntSlice(d.Get("registries").([]interface{}))
@@ -255,7 +266,7 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 			}
 			payload["envVars"] = envVars
 		}
-		return createEdgeStackFromJSON(client, d, payload, "/edge_stacks/create/string")
+		return createEdgeStackFromJSON(ctx, client, d, payload, "/edge_stacks/create/string")
 	}
 
 	// Method: stackFilePath (file)
@@ -290,7 +301,7 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 		if d.Get("dryrun").(bool) {
 			endpoint += "?dryrun=true"
 		}
-		req, _ := http.NewRequest("POST", endpoint, body)
+		req, _ := http.NewRequestWithContext(ctx, "POST", endpoint, body)
 		if client.APIKey != "" {
 			req.Header.Set("X-API-Key", client.APIKey)
 		} else if client.JWTToken != "" {
@@ -378,13 +389,17 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 				d.Set("webhook_url", webhookURL)
 			}
 		}
-		return createEdgeStackFromJSON(client, d, payload, "/edge_stacks/create/repository")
+		return createEdgeStackFromJSON(ctx, client, d, payload, "/edge_stacks/create/repository")
 	}
 
 	return fmt.Errorf("one of 'stack_file_content', 'stack_file_path', or 'repository_url' must be provided")
 }
 
 func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
+	timeout := d.Timeout(schema.TimeoutUpdate)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	client := meta.(*APIClient)
 	deploymentType := d.Get("deployment_type").(int)
 
@@ -410,7 +425,7 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 			return err
 		}
 
-		req, err := http.NewRequest("PUT", fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
+		req, err := http.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
 		if err != nil {
 			return err
 		}
@@ -484,7 +499,7 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 			return err
 		}
 
-		req, err := http.NewRequest("PUT", fmt.Sprintf("%s/edge_stacks/%s/git", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
+		req, err := http.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("%s/edge_stacks/%s/git", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
 		if err != nil {
 			return err
 		}
@@ -508,13 +523,13 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 	return fmt.Errorf("one of 'stack_file_content', 'stack_file_path', or 'repository_url' must be provided for update")
 }
 
-func createEdgeStackFromJSON(client *APIClient, d *schema.ResourceData, payload map[string]interface{}, endpoint string) error {
+func createEdgeStackFromJSON(ctx context.Context, client *APIClient, d *schema.ResourceData, payload map[string]interface{}, endpoint string) error {
 	jsonBody, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", client.Endpoint+endpoint, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", client.Endpoint+endpoint, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
@@ -620,9 +635,13 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceEdgeStackDelete(d *schema.ResourceData, meta interface{}) error {
+	timeout := d.Timeout(schema.TimeoutDelete)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	client := meta.(*APIClient)
 
-	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil)
+	req, _ := http.NewRequestWithContext(ctx, "DELETE", fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil)
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
