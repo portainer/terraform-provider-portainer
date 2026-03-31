@@ -247,12 +247,12 @@ sec: trivy trivy-iac govulncheck lint
 .PHONY: trivy
 trivy:
 	@echo "Running Trivy dependency scan..."
-	docker run --rm -v $(CURDIR):/workspace:ro aquasec/trivy:latest fs --scanners vuln --severity CRITICAL,HIGH --exit-code 1 /workspace
+	docker run --rm -v $(CURDIR):/workspace:ro aquasec/trivy:0.69.3 fs --scanners vuln --severity CRITICAL,HIGH --exit-code 1 /workspace
 
 .PHONY: trivy-iac
 trivy-iac:
 	@echo "Running Trivy IaC scan..."
-	docker run --rm -v $(CURDIR):/workspace:ro aquasec/trivy:latest fs --scanners misconfig --severity CRITICAL,HIGH --exit-code 1 --ignorefile /workspace/.trivyignore /workspace
+	docker run --rm -v $(CURDIR):/workspace:ro aquasec/trivy:0.69.3 fs --scanners misconfig --severity CRITICAL,HIGH --exit-code 1 --ignorefile /workspace/.trivyignore /workspace
 
 GOBIN := $(shell go env GOPATH)/bin
 
