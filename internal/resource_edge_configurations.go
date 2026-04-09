@@ -115,12 +115,48 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 		return fmt.Errorf("failed to create edge configuration: %s", string(respBody))
 	}
 
-	var created EdgeConfiguration
-	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
-		return fmt.Errorf("failed to decode create response: %w", err)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read create response: %w", err)
 	}
+
+	var created EdgeConfiguration
+	if len(respBody) > 0 {
+		if err := json.Unmarshal(respBody, &created); err != nil {
+			return fmt.Errorf("failed to decode create response: %w", err)
+		}
+	}
+
 	if created.ID == 0 {
-		return fmt.Errorf("edge configuration created but no ID returned")
+		// API returned empty body — find the created config by name
+		name := d.Get("name").(string)
+		listReq, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_configurations", client.Endpoint), nil)
+		if err != nil {
+			return fmt.Errorf("failed to build list request: %w", err)
+		}
+		if client.APIKey != "" {
+			listReq.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			listReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		}
+		listResp, err := client.HTTPClient.Do(listReq)
+		if err != nil {
+			return fmt.Errorf("failed to list edge configurations: %w", err)
+		}
+		defer listResp.Body.Close()
+		var configs []EdgeConfiguration
+		if err := json.NewDecoder(listResp.Body).Decode(&configs); err != nil {
+			return fmt.Errorf("failed to decode edge configurations list: %w", err)
+		}
+		for _, c := range configs {
+			if c.Name == name {
+				created = c
+				break
+			}
+		}
+		if created.ID == 0 {
+			return fmt.Errorf("edge configuration created but could not determine its ID")
+		}
 	}
 
 	d.SetId(strconv.Itoa(created.ID))
