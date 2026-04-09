@@ -115,32 +115,15 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 		return fmt.Errorf("failed to create edge configuration: %s", string(respBody))
 	}
 
-	filterBytes, _ := json.Marshal(payload)
-	getReq, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_configurations", client.Endpoint), bytes.NewReader(filterBytes))
-	if err != nil {
-		return fmt.Errorf("failed to build GET request for lookup: %w", err)
+	var created EdgeConfiguration
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		return fmt.Errorf("failed to decode create response: %w", err)
 	}
-	getReq.Header.Set("Content-Type", "application/json")
-	if client.APIKey != "" {
-		getReq.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		getReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	}
-	getResp, err := client.HTTPClient.Do(getReq)
-	if err != nil {
-		return fmt.Errorf("failed to send GET lookup request: %w", err)
-	}
-	defer getResp.Body.Close()
-
-	var configs []EdgeConfiguration
-	if err := json.NewDecoder(getResp.Body).Decode(&configs); err != nil {
-		return fmt.Errorf("failed to decode GET response: %w", err)
-	}
-	if len(configs) == 0 {
-		return fmt.Errorf("no edge configuration found after creation")
+	if created.ID == 0 {
+		return fmt.Errorf("edge configuration created but no ID returned")
 	}
 
-	d.SetId(strconv.Itoa(configs[0].ID))
+	d.SetId(strconv.Itoa(created.ID))
 	return nil
 }
 
