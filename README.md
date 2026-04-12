@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://registry.terraform.io/providers/portainer/portainer/latest/docs">
-    <img src="https://camo.githubusercontent.com/cdda8928975712cecce7be8b6a1506e3b327b1643cd3391dcf40515e25b54f73/68747470733a2f2f7777772e6461746f636d732d6173736574732e636f6d2f323838352f313733313337333331302d7465727261666f726d5f77686974652e737667" alt="Terraform Logo" width="200">
+    <img src="https://www.datocms-assets.com/2885/1731373310-terraform_white.svg" alt="Terraform Logo" width="200">
   </a>
   &nbsp;&nbsp;&nbsp;
   <a href="https://github.com/portainer/terraform-provider-portainer">
@@ -209,6 +209,16 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_kubernetes_ingress`             | [kubernetes_ingress.md](docs/resources/kubernetes_ingress.md)                                  | [example](examples/kubernetes_ingress/)              | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_kubernetes_volume`              | [kubernetes_volume.md](docs/resources/kubernetes_volume.md)                                    | [example](examples/kubernetes_volume/)               | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_kubernetes_storage`             | [kubernetes_storage.md](docs/resources/kubernetes_storage.md)                                  | [example](examples/kubernetes_storage/)              | ✅     | ❌ / ❌                             | ✅        |
+| `portainer_alerting_rule`                  | [alerting_rule.md](docs/resources/alerting_rule.md)                                            | [example](examples/alerting_rule/)                   | ✅     | ❌ / ✅                             | ❌        |
+| `portainer_alerting_settings`              | [alerting_settings.md](docs/resources/alerting_settings.md)                                    | [example](examples/alerting_settings/)               | ✅     | ❌ / ✅                             | ❌        |
+| `portainer_alerting_silence`               | [alerting_silence.md](docs/resources/alerting_silence.md)                                      | [example](examples/alerting_silence/)                | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_helm_user_repository`           | [helm_user_repository.md](docs/resources/helm_user_repository.md)                              | [example](examples/helm_user_repository/)            | ✅     | ✅ / ❌                             | ❌        |
+| `portainer_policy`                         | [policy.md](docs/resources/policy.md)                                                          | [example](examples/policy/)                          | ✅     | ✅ / ✅                             | ❌        |
+| `portainer_shared_git_credential`          | [shared_git_credential.md](docs/resources/shared_git_credential.md)                            | [example](examples/shared_git_credential/)           | ✅     | ✅ / ✅                             | ❌        |
+| `portainer_stack_migrate`                  | [stack_migrate.md](docs/resources/stack_migrate.md)                                            | [example](examples/stack_migrate/)                   | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_user_git_credential`            | [user_git_credential.md](docs/resources/user_git_credential.md)                                | [example](examples/user_git_credential/)             | ✅     | ✅ / ✅                             | ❌        |
+| `portainer_ldap_settings`                  | [ldap_settings.md](docs/resources/ldap_settings.md)                                            | [example](examples/ldap_settings/)                   | ✅     | ❌ / ✅                             | ❌        |
+| `portainer_helm_rollback`                  | [helm_rollback.md](docs/resources/helm_rollback.md)                                            | [example](examples/helm_rollback/)                   | ✅     | ❌ / ❌                             | ❌        |
 
 
 
@@ -238,9 +248,19 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_team_membership`   | [team_membership.md](docs/data-sources/team_membership.md)       | [team membership docs](docs/data-sources/team_membership.md)| ✅     | ❌        |
 | `portainer_endpoint_group_access` | [endpoint_group_access.md](docs/data-sources/endpoint_group_access.md) | [endpoint group access docs](docs/data-sources/endpoint_group_access.md) | ✅ | ❌        |
 | `portainer_registry_access`   | [registry_access.md](docs/data-sources/registry_access.md)       | [registry access docs](docs/data-sources/registry_access.md)| ✅     | ❌        |
- 
- 
- ### 🐳 Podman Support via Docker Resources
+| `portainer_kubernetes_crd`    | [kubernetes_crd.md](docs/data-sources/kubernetes_crd.md)         | [kubernetes crd docs](docs/data-sources/kubernetes_crd.md)   | ✅     | ❌        |
+| `portainer_policy`            | [policy.md](docs/data-sources/policy.md)                         | [policy docs](docs/data-sources/policy.md)                   | ✅     | ❌        |
+| `portainer_policy_template`   | [policy_template.md](docs/data-sources/policy_template.md)       | [policy template docs](docs/data-sources/policy_template.md) | ✅     | ❌        |
+| `portainer_role`              | [role.md](docs/data-sources/role.md)                             | [role docs](docs/data-sources/role.md)                       | ✅     | ❌        |
+| `portainer_shared_git_credential` | [shared_git_credential.md](docs/data-sources/shared_git_credential.md) | [shared git credential docs](docs/data-sources/shared_git_credential.md) | ✅ | ❌        |
+| `portainer_user_activity`     | [user_activity.md](docs/data-sources/user_activity.md)           | [user activity docs](docs/data-sources/user_activity.md)     | ✅     | ❌        |
+| `portainer_helm_git_dryrun`   | [helm_git_dryrun.md](docs/data-sources/helm_git_dryrun.md)      | [helm git dryrun docs](docs/data-sources/helm_git_dryrun.md) | ✅     | ❌        |
+| `portainer_gitops_repo_refs`  | [gitops_repo_refs.md](docs/data-sources/gitops_repo_refs.md)    | [gitops repo refs docs](docs/data-sources/gitops_repo_refs.md) | ✅   | ❌        |
+| `portainer_gitops_repo_file`  | [gitops_repo_file.md](docs/data-sources/gitops_repo_file.md)    | [gitops repo file docs](docs/data-sources/gitops_repo_file.md) | ✅   | ❌        |
+| `portainer_helm_release_history` | [helm_release_history.md](docs/data-sources/helm_release_history.md) | [helm release history docs](docs/data-sources/helm_release_history.md) | ✅ | ❌ |
+
+
+### 🐳 Podman Support via Docker Resources
 
 [Podman is compatible with the Docker API](https://docs.podman.io/en/latest/_static/api.html), which means you can use existing `portainer_docker_*` resources with Podman – **no special `portainer_podman_*` resources are needed**.
 

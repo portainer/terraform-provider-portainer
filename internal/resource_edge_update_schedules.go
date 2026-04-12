@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 type EdgeUpdateSchedulePayload struct {
@@ -39,19 +40,19 @@ func resourcePortainerEdgeUpdateSchedules() *schema.Resource {
 	return &schema.Resource{
 		Create: resourcePortainerEdgeUpdateSchedulesCreate,
 		Read:   resourcePortainerEdgeUpdateSchedulesRead,
-		Update: schema.Noop,
-		Delete: schema.RemoveFromState,
+		Update: resourcePortainerEdgeUpdateSchedulesUpdate,
+		Delete: resourcePortainerEdgeUpdateSchedulesDelete,
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
 		},
 		Schema: map[string]*schema.Schema{
-			"name":           {Type: schema.TypeString, Required: true},
+			"name":           {Type: schema.TypeString, Required: true, ValidateFunc: validation.NoZeroValues},
 			"agent_image":    {Type: schema.TypeString, Required: true},
 			"updater_image":  {Type: schema.TypeString, Required: true},
 			"registry_id":    {Type: schema.TypeInt, Required: true},
 			"scheduled_time": {Type: schema.TypeString, Required: true, Description: "Time in RFC3339 format"},
 			"group_ids":      {Type: schema.TypeList, Required: true, Elem: &schema.Schema{Type: schema.TypeInt}},
-			"type":           {Type: schema.TypeInt, Required: true, Description: "0 = update, 1 = rollback"},
+			"type":           {Type: schema.TypeInt, Required: true, Description: "0 = update, 1 = rollback", ValidateFunc: validation.IntBetween(0, 1)},
 		},
 	}
 }
@@ -106,6 +107,89 @@ func resourcePortainerEdgeUpdateSchedulesCreate(d *schema.ResourceData, meta int
 		return err
 	}
 	d.SetId(strconv.Itoa(response.ID))
+	return nil
+}
+
+func resourcePortainerEdgeUpdateSchedulesUpdate(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+	id := d.Id()
+
+	payload := EdgeUpdateSchedulePayload{
+		Name:          d.Get("name").(string),
+		AgentImage:    d.Get("agent_image").(string),
+		UpdaterImage:  d.Get("updater_image").(string),
+		RegistryID:    d.Get("registry_id").(int),
+		ScheduledTime: d.Get("scheduled_time").(string),
+		Type:          d.Get("type").(int),
+	}
+
+	for _, gid := range d.Get("group_ids").([]interface{}) {
+		payload.GroupIDs = append(payload.GroupIDs, gid.(int))
+	}
+
+	jsonBody, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return err
+	}
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		msg, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update edge update schedule: %s", string(msg))
+	}
+
+	return resourcePortainerEdgeUpdateSchedulesRead(d, meta)
+}
+
+func resourcePortainerEdgeUpdateSchedulesDelete(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+	id := d.Id()
+
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), nil)
+	if err != nil {
+		return err
+	}
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 204 || resp.StatusCode == 404 {
+		return nil
+	}
+
+	if resp.StatusCode >= 400 {
+		msg, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete edge update schedule: %s", string(msg))
+	}
+
 	return nil
 }
 

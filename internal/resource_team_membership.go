@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/portainer/client-api-go/v2/pkg/client/team_memberships"
 	"github.com/portainer/client-api-go/v2/pkg/models"
 )
@@ -23,9 +24,10 @@ func resourceTeamMembership() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"role": {
-				Type:        schema.TypeInt,
-				Required:    true,
-				Description: "Membership role: 1 = team leader, 2 = regular member",
+				Type:         schema.TypeInt,
+				Required:     true,
+				Description:  "Membership role: 1 = team leader, 2 = regular member",
+				ValidateFunc: validation.IntBetween(1, 2),
 			},
 			"team_id": {
 				Type:        schema.TypeInt,

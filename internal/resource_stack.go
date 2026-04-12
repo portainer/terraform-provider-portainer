@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourcePortainerStack() *schema.Resource {
@@ -66,12 +67,18 @@ func resourcePortainerStack() *schema.Resource {
 				Required:    true,
 				Description: "Deployment mode: 'standalone', 'swarm', or 'kubernetes'",
 				ForceNew:    true,
+				ValidateFunc: validation.StringInSlice([]string{
+					"standalone", "swarm", "kubernetes",
+				}, false),
 			},
 			"method": {
 				Type:        schema.TypeString,
 				Required:    true,
 				Description: "Creation method: 'string', 'file', 'repository', or 'url'",
 				ForceNew:    true,
+				ValidateFunc: validation.StringInSlice([]string{
+					"string", "file", "repository", "url",
+				}, false),
 			},
 			"name":        {Type: schema.TypeString, Required: true, ForceNew: true},
 			"endpoint_id": {Type: schema.TypeInt, Required: true, ForceNew: true},
@@ -198,8 +205,8 @@ func resourcePortainerStack() *schema.Resource {
 			"file_path_in_repository": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     "docker-compose.yml",
-				Description: "Path to Compose/manifest file in the repository. Not required when helm_chart_path is set.",
+				Default:     "",
+				Description: "Path to Compose/manifest file in the repository. Defaults to docker-compose.yml for Docker/Swarm stacks. Not required when helm_chart_path is set.",
 			},
 			"manifest_url":   {Type: schema.TypeString, Optional: true, ForceNew: true},
 			"compose_format": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
@@ -1115,9 +1122,14 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 		}
 	}
 
+	composeFile := d.Get("file_path_in_repository").(string)
+	if composeFile == "" {
+		composeFile = "docker-compose.yml"
+	}
+
 	payload := map[string]interface{}{
 		"name":                      d.Get("name").(string),
-		"composeFile":               d.Get("file_path_in_repository").(string),
+		"composeFile":               composeFile,
 		"repositoryURL":             repoURL,
 		"repositoryUsername":        repoUser,
 		"repositoryPassword":        repoPass,
@@ -1252,9 +1264,15 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 			repoPass = raw.AsString()
 		}
 	}
+
+	composeFile := d.Get("file_path_in_repository").(string)
+	if composeFile == "" {
+		composeFile = "docker-compose.yml"
+	}
+
 	payload := map[string]interface{}{
 		"name":                      d.Get("name").(string),
-		"composeFile":               d.Get("file_path_in_repository").(string),
+		"composeFile":               composeFile,
 		"repositoryURL":             repoURL,
 		"repositoryUsername":        repoUser,
 		"repositoryPassword":        repoPass,
@@ -1428,13 +1446,10 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 	}
 
 	if helmChartPath != "" {
-		helmConfig := map[string]interface{}{
-			"chartPath": helmChartPath,
-		}
+		payload["helmChartPath"] = helmChartPath
 		if valuesFiles, ok := d.GetOk("additional_helm_values_files"); ok {
-			helmConfig["valuesFiles"] = expandStringList(valuesFiles.([]interface{}))
+			payload["helmValuesFiles"] = expandStringList(valuesFiles.([]interface{}))
 		}
-		payload["helmConfig"] = helmConfig
 	}
 
 	stackWebhook := d.Get("stack_webhook").(bool)

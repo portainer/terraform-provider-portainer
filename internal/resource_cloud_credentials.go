@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 type CloudCredentialPayload struct {
@@ -31,9 +32,10 @@ func resourceCloudCredentials() *schema.Resource {
 				Description: "Cloud provider name (e.g., aws, gcp, digitalocean)",
 			},
 			"name": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Human-readable name of the credentials",
+				Type:         schema.TypeString,
+				Required:     true,
+				Description:  "Human-readable name of the credentials",
+				ValidateFunc: validation.NoZeroValues,
 			},
 			"credentials": {
 				Type:        schema.TypeMap,

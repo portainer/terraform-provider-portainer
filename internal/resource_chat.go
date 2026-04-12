@@ -102,8 +102,8 @@ func resourcePortainerChatSend(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 
-	d.Set("response_message", chatResp.Message)
-	d.Set("response_yaml", chatResp.YAML)
+	_ = d.Set("response_message", chatResp.Message)
+	_ = d.Set("response_yaml", chatResp.YAML)
 	d.SetId(fmt.Sprintf("chat-%d", reqBody.EnvironmentID))
 	return nil
 }

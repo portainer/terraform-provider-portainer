@@ -24,7 +24,7 @@ resource "portainer_edge_configurations" "example_edge_configuration" {
 
 ## ⚙️ Lifecycle & Behavior
 - **Create** uploads a configuration file and sets the name, type, and association to edge groups.
-- **Update** sends/updates the state using `PUT /edge_configurations/{id}`.
+- **Update** updates the configuration via `PUT /edge_configurations/{id}` (supports changing `type`, `edge_group_ids`, and `file_path`).
 - **Delete** removes the configuration via `DELETE /edge_configurations/{id}`.
 - **Read** retrieves metadata and synchronizes state with Portainer using `GET /edge_configurations/{id}`.
 
@@ -38,7 +38,7 @@ resource "portainer_edge_configurations" "example_edge_configuration" {
 | `type`           | string | ✅ yes   | Type of configuration. Allowed values: `general`, `filename`, or `foldername` |
 | `edge_group_ids` | list(number) | ✅ yes | List of Edge Group IDs                                              |
 | `file_path`      | string | ✅ yes   | Path to the configuration file to upload                                |
-| `category`       | string | 🚫 no    | Optional category                                                       |
+| `category`       | string | 🚫 no    | Optional category. Allowed values: `configuration`, `secret`. Changing forces recreation |
 | `base_dir`       | string | 🚫 no    | Optional base directory for the configuration                           |
 
 ---
@@ -47,4 +47,4 @@ resource "portainer_edge_configurations" "example_edge_configuration" {
 
 | Name | Description                             |
 |------|-----------------------------------------|
-| `id` | Synthetic ID based on uploaded file name |
+| `id` | The Edge Configuration ID assigned by Portainer |

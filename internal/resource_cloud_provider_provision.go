@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 type CloudProvisionPayload struct {
@@ -50,6 +51,9 @@ func resourcePortainerCloudProvision() *schema.Resource {
 				Required:    true,
 				ForceNew:    true,
 				Description: "Cloud provider (civo, digitalocean, linode, amazon, azure, gke)",
+				ValidateFunc: validation.StringInSlice([]string{
+					"civo", "digitalocean", "linode", "amazon", "azure", "gke",
+				}, false),
 			},
 			"payload": {
 				Type:        schema.TypeMap,
