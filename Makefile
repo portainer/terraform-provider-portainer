@@ -270,6 +270,11 @@ lint:
 	@echo "Running golangci-lint..."
 	$(GOBIN)/golangci-lint run ./internal/ .
 
+.PHONY: unit-test
+unit-test:
+	@echo "Running unit tests..."
+	go test ./internal/ -v -count=1
+
 ### Go
 .PHONY: go-fmt-check
 go-fmt-check:

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/portainer/client-api-go/v2/pkg/client/registries"
 	"github.com/portainer/client-api-go/v2/pkg/models"
 )
@@ -21,10 +22,10 @@ func resourceRegistry() *schema.Resource {
 			State: schema.ImportStatePassthrough,
 		},
 		Schema: map[string]*schema.Schema{
-			"name":                     {Type: schema.TypeString, Required: true},
-			"url":                      {Type: schema.TypeString, Required: true},
+			"name":                     {Type: schema.TypeString, Required: true, ValidateFunc: validation.NoZeroValues},
+			"url":                      {Type: schema.TypeString, Required: true, ValidateFunc: validation.NoZeroValues},
 			"base_url":                 {Type: schema.TypeString, Optional: true},
-			"type":                     {Type: schema.TypeInt, Required: true, ForceNew: true},
+			"type":                     {Type: schema.TypeInt, Required: true, ForceNew: true, ValidateFunc: validation.IntBetween(1, 8)},
 			"authentication":           {Type: schema.TypeBool, Optional: true, Default: false},
 			"username":                 {Type: schema.TypeString, Optional: true},
 			"password":                 {Type: schema.TypeString, Optional: true, Sensitive: true},

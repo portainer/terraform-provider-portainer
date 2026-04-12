@@ -13,6 +13,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 
 	"github.com/go-openapi/runtime"
 	httptransport "github.com/go-openapi/runtime/client"
@@ -25,10 +26,11 @@ func Provider() *schema.Provider {
 	return &schema.Provider{
 		Schema: map[string]*schema.Schema{
 			"endpoint": {
-				Type:        schema.TypeString,
-				Required:    true,
-				DefaultFunc: schema.EnvDefaultFunc("PORTAINER_ENDPOINT", nil),
-				Description: "URL of the Portainer instance (e.g. https://portainer.example.com). '/api' will be appended automatically if missing.",
+				Type:         schema.TypeString,
+				Required:     true,
+				DefaultFunc:  schema.EnvDefaultFunc("PORTAINER_ENDPOINT", nil),
+				Description:  "URL of the Portainer instance (e.g. https://portainer.example.com). '/api' will be appended automatically if missing.",
+				ValidateFunc: validation.IsURLWithHTTPorHTTPS,
 			},
 			"api_key": {
 				Type:        schema.TypeString,
@@ -142,6 +144,16 @@ func Provider() *schema.Provider {
 			"portainer_kubernetes_namespace_access":             resourceKubernetesNamespaceAccess(),
 			"portainer_registry_access":                         resourceRegistryAccess(),
 			"portainer_endpoint_group_access":                   resourceEndpointGroupAccess(),
+			"portainer_policy":                                  resourcePortainerPolicy(),
+			"portainer_alerting_settings":                       resourceAlertingSettings(),
+			"portainer_alerting_rule":                           resourceAlertingRule(),
+			"portainer_alerting_silence":                        resourceAlertingSilence(),
+			"portainer_shared_git_credential":                   resourcePortainerSharedGitCredential(),
+			"portainer_user_git_credential":                     resourcePortainerUserGitCredential(),
+			"portainer_helm_user_repository":                    resourceHelmUserRepository(),
+			"portainer_stack_migrate":                           resourceStackMigrate(),
+			"portainer_ldap_settings":                           resourceLDAPSettings(),
+			"portainer_helm_rollback":                           resourceHelmRollback(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"portainer_user":                  dataSourceUser(),
@@ -167,6 +179,16 @@ func Provider() *schema.Provider {
 			"portainer_docker_secret":         dataSourceDockerSecret(),
 			"portainer_docker_image":          dataSourceDockerImage(),
 			"portainer_docker_node":           dataSourceDockerNode(),
+			"portainer_policy":                dataSourcePortainerPolicy(),
+			"portainer_policy_template":       dataSourcePortainerPolicyTemplate(),
+			"portainer_shared_git_credential": dataSourcePortainerSharedGitCredential(),
+			"portainer_user_activity":         dataSourceUserActivity(),
+			"portainer_role":                  dataSourceRole(),
+			"portainer_kubernetes_crd":        dataSourceKubernetesCRD(),
+			"portainer_helm_git_dryrun":       dataSourceHelmGitDryRun(),
+			"portainer_gitops_repo_refs":      dataSourceGitopsRepoRefs(),
+			"portainer_gitops_repo_file":      dataSourceGitopsRepoFile(),
+			"portainer_helm_release_history":  dataSourceHelmReleaseHistory(),
 		},
 		ConfigureContextFunc: configureProvider,
 	}

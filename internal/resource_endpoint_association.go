@@ -2,7 +2,7 @@ package internal
 
 import (
 	"fmt"
-	"net/http"
+	"io"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -11,14 +11,15 @@ import (
 func resourceEndpointAssociation() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceEndpointAssociationCreate,
-		Read:   resourceEndpointAssociationRead,   // no-op
-		Delete: resourceEndpointAssociationDelete, // no-op (optional)
+		Read:   resourceEndpointAssociationRead,
+		Delete: resourceEndpointAssociationDelete,
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Environment (Endpoint) identifier to de-associate",
 			},
 		},
 	}
@@ -28,27 +29,15 @@ func resourceEndpointAssociationCreate(d *schema.ResourceData, meta interface{})
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 
-	url := fmt.Sprintf("%s/endpoints/%d/association", client.Endpoint, endpointID)
-	req, err := http.NewRequest("PUT", url, nil)
+	resp, err := client.DoRequest("PUT", fmt.Sprintf("/endpoints/%d/association", endpointID), nil, nil)
 	if err != nil {
-		return err
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
+		return fmt.Errorf("failed to de-associate endpoint %d: %w", endpointID, err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 204 {
-		return fmt.Errorf("failed to de-associate endpoint %d, status code: %d", endpointID, resp.StatusCode)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to de-associate endpoint %d (status %d): %s", endpointID, resp.StatusCode, string(data))
 	}
 
 	d.SetId(strconv.Itoa(endpointID))
@@ -56,12 +45,37 @@ func resourceEndpointAssociationCreate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceEndpointAssociationRead(d *schema.ResourceData, meta interface{}) error {
-	// This resource is write-only and has no read functionality
+	client := meta.(*APIClient)
+
+	endpointID := d.Id()
+
+	// Verify the endpoint still exists via GET /endpoints/{id}
+	resp, err := client.DoRequest("GET", fmt.Sprintf("/endpoints/%s", endpointID), nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to read endpoint %s: %w", endpointID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		// Endpoint no longer exists, remove from state
+		d.SetId("")
+		return nil
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read endpoint %s (status %d): %s", endpointID, resp.StatusCode, string(data))
+	}
+
+	// Endpoint exists; keep in state
+	id, _ := strconv.Atoi(endpointID)
+	d.Set("endpoint_id", id)
 	return nil
 }
 
 func resourceEndpointAssociationDelete(d *schema.ResourceData, meta interface{}) error {
-	// Optionally: remove from state only
+	// The API only supports de-association (which is the Create action).
+	// There is no re-association API, so Delete simply removes from state.
 	d.SetId("")
 	return nil
 }

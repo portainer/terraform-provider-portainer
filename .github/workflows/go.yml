@@ -24,3 +24,6 @@ jobs:
 
       - name: Run Go format check via Makefile
         run: make go-fmt-check
+
+      - name: Run unit tests
+        run: go test ./internal/ -v -count=1

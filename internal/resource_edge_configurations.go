@@ -12,7 +12,26 @@ import (
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
+
+var edgeConfigTypeToString = map[int]string{
+	1: "general",
+}
+
+func edgeConfigTypeDiffSuppress(_, old, new string, _ *schema.ResourceData) bool {
+	if oldInt, err := strconv.Atoi(old); err == nil {
+		if name, ok := edgeConfigTypeToString[oldInt]; ok {
+			return name == new
+		}
+	}
+	if newInt, err := strconv.Atoi(new); err == nil {
+		if name, ok := edgeConfigTypeToString[newInt]; ok {
+			return name == old
+		}
+	}
+	return old == new
+}
 
 type EdgeConfiguration struct {
 	ID           int         `json:"id"`
@@ -32,15 +51,15 @@ func resourcePortainerEdgeConfigurations() *schema.Resource {
 	return &schema.Resource{
 		Create: resourcePortainerEdgeConfigurationsCreate,
 		Read:   resourcePortainerEdgeConfigurationsRead,
-		Update: schema.Noop,
+		Update: resourcePortainerEdgeConfigurationsUpdate,
 		Delete: resourcePortainerEdgeConfigurationsDelete,
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
 		},
 		Schema: map[string]*schema.Schema{
-			"name":           {Type: schema.TypeString, Required: true, ForceNew: true},
-			"type":           {Type: schema.TypeString, Required: true},
-			"category":       {Type: schema.TypeString, Optional: true, Default: "", ForceNew: true},
+			"name":           {Type: schema.TypeString, Required: true, ForceNew: true, ValidateFunc: validation.NoZeroValues},
+			"type":           {Type: schema.TypeString, Required: true, DiffSuppressFunc: edgeConfigTypeDiffSuppress},
+			"category":       {Type: schema.TypeString, Optional: true, Default: "", ForceNew: true, ValidateFunc: validation.StringInSlice([]string{"configuration", "secret", ""}, false)},
 			"base_dir":       {Type: schema.TypeString, Optional: true, Default: ""},
 			"edge_group_ids": {Type: schema.TypeList, Required: true, Elem: &schema.Schema{Type: schema.TypeInt}},
 			"file_path":      {Type: schema.TypeString, Required: true},
@@ -115,33 +134,111 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 		return fmt.Errorf("failed to create edge configuration: %s", string(respBody))
 	}
 
-	filterBytes, _ := json.Marshal(payload)
-	getReq, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_configurations", client.Endpoint), bytes.NewReader(filterBytes))
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to build GET request for lookup: %w", err)
-	}
-	getReq.Header.Set("Content-Type", "application/json")
-	if client.APIKey != "" {
-		getReq.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		getReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	}
-	getResp, err := client.HTTPClient.Do(getReq)
-	if err != nil {
-		return fmt.Errorf("failed to send GET lookup request: %w", err)
-	}
-	defer getResp.Body.Close()
-
-	var configs []EdgeConfiguration
-	if err := json.NewDecoder(getResp.Body).Decode(&configs); err != nil {
-		return fmt.Errorf("failed to decode GET response: %w", err)
-	}
-	if len(configs) == 0 {
-		return fmt.Errorf("no edge configuration found after creation")
+		return fmt.Errorf("failed to read create response: %w", err)
 	}
 
-	d.SetId(strconv.Itoa(configs[0].ID))
+	var created EdgeConfiguration
+	if len(respBody) > 0 {
+		if err := json.Unmarshal(respBody, &created); err != nil {
+			return fmt.Errorf("failed to decode create response: %w", err)
+		}
+	}
+
+	if created.ID == 0 {
+		// API returned empty body — find the created config by name
+		name := d.Get("name").(string)
+		listReq, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_configurations", client.Endpoint), nil)
+		if err != nil {
+			return fmt.Errorf("failed to build list request: %w", err)
+		}
+		if client.APIKey != "" {
+			listReq.Header.Set("X-API-Key", client.APIKey)
+		} else if client.JWTToken != "" {
+			listReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
+		}
+		listResp, err := client.HTTPClient.Do(listReq)
+		if err != nil {
+			return fmt.Errorf("failed to list edge configurations: %w", err)
+		}
+		defer listResp.Body.Close()
+		var configs []EdgeConfiguration
+		if err := json.NewDecoder(listResp.Body).Decode(&configs); err != nil {
+			return fmt.Errorf("failed to decode edge configurations list: %w", err)
+		}
+		for _, c := range configs {
+			if c.Name == name {
+				created = c
+				break
+			}
+		}
+		if created.ID == 0 {
+			return fmt.Errorf("edge configuration created but could not determine its ID")
+		}
+	}
+
+	d.SetId(strconv.Itoa(created.ID))
 	return nil
+}
+
+func resourcePortainerEdgeConfigurationsUpdate(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+
+	rawID := filepath.Base(d.Id())
+
+	filePath := d.Get("file_path").(string)
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	edgeGroupIDs := convertToIntSlice(d.Get("edge_group_ids").([]interface{}))
+	edgeGroupIDsBytes, err := json.Marshal(edgeGroupIDs)
+	if err != nil {
+		return fmt.Errorf("failed to marshal edgeGroupIDs: %w", err)
+	}
+	_ = writer.WriteField("EdgeGroupIDs", string(edgeGroupIDsBytes))
+	_ = writer.WriteField("Type", d.Get("type").(string))
+
+	part, err := writer.CreateFormFile("File", filepath.Base(filePath))
+	if err != nil {
+		return fmt.Errorf("failed to create form file: %w", err)
+	}
+	_, err = io.Copy(part, file)
+	if err != nil {
+		return fmt.Errorf("failed to copy file content: %w", err)
+	}
+
+	writer.Close()
+
+	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/edge_configurations/%s", client.Endpoint, rawID), body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update edge configuration: %s", string(respBody))
+	}
+
+	return resourcePortainerEdgeConfigurationsRead(d, meta)
 }
 
 func resourcePortainerEdgeConfigurationsRead(d *schema.ResourceData, meta interface{}) error {
@@ -186,7 +283,11 @@ func resourcePortainerEdgeConfigurationsRead(d *schema.ResourceData, meta interf
 	d.Set("category", config.Category)
 	d.Set("base_dir", config.BaseDir)
 	d.Set("edge_group_ids", config.EdgeGroupIDs)
-	d.Set("type", strconv.Itoa(config.Type))
+	if typeName, ok := edgeConfigTypeToString[config.Type]; ok {
+		d.Set("type", typeName)
+	} else {
+		d.Set("type", strconv.Itoa(config.Type))
+	}
 
 	return nil
 }

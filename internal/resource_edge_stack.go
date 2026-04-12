@@ -164,6 +164,12 @@ func resourceEdgeStack() *schema.Resource {
 				Optional:    true,
 				Description: "ID of the Git credentials to use for authentication.",
 			},
+			"always_clone": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Whether the agent must always clone the git repository for relative path. Only valid when relative_path is set.",
+			},
 		},
 	}
 }
@@ -356,6 +362,7 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 		if relPath, ok := d.GetOk("relative_path"); ok && relPath.(string) != "" {
 			payload["supportRelativePath"] = true
 			payload["filesystemPath"] = relPath.(string)
+			payload["AlwaysCloneGitRepoForRelativePath"] = d.Get("always_clone").(bool)
 		}
 
 		if envMap, ok := d.GetOk("environment"); ok {
@@ -463,6 +470,7 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 		if relPath, ok := d.GetOk("relative_path"); ok && relPath.(string) != "" {
 			payload["supportRelativePath"] = true
 			payload["filesystemPath"] = relPath.(string)
+			payload["AlwaysCloneGitRepoForRelativePath"] = d.Get("always_clone").(bool)
 		}
 
 		if d.Get("git_repository_authentication").(bool) {
@@ -608,6 +616,7 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 			Webhook        string `json:"Webhook"`
 			ForcePullImage bool   `json:"ForcePullImage"`
 		} `json:"AutoUpdate,omitempty"`
+		AlwaysCloneGitRepoForRelativePath bool `json:"AlwaysCloneGitRepoForRelativePath"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
@@ -630,6 +639,7 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 		d.Set("pull_image", stack.AutoUpdate.ForcePullImage)
 		d.Set("update_interval", stack.AutoUpdate.Interval)
 	}
+	d.Set("always_clone", stack.AlwaysCloneGitRepoForRelativePath)
 
 	return nil
 }

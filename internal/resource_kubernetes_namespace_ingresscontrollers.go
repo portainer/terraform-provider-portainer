@@ -13,8 +13,8 @@ import (
 func resourceKubernetesNamespaceIngressControllers() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceKubernetesNamespaceIngressControllersCreate,
-		Read:   schema.Noop,
-		Delete: schema.Noop,
+		Read:   resourceKubernetesNamespaceIngressControllersRead,
+		Delete: resourceKubernetesNamespaceIngressControllersDelete,
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
@@ -115,5 +115,105 @@ func resourceKubernetesNamespaceIngressControllersCreate(d *schema.ResourceData,
 }
 
 func resourceKubernetesNamespaceIngressControllersRead(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+	endpointID := d.Get("environment_id").(int)
+	namespace := d.Get("namespace").(string)
+
+	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s/ingresscontrollers", client.Endpoint, endpointID, namespace)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		d.SetId("")
+		return nil
+	}
+	if resp.StatusCode >= 400 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to read namespace ingress controllers: %s", string(data))
+	}
+
+	var controllers []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&controllers); err != nil {
+		return err
+	}
+
+	controllersList := make([]map[string]interface{}, len(controllers))
+	for i, c := range controllers {
+		controllersList[i] = map[string]interface{}{
+			"name":         c["Name"],
+			"class_name":   c["ClassName"],
+			"type":         c["Type"],
+			"availability": c["Availability"],
+			"used":         c["Used"],
+			"new":          c["New"],
+		}
+	}
+	d.Set("controllers", controllersList)
+
+	return nil
+}
+
+func resourceKubernetesNamespaceIngressControllersDelete(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*APIClient)
+	endpointID := d.Get("environment_id").(int)
+	namespace := d.Get("namespace").(string)
+
+	// No DELETE endpoint exists; disable all controllers via PUT to clean up.
+	controllers := make([]map[string]interface{}, 0)
+	for _, c := range d.Get("controllers").([]interface{}) {
+		cMap := c.(map[string]interface{})
+		controller := map[string]interface{}{
+			"Name":         cMap["name"].(string),
+			"ClassName":    cMap["class_name"].(string),
+			"Type":         cMap["type"].(string),
+			"Availability": false,
+			"Used":         cMap["used"].(bool),
+			"New":          cMap["new"].(bool),
+		}
+		controllers = append(controllers, controller)
+	}
+
+	jsonBody, _ := json.Marshal(controllers)
+	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s/ingresscontrollers", client.Endpoint, endpointID, namespace)
+
+	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return err
+	}
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to disable namespace ingress controllers: %s", string(data))
+	}
+
 	return nil
 }

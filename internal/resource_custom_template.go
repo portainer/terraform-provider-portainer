@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/portainer/client-api-go/v2/pkg/client/custom_templates"
 	"github.com/portainer/client-api-go/v2/pkg/models"
 )
@@ -26,8 +27,8 @@ func resourceCustomTemplate() *schema.Resource {
 			"title":                {Type: schema.TypeString, Required: true},
 			"description":          {Type: schema.TypeString, Required: true},
 			"note":                 {Type: schema.TypeString, Required: true},
-			"platform":             {Type: schema.TypeInt, Required: true},
-			"type":                 {Type: schema.TypeInt, Required: true},
+			"platform":             {Type: schema.TypeInt, Required: true, ValidateFunc: validation.IntBetween(1, 2)},
+			"type":                 {Type: schema.TypeInt, Required: true, ValidateFunc: validation.IntBetween(1, 3)},
 			"logo":                 {Type: schema.TypeString, Optional: true},
 			"edge_template":        {Type: schema.TypeBool, Optional: true, Default: false},
 			"is_compose_format":    {Type: schema.TypeBool, Optional: true, Default: false},

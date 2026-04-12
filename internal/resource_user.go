@@ -7,6 +7,7 @@ import (
 
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/portainer/client-api-go/v2/pkg/client/auth"
 	"github.com/portainer/client-api-go/v2/pkg/client/team_memberships"
 	"github.com/portainer/client-api-go/v2/pkg/client/users"
@@ -35,9 +36,10 @@ func resourceUser() *schema.Resource {
 				Sensitive: true,
 			},
 			"role": {
-				Type:     schema.TypeInt,
-				Optional: true,
-				Default:  2,
+				Type:         schema.TypeInt,
+				Optional:     true,
+				Default:      2,
+				ValidateFunc: validation.IntBetween(1, 2),
 			},
 			"ldap_user": {
 				Type:     schema.TypeBool,

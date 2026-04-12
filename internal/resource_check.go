@@ -123,7 +123,7 @@ func resourceCheckCreate(d *schema.ResourceData, meta interface{}) error {
 		}
 	}
 
-	d.Set("output", out.String())
+	_ = d.Set("output", out.String())
 	d.SetId(fmt.Sprintf("check-%d", time.Now().Unix()))
 	return nil
 }
@@ -190,17 +190,6 @@ func checkSwarmServices(client *APIClient, endpointID int, revision, desiredStat
 }
 
 func checkStandaloneContainers(client *APIClient, endpointID int, revision, desiredState string, fullServices []string, maxRetries, waitBetween int, out *strings.Builder) error {
-
-	containersURL := fmt.Sprintf("%s/endpoints/%d/docker/containers/json?all=1", client.Endpoint, endpointID)
-	containersBody, code, err := apiGETWithCode(containersURL, client.APIKey, client)
-	if err != nil || code != 200 {
-		return fmt.Errorf("failed to list containers (status %d): %w", code, err)
-	}
-	var containers []map[string]interface{}
-	if err := json.Unmarshal(containersBody, &containers); err != nil {
-		return fmt.Errorf("failed to parse containers list: %w", err)
-	}
-
 	for _, service := range fullServices {
 		success := false
 		for attempt := 1; attempt <= maxRetries; attempt++ {
