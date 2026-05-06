@@ -309,15 +309,22 @@ func resourcePortainerEdgeConfigurationsUpdate(d *schema.ResourceData, meta inte
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	edgeGroupIDs := convertToIntSlice(d.Get("edge_group_ids").([]interface{}))
-	edgeGroupIDsBytes, err := json.Marshal(edgeGroupIDs)
-	if err != nil {
-		return fmt.Errorf("failed to marshal edgeGroupIDs: %w", err)
+	// Portainer API docs are incorrect. API expects form data as follows,
+	// note lower case naming as well:
+	// edgeConfiguration: {"edgeGroupIDs":[...],"type":"..."}
+	// file:              (binary file)
+	payload := map[string]interface{}{
+		"type":         d.Get("type").(string),
+		"edgeGroupIDs": convertToIntSlice(d.Get("edge_group_ids").([]interface{})),
 	}
-	_ = writer.WriteField("EdgeGroupIDs", string(edgeGroupIDsBytes))
-	_ = writer.WriteField("Type", d.Get("type").(string))
 
-	part, err := writer.CreateFormFile("File", filepath.Base(filePath))
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal edgeConfiguration payload: %w", err)
+	}
+	_ = writer.WriteField("edgeConfiguration", string(payloadBytes))
+
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
 		return fmt.Errorf("failed to create form file: %w", err)
 	}
