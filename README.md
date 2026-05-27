@@ -38,7 +38,7 @@ It supports provisioning and configuration of Portainer users and will be extend
 ## Requirements
 - Terraform v0.13+
 - Portainer 2.x with admin API key support enabled
-- Go 1.21+ (if building from source)
+- Go 1.26+ (if building from source)
 
 ## Building and Installing
 ```hcl
