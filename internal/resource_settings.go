@@ -247,6 +247,7 @@ func resourceSettings() *schema.Resource {
 							Type:        schema.TypeList,
 							Optional:    true,
 							Computed:    true,
+							Sensitive:   true,
 							Description: "Byte-array key used to encrypt OAuth-derived Kubernetes secrets. Stored in state.",
 							Elem:        &schema.Schema{Type: schema.TypeInt},
 						},

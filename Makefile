@@ -294,6 +294,11 @@ schema-lint:
 	@echo "Linting schema descriptions..."
 	go run ./internal/tools/schemalint ./internal/
 
+.PHONY: sensitive-lint
+sensitive-lint:
+	@echo "Linting sensitive fields..."
+	go run ./internal/tools/sensitivelint ./internal/
+
 .PHONY: docs-check
 docs-check:
 	@bash scripts/docs-presence-check.sh

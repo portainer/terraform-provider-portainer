@@ -17,6 +17,7 @@ func resourceWebhookExecute() *schema.Resource {
 				Type:          schema.TypeString,
 				Optional:      true,
 				ForceNew:      true,
+				Sensitive:     true,
 				ConflictsWith: []string{"stack_id", "edge_stack_id"},
 				Description:   "Webhook token for service restart webhook",
 			},

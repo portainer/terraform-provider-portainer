@@ -71,3 +71,22 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
+
+      - name: Sensitive field lint
+        run: |
+          set +e
+          go run ./internal/tools/sensitivelint ./internal/ > sensitivelint.out
+          status=$?
+          missing=$(grep -c 'not marked Sensitive' sensitivelint.out || true)
+          {
+            echo "## Sensitive field lint"
+            echo ""
+            echo "**Secret-like fields not marked Sensitive:** $missing"
+            if [ "$missing" -gt 0 ]; then
+              echo ""
+              echo '```'
+              cat sensitivelint.out
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status

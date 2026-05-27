@@ -31,6 +31,7 @@ func dataSourceWebhook() *schema.Resource {
 			"token": {
 				Type:        schema.TypeString,
 				Computed:    true,
+				Sensitive:   true,
 				Description: "Token used to invoke the Portainer webhook URL.",
 			},
 		},
