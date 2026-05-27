@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"io"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -56,7 +57,7 @@ func parseMultipart(t *testing.T, req *RecordedRequest) (fields map[string]strin
 			break // io.EOF when done
 		}
 		buf := new(strings.Builder)
-		_, _ = copyAll(buf, part)
+		_, _ = io.Copy(buf, part)
 		if part.FileName() != "" {
 			fileName = part.FileName()
 			fileContent = buf.String()
@@ -66,23 +67,6 @@ func parseMultipart(t *testing.T, req *RecordedRequest) (fields map[string]strin
 		_ = part.Close()
 	}
 	return fields, fileName, fileContent
-}
-
-// copyAll is a tiny io.Copy wrapper kept local so the test file does not need
-// to import io directly for a single use.
-func copyAll(dst *strings.Builder, src interface{ Read([]byte) (int, error) }) (int, error) {
-	total := 0
-	b := make([]byte, 4096)
-	for {
-		n, err := src.Read(b)
-		if n > 0 {
-			dst.Write(b[:n])
-			total += n
-		}
-		if err != nil {
-			return total, nil
-		}
-	}
 }
 
 // TestEdgeStackCreateMultipart_HappyPath covers the stack_file_path (file
