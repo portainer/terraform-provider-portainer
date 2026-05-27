@@ -1,3 +1,4 @@
 output "webhook_token" {
-  value = portainer_webhook.example.token
+  value     = portainer_webhook.example.token
+  sensitive = true
 }
