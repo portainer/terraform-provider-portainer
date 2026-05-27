@@ -43,3 +43,11 @@ If any setting is changed, Terraform will re-apply the configuration during `ter
 | Name  | Description                              |
 |-------|------------------------------------------|
 | `id`  | Always set to `"portainer-experimental-settings"` |
+
+## Import
+
+The experimental settings are a singleton resource; import using the fixed ID `portainer-experimental-settings`:
+
+```shell
+terraform import portainer_settings_experimental.example portainer-experimental-settings
+```

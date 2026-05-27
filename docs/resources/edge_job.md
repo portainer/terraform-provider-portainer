@@ -79,3 +79,11 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` | ID of the Portainer edge job |
+
+## Import
+
+Edge jobs can be imported using their numeric ID:
+
+```shell
+terraform import portainer_edge_job.example 6
+```

@@ -50,3 +50,11 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` | ID of the created cloud credentials     |
+
+## Import
+
+Cloud credentials can be imported using their numeric ID:
+
+```shell
+terraform import portainer_cloud_credentials.example 18
+```

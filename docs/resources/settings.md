@@ -152,3 +152,11 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` | Always `"portainer-settings"` |
+
+## Import
+
+The Portainer settings are a singleton resource; import using the fixed ID `portainer-settings`:
+
+```shell
+terraform import portainer_settings.example portainer-settings
+```

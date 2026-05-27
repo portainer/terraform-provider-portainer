@@ -303,6 +303,11 @@ sensitive-lint:
 docs-check:
 	@bash scripts/docs-presence-check.sh
 
+.PHONY: import-doc-lint
+import-doc-lint:
+	@echo "Linting import documentation..."
+	go run ./internal/tools/importdoclint .
+
 ### Go
 .PHONY: go-fmt-check
 go-fmt-check:

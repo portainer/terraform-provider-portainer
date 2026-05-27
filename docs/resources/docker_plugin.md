@@ -85,3 +85,11 @@ resource "portainer_docker_plugin" "rclone" {
 | Name | Description                                               |
 | ---- | --------------------------------------------------------- |
 | `id` | Plugin name (e.g., `rclone:latest`) used as the unique ID |
+
+## Import
+
+Docker plugins can be imported using a composite ID in the form `<endpoint_id>:<plugin_name>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<plugin_name>` is the local plugin name. The separator is `:`, so the plugin name (which may itself contain a `:`) is taken as everything after the first colon:
+
+```shell
+terraform import portainer_docker_plugin.example 1:rclone:latest
+```

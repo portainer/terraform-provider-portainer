@@ -90,3 +90,22 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
+
+      - name: Import documentation lint
+        run: |
+          set +e
+          go run ./internal/tools/importdoclint . > importdoclint.out
+          status=$?
+          missing=$(grep -c 'Import section\|docs file missing' importdoclint.out || true)
+          {
+            echo "## Import documentation lint"
+            echo ""
+            echo "**Importable resources without an Import section:** $missing"
+            if [ "$missing" -gt 0 ]; then
+              echo ""
+              echo '```'
+              cat importdoclint.out
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status

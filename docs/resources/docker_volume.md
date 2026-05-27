@@ -155,3 +155,11 @@ terraform destroy
 |------|--------------------------|
 | `id` | Unique identifier of the volume |
 | `resource_control_id` | ID of the automatically generated Portainer ResourceControl for this volume |
+
+## Import
+
+Docker volumes can be imported using a composite ID in the form `<endpoint_id>-<volume_name>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<volume_name>` is the Docker volume name:
+
+```shell
+terraform import portainer_docker_volume.example 1-my-volume
+```

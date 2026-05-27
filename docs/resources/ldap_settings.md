@@ -52,3 +52,11 @@ This resource updates the Portainer global settings to configure LDAP authentica
 | `group_search_settings`      | list(object) | no       | LDAP group search settings (group_attribute, group_base_dn, group_filter). |
 | `admin_group_search_settings`| list(object) | no       | LDAP admin group search settings.                                  |
 | `tls_config`                 | list(object) | no       | TLS configuration (tls, tls_ca_cert, tls_cert, tls_key, tls_skip_verify). |
+
+## Import
+
+The LDAP settings are a singleton resource; import using the fixed ID `portainer-ldap-settings`:
+
+```shell
+terraform import portainer_ldap_settings.example portainer-ldap-settings
+```

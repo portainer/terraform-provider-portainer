@@ -106,3 +106,11 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` | ID of the custom template in Portainer |
+
+## Import
+
+Custom templates can be imported using their numeric ID:
+
+```shell
+terraform import portainer_custom_template.example 42
+```

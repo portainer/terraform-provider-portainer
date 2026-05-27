@@ -515,3 +515,11 @@ terraform apply
 |------|---------------------------------|
 | `id` | ID of the created stack         |
 | `resource_control_id` | ID of the automatically generated Portainer ResourceControl for this stack |
+
+## Import
+
+Stacks can be imported using their numeric ID:
+
+```shell
+terraform import portainer_stack.example 5
+```

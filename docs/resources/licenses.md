@@ -31,3 +31,11 @@ terraform destroy
 | `key`              | string       | ✅ yes      | License key to be attached. Sensitive and immutable.                               |
 | `force`            | bool         | 🚫 optional | Whether to force attach even if there are conflicting licenses (default: `false`). |
 | `conflicting_keys` | list(string) | 🚫 optional | List of conflicting license keys, if any were detected.                            |
+
+## Import
+
+Licenses can be imported using their resource ID, which is the SHA-256 hex digest of the license key:
+
+```shell
+terraform import portainer_licenses.example 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+```

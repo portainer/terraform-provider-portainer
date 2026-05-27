@@ -102,3 +102,11 @@ terraform apply
 |------|---------------------------------------------------------------|
 | `id` | ID of the created Docker network (as returned by Portainer)   |
 | `resource_control_id` | ID of the automatically generated Portainer ResourceControl for this network |
+
+## Import
+
+Docker networks can be imported using a composite ID in the form `<endpoint_id>:<network_id>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<network_id>` is the Docker network ID (a string hash, not a number):
+
+```shell
+terraform import portainer_docker_network.example 1:a1b2c3d4e5f6
+```

@@ -76,3 +76,11 @@ Use `terraform destroy` to remove the secret.
 | --------------------- | --------------------------------------------------------------------------- |
 | `id`                  | ID of the created Docker secret (from Portainer)                            |
 | `resource_control_id` | ID of the automatically generated Portainer ResourceControl for this secret |
+
+## Import
+
+Docker secrets can be imported using a composite ID in the form `<endpoint_id>-<secret_id>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<secret_id>` is the Docker Swarm secret ID (a string):
+
+```shell
+terraform import portainer_docker_secret.example 1-abc123
+```
