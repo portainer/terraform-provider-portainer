@@ -145,19 +145,22 @@ func resourceLDAPSettings() *schema.Resource {
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"group_attribute": {
-							Type:     schema.TypeString,
-							Optional: true,
-							Computed: true,
+							Type:        schema.TypeString,
+							Optional:    true,
+							Computed:    true,
+							Description: "LDAP attribute used to identify group membership for admin users (e.g. `member`).",
 						},
 						"group_base_dn": {
-							Type:     schema.TypeString,
-							Optional: true,
-							Computed: true,
+							Type:        schema.TypeString,
+							Optional:    true,
+							Computed:    true,
+							Description: "Base distinguished name under which to search for admin groups.",
 						},
 						"group_filter": {
-							Type:     schema.TypeString,
-							Optional: true,
-							Computed: true,
+							Type:        schema.TypeString,
+							Optional:    true,
+							Computed:    true,
+							Description: "LDAP search filter used to match admin groups (e.g. `(objectClass=groupOfNames)`).",
 						},
 					},
 				},

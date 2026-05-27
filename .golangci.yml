@@ -33,3 +33,8 @@ issues:
     - portainer_data
     - e2e-tests
     - examples
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec
+      text: "G101"

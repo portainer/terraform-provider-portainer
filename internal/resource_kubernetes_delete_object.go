@@ -20,9 +20,10 @@ func resourceKubernetesDeleteObject() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the Portainer Kubernetes environment from which the resources are deleted.",
 			},
 			"resource_type": {
 				Type:     schema.TypeString,
@@ -33,17 +34,20 @@ func resourceKubernetesDeleteObject() *schema.Resource {
 					"roles", "service_accounts", "services", "cluster_role_bindings",
 					"cluster_roles",
 				}, false),
+				Description: "Type of Kubernetes resource to delete. One of `cron_jobs`, `ingresses`, `jobs`, `role_bindings`, `roles`, `service_accounts`, `services`, `cluster_role_bindings`, `cluster_roles`.",
 			},
 			"namespace": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Kubernetes namespace containing the resources to delete (ignored for cluster-scoped types).",
 			},
 			"names": {
-				Type:     schema.TypeList,
-				Required: true,
-				ForceNew: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
+				Type:        schema.TypeList,
+				Required:    true,
+				ForceNew:    true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Description: "List of resource names to delete within the target namespace or cluster scope.",
 			},
 		},
 	}

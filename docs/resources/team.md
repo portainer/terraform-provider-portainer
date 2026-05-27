@@ -51,3 +51,11 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` | ID of the Portainer team |
+
+## Import
+
+Teams can be imported using their numeric ID:
+
+```shell
+terraform import portainer_team.example 3
+```

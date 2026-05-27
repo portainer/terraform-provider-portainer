@@ -50,3 +50,11 @@ resource "portainer_edge_update_schedules" "example" {
 | Name | Description                     |
 |------|---------------------------------|
 | `id` | ID of the update schedule in Portainer |
+
+## Import
+
+Edge update schedules can be imported using their numeric ID:
+
+```shell
+terraform import portainer_edge_update_schedules.example 42
+```

@@ -20,17 +20,20 @@ func resourceKubernetesConfigMaps() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the Portainer Kubernetes environment (endpoint) where the ConfigMap is managed. Changing this value forces resource recreation.",
 			},
 			"namespace": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Kubernetes namespace in which the ConfigMap is created.",
 			},
 			"manifest": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Raw YAML or JSON manifest defining the Kubernetes ConfigMap.",
 			},
 		},
 	}

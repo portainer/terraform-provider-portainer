@@ -76,13 +76,15 @@ func resourcePortainerSharedGitCredentialCreate(d *schema.ResourceData, meta int
 	}
 
 	var result struct {
-		ID int `json:"id"`
+		GitCredential struct {
+			ID int `json:"id"`
+		} `json:"gitCredential"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return fmt.Errorf("failed to decode shared git credential response: %w", err)
 	}
 
-	d.SetId(strconv.Itoa(result.ID))
+	d.SetId(strconv.Itoa(result.GitCredential.ID))
 	return resourcePortainerSharedGitCredentialRead(d, meta)
 }
 

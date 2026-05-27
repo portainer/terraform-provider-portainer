@@ -24,14 +24,16 @@ func resourceDeploy() *schema.Resource {
 		},
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the Portainer endpoint hosting the stack to deploy/update.",
 			},
 			"stack_name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Name of the Portainer stack whose services are being deployed.",
 			},
 			"stack_env_var": {
 				Type:        schema.TypeString,
@@ -73,9 +75,10 @@ func resourceDeploy() *schema.Resource {
 				Description: "Seconds to wait before force-updating a service (only when force_update = true).",
 			},
 			"output": {
-				Type:     schema.TypeString,
-				Computed: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				ForceNew:    true,
+				Description: "Human-readable summary of the deployment actions performed by the provider.",
 			},
 		},
 	}

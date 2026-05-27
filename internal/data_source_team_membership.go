@@ -14,16 +14,19 @@ func dataSourceTeamMembership() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"team_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "Identifier of the Portainer team the membership belongs to. Combined with user_id to find a specific membership.",
 			},
 			"user_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "Identifier of the Portainer user whose membership in the team is being looked up.",
 			},
 			"role": {
-				Type:     schema.TypeInt,
-				Computed: true,
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: "Role of the user within the team as returned by Portainer (e.g. team leader, member).",
 			},
 		},
 	}

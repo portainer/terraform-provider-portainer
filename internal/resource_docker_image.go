@@ -32,9 +32,9 @@ func resourceDockerImage() *schema.Resource {
 			Delete: schema.DefaultTimeout(5 * time.Minute),
 		},
 		Schema: map[string]*schema.Schema{
-			"endpoint_id":   {Type: schema.TypeInt, Required: true, ForceNew: true},
-			"image":         {Type: schema.TypeString, Required: true, ForceNew: true},
-			"registry_auth": {Type: schema.TypeString, Optional: true, Sensitive: true, ForceNew: true},
+			"endpoint_id":   {Type: schema.TypeInt, Required: true, ForceNew: true, Description: "Identifier of the Portainer endpoint on which the Docker image should be pulled."},
+			"image":         {Type: schema.TypeString, Required: true, ForceNew: true, Description: "Image reference to pull (for example `nginx:latest`)."},
+			"registry_auth": {Type: schema.TypeString, Optional: true, Sensitive: true, ForceNew: true, Description: "Sensitive base64-encoded JSON object with registry credentials (username, password, email, serveraddress) used to pull the image."},
 		},
 	}
 }

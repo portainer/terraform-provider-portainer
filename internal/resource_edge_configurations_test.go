@@ -1,8 +1,14 @@
 package internal
 
 import (
+	"encoding/json"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -317,6 +323,161 @@ func TestResolveCreatedEdgeConfigID(t *testing.T) {
 				t.Errorf("got ID %d, want %d", got.ID, tt.wantID)
 			}
 		})
+	}
+}
+
+// --------------- regression: issue #119 ---------------
+
+// TestEdgeConfigurationsUpdate_FormFieldsRegression119 is a regression test
+// for issue #119.
+//
+// Before the fix, the PUT /edge_configurations/{id} multipart body sent
+// separate form fields named "EdgeGroupIDs" and "Type" (capitalized), plus a
+// "File" part. The Portainer API actually expects a single JSON form field
+// named "edgeConfiguration" (lowercase, with camelCase keys inside) and a
+// "file" part (lowercase) — see resource_edge_configurations.go:309-327.
+//
+// This test mounts a temp file as the upload, drives Update, and inspects the
+// recorded multipart body to assert:
+//   - Content-Type is multipart
+//   - body contains the "edgeConfiguration" form field name
+//   - body does NOT contain the old capitalized "EdgeGroupIDs" field name
+//   - the JSON inside "edgeConfiguration" has the camelCase "edgeGroupIDs"
+//     and "type" keys (the API's expectation)
+//   - the file part is named "file" (lowercase), not "File"
+func TestEdgeConfigurationsUpdate_FormFieldsRegression119(t *testing.T) {
+	mock := NewMockServer(t)
+
+	// Prepare a small file to upload.
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "config.txt")
+	if err := os.WriteFile(filePath, []byte("hello-edge-config"), 0o600); err != nil {
+		t.Fatalf("write tmp file: %v", err)
+	}
+
+	// Capture state observed by the inline handler so assertions live in the
+	// test body where t.Errorf has clearer scope.
+	var (
+		gotContentType    string
+		gotEdgeConfigJSON string
+		gotFilePartName   string
+		gotRawBody        []byte
+		extraFieldNames   []string
+	)
+
+	mock.On("PUT", "/edge_configurations/7", func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		gotRawBody = raw
+		gotContentType = r.Header.Get("Content-Type")
+
+		mediaType, params, err := mime.ParseMediaType(gotContentType)
+		if err != nil {
+			t.Errorf("parse Content-Type: %v", err)
+		}
+		if !strings.HasPrefix(mediaType, "multipart/") {
+			t.Errorf("Content-Type: expected multipart, got %q", mediaType)
+		}
+
+		mr := multipart.NewReader(strings.NewReader(string(raw)), params["boundary"])
+		for {
+			part, err := mr.NextPart()
+			if err != nil {
+				break
+			}
+			name := part.FormName()
+			switch name {
+			case "edgeConfiguration":
+				b, _ := io.ReadAll(part)
+				gotEdgeConfigJSON = string(b)
+			case "file":
+				gotFilePartName = name
+				_, _ = io.Copy(io.Discard, part)
+			default:
+				extraFieldNames = append(extraFieldNames, name)
+				_, _ = io.Copy(io.Discard, part)
+			}
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Read is called after Update — return a valid response so Update finishes.
+	mock.On("GET", "/edge_configurations/7", RespondJSON(http.StatusOK, map[string]interface{}{
+		"id":           7,
+		"name":         "cfg",
+		"type":         1,
+		"category":     "configuration",
+		"baseDir":      "",
+		"edgeGroupIDs": []int{1, 2},
+	}))
+
+	r := resourcePortainerEdgeConfigurations()
+	d := r.TestResourceData()
+	d.SetId("7")
+	_ = d.Set("name", "cfg")
+	_ = d.Set("type", "general")
+	_ = d.Set("category", "configuration")
+	_ = d.Set("base_dir", "")
+	_ = d.Set("edge_group_ids", []interface{}{1, 2})
+	_ = d.Set("file_path", filePath)
+
+	if err := r.Update(d, mock.Client()); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	// --- assertions ---
+
+	if gotContentType == "" {
+		t.Fatal("handler never observed the PUT request")
+	}
+
+	// The form field name must be the lowercase "edgeConfiguration". Old
+	// behavior shipped capitalized "EdgeGroupIDs" and "Type" as separate
+	// fields — those names must NOT be present in the raw body at all.
+	bodyStr := string(gotRawBody)
+	if !strings.Contains(bodyStr, `name="edgeConfiguration"`) {
+		t.Error("regression of issue #119: expected form field name=\"edgeConfiguration\" in multipart body")
+	}
+	if strings.Contains(bodyStr, `name="EdgeGroupIDs"`) {
+		t.Error("regression of issue #119: form must NOT contain separate field name=\"EdgeGroupIDs\"")
+	}
+	if strings.Contains(bodyStr, `name="Type"`) {
+		t.Error("regression of issue #119: form must NOT contain separate field name=\"Type\"")
+	}
+	if strings.Contains(bodyStr, `name="File"`) {
+		t.Error("regression of issue #119: file part must be lowercase name=\"file\", not name=\"File\"")
+	}
+	if gotFilePartName != "file" {
+		t.Errorf("regression of issue #119: expected file part name %q, got %q", "file", gotFilePartName)
+	}
+
+	// Validate the JSON inside the edgeConfiguration field carries camelCase keys.
+	if gotEdgeConfigJSON == "" {
+		t.Fatal("regression of issue #119: edgeConfiguration form field was empty")
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal([]byte(gotEdgeConfigJSON), &payload); err != nil {
+		t.Fatalf("edgeConfiguration JSON: %v (raw: %s)", err, gotEdgeConfigJSON)
+	}
+	if got, ok := payload["type"]; !ok {
+		t.Error("regression of issue #119: expected key \"type\" (camelCase) inside edgeConfiguration JSON")
+	} else if got != "general" {
+		t.Errorf("edgeConfiguration.type: got %v, want %q", got, "general")
+	}
+	if _, ok := payload["edgeGroupIDs"]; !ok {
+		t.Error("regression of issue #119: expected key \"edgeGroupIDs\" (camelCase) inside edgeConfiguration JSON")
+	}
+	if _, present := payload["EdgeGroupIDs"]; present {
+		t.Error("regression of issue #119: edgeConfiguration JSON must NOT carry capitalized \"EdgeGroupIDs\" key")
+	}
+	if _, present := payload["Type"]; present {
+		t.Error("regression of issue #119: edgeConfiguration JSON must NOT carry capitalized \"Type\" key")
+	}
+
+	// Any unexpected extra form fields would indicate stale capitalized fields
+	// surviving the fix.
+	for _, name := range extraFieldNames {
+		t.Errorf("regression of issue #119: unexpected extra form field %q in PUT body (only \"edgeConfiguration\" and \"file\" expected)", name)
 	}
 }
 

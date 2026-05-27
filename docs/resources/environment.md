@@ -116,3 +116,11 @@ resource "meu_portainer_environment" "docker_tls" {
 | `id`       | ID of the Portainer environment            |
 | `edge_key` | Edge key/token for Edge Agent registration |
 | `edge_id`  | Unique Edge Agent identifier (EdgeID)      |
+
+## Import
+
+Environments can be imported using their numeric endpoint ID:
+
+```shell
+terraform import portainer_environment.example 7
+```

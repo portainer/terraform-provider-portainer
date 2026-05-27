@@ -37,3 +37,11 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` | ID of the Portainer tag  |
+
+## Import
+
+Tags can be imported using their numeric ID:
+
+```shell
+terraform import portainer_tag.example 42
+```

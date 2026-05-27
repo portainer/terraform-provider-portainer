@@ -59,3 +59,11 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` | ID of the Portainer edge group |
+
+## Import
+
+Edge groups can be imported using their numeric ID:
+
+```shell
+terraform import portainer_edge_group.example 4
+```

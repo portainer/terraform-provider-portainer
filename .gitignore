@@ -27,6 +27,7 @@ dev.tfrc
 backup.tar.gz
 generated.tf
 imported.json
+coverage.out
 
 # Portainer
 portainer_data/

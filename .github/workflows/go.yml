@@ -23,5 +23,89 @@ jobs:
       - name: Run Go format check via Makefile
         run: make go-fmt-check
 
-      - name: Run unit tests
-        run: go test ./internal/ -v -count=1
+      - name: Run unit tests with coverage
+        run: |
+          go test ./internal/ -v -count=1 \
+            -covermode=atomic \
+            -coverprofile=coverage.out
+
+      - name: Coverage summary
+        run: |
+          echo "::group::Total coverage"
+          go tool cover -func=coverage.out | tail -1
+          echo "::endgroup::"
+          # Append to job summary so it's visible without opening logs.
+          {
+            echo "## Unit test coverage"
+            echo ""
+            echo '```'
+            go tool cover -func=coverage.out | tail -1
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage profile artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-profile
+          path: coverage.out
+          retention-days: 14
+
+      - name: Schema description lint
+        run: |
+          set +e
+          go run ./internal/tools/schemalint ./internal/ > schemalint.out
+          status=$?
+          missing=$(grep -c 'missing Description' schemalint.out || true)
+          {
+            echo "## Schema description lint"
+            echo ""
+            echo "**Fields without Description:** $missing"
+            echo ""
+            if [ "$missing" -gt 0 ]; then
+              echo "<details><summary>First 50 violations</summary>"
+              echo ""
+              echo '```'
+              head -50 schemalint.out
+              echo '```'
+              echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+      - name: Sensitive field lint
+        run: |
+          set +e
+          go run ./internal/tools/sensitivelint ./internal/ > sensitivelint.out
+          status=$?
+          missing=$(grep -c 'not marked Sensitive' sensitivelint.out || true)
+          {
+            echo "## Sensitive field lint"
+            echo ""
+            echo "**Secret-like fields not marked Sensitive:** $missing"
+            if [ "$missing" -gt 0 ]; then
+              echo ""
+              echo '```'
+              cat sensitivelint.out
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+      - name: Import documentation lint
+        run: |
+          set +e
+          go run ./internal/tools/importdoclint . > importdoclint.out
+          status=$?
+          missing=$(grep -c 'Import section\|docs file missing' importdoclint.out || true)
+          {
+            echo "## Import documentation lint"
+            echo ""
+            echo "**Importable resources without an Import section:** $missing"
+            if [ "$missing" -gt 0 ]; then
+              echo ""
+              echo '```'
+              cat importdoclint.out
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status

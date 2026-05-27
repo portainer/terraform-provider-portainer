@@ -53,3 +53,11 @@ Use `terraform destroy` to remove the config.
 |------|--------------------------|
 | `id` | ID of the created Docker config (from Portainer) |
 | `resource_control_id` | ID of the automatically generated Portainer ResourceControl for this config |
+
+## Import
+
+Docker configs can be imported using a composite ID in the form `<endpoint_id>-<config_id>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<config_id>` is the Docker Swarm config ID (a string):
+
+```shell
+terraform import portainer_docker_config.example 1-abc123
+```

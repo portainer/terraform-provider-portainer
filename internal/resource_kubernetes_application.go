@@ -28,17 +28,20 @@ func resourceKubernetesApplication() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the Portainer Kubernetes endpoint where the application is deployed.",
 			},
 			"namespace": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Kubernetes namespace in which the application manifest is applied.",
 			},
 			"manifest": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "YAML or JSON manifest describing the Kubernetes application to deploy.",
 			},
 		},
 	}

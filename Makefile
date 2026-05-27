@@ -275,6 +275,43 @@ unit-test:
 	@echo "Running unit tests..."
 	go test ./internal/ -v -count=1
 
+.PHONY: test-coverage
+test-coverage:
+	@echo "Running unit tests with coverage..."
+	go test ./internal/ -count=1 -covermode=atomic -coverprofile=coverage.out
+	@echo ""
+	@go tool cover -func=coverage.out | tail -1
+	@echo ""
+	@echo "Generated coverage.out — open HTML report with: make coverage-html"
+
+.PHONY: coverage-html
+coverage-html: test-coverage
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Generated coverage.html"
+
+.PHONY: schema-lint
+schema-lint:
+	@echo "Linting schema descriptions..."
+	go run ./internal/tools/schemalint ./internal/
+
+.PHONY: sensitive-lint
+sensitive-lint:
+	@echo "Linting sensitive fields..."
+	go run ./internal/tools/sensitivelint ./internal/
+
+.PHONY: docs-check
+docs-check:
+	@bash scripts/docs-presence-check.sh
+
+.PHONY: examples-check
+examples-check:
+	@bash scripts/examples-presence-check.sh
+
+.PHONY: import-doc-lint
+import-doc-lint:
+	@echo "Linting import documentation..."
+	go run ./internal/tools/importdoclint .
+
 ### Go
 .PHONY: go-fmt-check
 go-fmt-check:

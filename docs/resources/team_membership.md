@@ -46,3 +46,11 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` | ID of the membership     |
+
+## Import
+
+Team memberships can be imported using their numeric membership ID (not the `team_id`/`user_id` pair):
+
+```shell
+terraform import portainer_team_membership.example 11
+```

@@ -29,20 +29,22 @@ func resourceKubernetesIngressControllers() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "Identifier of the Portainer Kubernetes environment whose ingress controllers are managed.",
 			},
 			"controllers": {
-				Type:     schema.TypeList,
-				Required: true,
+				Type:        schema.TypeList,
+				Required:    true,
+				Description: "List of ingress controller configurations to apply at the cluster level.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"availability": {Type: schema.TypeBool, Required: true},
-						"class_name":   {Type: schema.TypeString, Required: true},
-						"name":         {Type: schema.TypeString, Required: true},
-						"new":          {Type: schema.TypeBool, Required: true},
-						"type":         {Type: schema.TypeString, Required: true},
-						"used":         {Type: schema.TypeBool, Required: true},
+						"availability": {Type: schema.TypeBool, Required: true, Description: "Whether the ingress controller is exposed for selection in the Portainer UI."},
+						"class_name":   {Type: schema.TypeString, Required: true, Description: "Kubernetes IngressClass name associated with the controller."},
+						"name":         {Type: schema.TypeString, Required: true, Description: "Display name of the ingress controller in Portainer."},
+						"new":          {Type: schema.TypeBool, Required: true, Description: "Whether Portainer should treat this entry as a newly-registered controller."},
+						"type":         {Type: schema.TypeString, Required: true, Description: "Type of the ingress controller (for example `nginx`, `traefik`, `custom`)."},
+						"used":         {Type: schema.TypeBool, Required: true, Description: "Whether the ingress controller is currently in use by workloads."},
 					},
 				},
 			},

@@ -27,15 +27,18 @@ func resourceEndpointGroup() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ValidateFunc: validation.NoZeroValues,
+				Description:  "Name of the Portainer endpoint group. Must be unique within the Portainer instance.",
 			},
 			"description": {
-				Type:     schema.TypeString,
-				Optional: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Human-readable description of the endpoint group displayed in the Portainer UI.",
 			},
 			"tag_ids": {
-				Type:     schema.TypeList,
-				Optional: true,
-				Elem:     &schema.Schema{Type: schema.TypeInt},
+				Type:        schema.TypeList,
+				Optional:    true,
+				Elem:        &schema.Schema{Type: schema.TypeInt},
+				Description: "List of Portainer tag identifiers associated with this endpoint group.",
 			},
 		},
 	}

@@ -15,12 +15,14 @@ func dataSourceEdgeStack() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Name of the edge stack to look up in Portainer.",
 			},
 			"deployment_type": {
-				Type:     schema.TypeInt,
-				Computed: true,
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: "Deployment type of the edge stack (0 = Compose, 1 = Kubernetes, 2 = Nomad).",
 			},
 		},
 	}

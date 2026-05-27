@@ -22,28 +22,33 @@ func resourceKubernetesNamespace() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "Identifier of the Portainer Kubernetes environment where the namespace is created.",
 			},
 			"name": {
 				Type:         schema.TypeString,
 				Required:     true,
 				ValidateFunc: validation.NoZeroValues,
+				Description:  "Name of the Kubernetes namespace (metadata.name).",
 			},
 			"owner": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Default:  "",
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "",
+				Description: "Owner label assigned to the namespace in Portainer.",
 			},
 			"annotations": {
-				Type:     schema.TypeMap,
-				Optional: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
+				Type:        schema.TypeMap,
+				Optional:    true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Description: "Map of annotations applied to the Kubernetes namespace.",
 			},
 			"resource_quota": {
-				Type:     schema.TypeMap,
-				Optional: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
+				Type:        schema.TypeMap,
+				Optional:    true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Description: "Resource quota limits applied to the namespace (e.g. cpu, memory limits and requests).",
 			},
 		},
 	}

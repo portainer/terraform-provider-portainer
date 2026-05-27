@@ -26,14 +26,16 @@ func resourceDockerNode() *schema.Resource {
 		Delete: resourceDockerNodeDelete,
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "ID of the Portainer environment (Docker Swarm cluster) where the node is managed.",
 			},
 			"node_id": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Docker Swarm node ID to update.",
 			},
 			"version": {
 				Type:        schema.TypeInt,
@@ -41,21 +43,25 @@ func resourceDockerNode() *schema.Resource {
 				Description: "Swarm node version required for update operation",
 			},
 			"name": {
-				Type:     schema.TypeString,
-				Optional: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Desired display name for the Swarm node.",
 			},
 			"availability": {
-				Type:     schema.TypeString,
-				Optional: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Desired availability of the Swarm node (active, pause, or drain).",
 			},
 			"role": {
-				Type:     schema.TypeString,
-				Optional: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Desired role of the Swarm node (worker or manager).",
 			},
 			"labels": {
-				Type:     schema.TypeMap,
-				Optional: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
+				Type:        schema.TypeMap,
+				Optional:    true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Description: "Key/value labels assigned to the Swarm node for placement and selection.",
 			},
 		},
 	}

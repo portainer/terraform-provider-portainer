@@ -55,3 +55,11 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` | ID of the Portainer endpoint group |
+
+## Import
+
+Endpoint groups can be imported using their numeric ID:
+
+```shell
+terraform import portainer_endpoint_group.example 2
+```

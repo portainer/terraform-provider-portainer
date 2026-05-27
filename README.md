@@ -38,7 +38,7 @@ It supports provisioning and configuration of Portainer users and will be extend
 ## Requirements
 - Terraform v0.13+
 - Portainer 2.x with admin API key support enabled
-- Go 1.21+ (if building from source)
+- Go 1.26+ (if building from source)
 
 ## Building and Installing
 ```hcl
@@ -197,7 +197,7 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_kubernetes_namespace_access`    | [kubernetes_namespace_access.md](docs/resources/kubernetes_namespace_access.md)                | [example](examples/kubernetes_namespace_access/)     | ✅     | ❌ / ❌                             | ❌        |
 | `portainer_kubernetes_cronjob`             | [kubernetes_cronjob.md](docs/resources/kubernetes_cronjob.md)                                  | [example](examples/kubernetes_cronjob/)              | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_kubernetes_job`                 | [kubernetes_job.md](docs/resources/kubernetes_job.md)                                          | [example](examples/kubernetes_job/)                  | ✅     | ❌ / ❌                             | ✅        |
-| `portainer_kubernetes_service_accounts`    | [kubernetes_service_account.md](docs/resources/kubernetes_service_account.md)                  | [example](examples/kubernetes_serviceaccounts/)      | ✅     | ❌ / ❌                             | ✅        |
+| `portainer_kubernetes_serviceaccounts`     | [kubernetes_serviceaccounts.md](docs/resources/kubernetes_serviceaccounts.md)                  | [example](examples/kubernetes_serviceaccounts/)      | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_kubernetes_configmaps`          | [kubernetes_configmaps.md](docs/resources/kubernetes_configmaps.md)                            | [example](examples/kubernetes_configmaps/)           | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_kubernetes_secret`              | [kubernetes_secret.md](docs/resources/kubernetes_secret.md)                                    | [example](examples/kubernetes_secret/)               | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_kubernetes_service`             | [kubernetes_service.md](docs/resources/kubernetes_service.md)                                  | [example](examples/kubernetes_service/)              | ✅     | ❌ / ❌                             | ✅        |
@@ -206,7 +206,7 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_kubernetes_clusterrole`         | [kubernetes_clusterrole.md](docs/resources/kubernetes_clusterrole.md)                          | [example](examples/kubernetes_clusterrole/)          | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_kubernetes_clusterrolebinding`  | [kubernetes_clusterrolebinding.md](docs/resources/kubernetes_clusterrolebinding.md)            | [example](examples/kubernetes_clusterrolebinding/)   | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_kubernetes_application`         | [kubernetes_application.md](docs/resources/kubernetes_application.md)                          | [example](examples/kubernetes_application/)          | ✅     | ❌ / ❌                             | ✅        |
-| `portainer_kubernetes_ingress`             | [kubernetes_ingress.md](docs/resources/kubernetes_ingress.md)                                  | [example](examples/kubernetes_ingress/)              | ✅     | ❌ / ❌                             | ✅        |
+| `portainer_kubernetes_ingresses`           | [kubernetes_ingresses.md](docs/resources/kubernetes_ingresses.md)                              | [example](examples/kubernetes_ingresses/)            | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_kubernetes_volume`              | [kubernetes_volume.md](docs/resources/kubernetes_volume.md)                                    | [example](examples/kubernetes_volume/)               | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_kubernetes_storage`             | [kubernetes_storage.md](docs/resources/kubernetes_storage.md)                                  | [example](examples/kubernetes_storage/)              | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_alerting_rule`                  | [alerting_rule.md](docs/resources/alerting_rule.md)                                            | [example](examples/alerting_rule/)                   | ✅     | ❌ / ✅                             | ❌        |

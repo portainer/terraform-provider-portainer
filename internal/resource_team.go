@@ -27,6 +27,7 @@ func resourceTeam() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ValidateFunc: validation.NoZeroValues,
+				Description:  "Name of the Portainer team. Must be unique within the Portainer instance.",
 			},
 		},
 	}

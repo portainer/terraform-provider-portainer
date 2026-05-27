@@ -15,20 +15,24 @@ func dataSourceDockerNetwork() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "ID of the Portainer environment (Docker host or Swarm) where the network is located.",
 			},
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Name of the Docker network to look up.",
 			},
 			"driver": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Driver used by the Docker network (e.g., bridge, overlay, macvlan, host).",
 			},
 			"scope": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Scope of the Docker network (e.g., local, global, swarm).",
 			},
 		},
 	}

@@ -173,3 +173,11 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` | ID of the Portainer registry |
+
+## Import
+
+Registries can be imported using their numeric ID:
+
+```shell
+terraform import portainer_registry.example 5
+```

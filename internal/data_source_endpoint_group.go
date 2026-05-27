@@ -14,12 +14,14 @@ func dataSourceEndpointGroup() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Name of the Portainer endpoint group to look up. The data source will fail if no matching endpoint group is found.",
 			},
 			"description": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Description of the Portainer endpoint group as configured in Portainer.",
 			},
 		},
 	}

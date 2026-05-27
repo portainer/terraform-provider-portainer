@@ -46,12 +46,12 @@ func resourcePortainerEdgeUpdateSchedules() *schema.Resource {
 			State: schema.ImportStatePassthrough,
 		},
 		Schema: map[string]*schema.Schema{
-			"name":           {Type: schema.TypeString, Required: true, ValidateFunc: validation.NoZeroValues},
-			"agent_image":    {Type: schema.TypeString, Required: true},
-			"updater_image":  {Type: schema.TypeString, Required: true},
-			"registry_id":    {Type: schema.TypeInt, Required: true},
+			"name":           {Type: schema.TypeString, Required: true, ValidateFunc: validation.NoZeroValues, Description: "Name of the Portainer edge update schedule."},
+			"agent_image":    {Type: schema.TypeString, Required: true, Description: "Container image used as the target Portainer Edge agent image after the update runs."},
+			"updater_image":  {Type: schema.TypeString, Required: true, Description: "Container image used to perform the Edge agent update."},
+			"registry_id":    {Type: schema.TypeInt, Required: true, Description: "Identifier of the Portainer registry from which the agent and updater images are pulled."},
 			"scheduled_time": {Type: schema.TypeString, Required: true, Description: "Time in RFC3339 format"},
-			"group_ids":      {Type: schema.TypeList, Required: true, Elem: &schema.Schema{Type: schema.TypeInt}},
+			"group_ids":      {Type: schema.TypeList, Required: true, Elem: &schema.Schema{Type: schema.TypeInt}, Description: "List of edge group identifiers targeted by the update schedule."},
 			"type":           {Type: schema.TypeInt, Required: true, Description: "0 = update, 1 = rollback", ValidateFunc: validation.IntBetween(0, 1)},
 		},
 	}

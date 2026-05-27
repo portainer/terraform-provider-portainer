@@ -20,17 +20,20 @@ func resourceKubernetesSecrets() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the Portainer Kubernetes environment (endpoint) where the Secret is managed. Changing this value forces resource recreation.",
 			},
 			"namespace": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Kubernetes namespace in which the Secret is created.",
 			},
 			"manifest": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Raw YAML or JSON manifest defining the Kubernetes Secret. May contain sensitive data; stored in Terraform state.",
 			},
 		},
 	}

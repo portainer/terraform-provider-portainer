@@ -41,3 +41,11 @@ $ openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.
 | Name | Description              |
 |------|--------------------------|
 | `id` | Always `"portainer-settings"` |
+
+## Import
+
+The SSL configuration is a singleton resource; import using the fixed ID `portainer-ssl`:
+
+```shell
+terraform import portainer_ssl.example portainer-ssl
+```

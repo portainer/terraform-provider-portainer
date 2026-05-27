@@ -63,3 +63,11 @@ You typically run this **once**, as part of bootstrap (e.g., after deploying Por
 | `id`          | Identifier of the admin resource (e.g., `"portainer-admin"` or user ID).    |
 | `initialized` | Boolean flag indicating whether Portainer reported the admin as initialized |
 
+## Import
+
+This is a singleton resource representing the initial admin user. Import using the admin user's numeric ID (typically `1`):
+
+```shell
+terraform import portainer_user_admin.example 1
+```
+

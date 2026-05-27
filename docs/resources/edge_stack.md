@@ -177,3 +177,11 @@ resource "portainer_edge_stack" "example" {
 | Name | Description |
 |:-----|:------------|
 | `id` | ID of the Edge Stack inside Portainer |
+
+## Import
+
+Edge stacks can be imported using their numeric ID:
+
+```shell
+terraform import portainer_edge_stack.example 42
+```

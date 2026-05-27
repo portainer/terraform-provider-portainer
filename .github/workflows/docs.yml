@@ -21,3 +21,40 @@ jobs:
 
       - name: Markdown Link Validation
         uses: gaurav-nelson/github-action-markdown-link-check@v1
+
+      - name: Docs presence check
+        run: |
+          bash scripts/docs-presence-check.sh | tee docs-presence.out
+          status=${PIPESTATUS[0]}
+          missing=$(grep -c '\.md$' docs-presence.out || true)
+          {
+            echo "## Docs presence check"
+            echo ""
+            if [ "$status" -eq 0 ]; then
+              echo "OK — every resource and data source has a docs page."
+            else
+              echo "**Missing docs pages:** $missing"
+              echo ""
+              echo '```'
+              cat docs-presence.out
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+      - name: Examples presence check
+        run: |
+          bash scripts/examples-presence-check.sh | tee examples-presence.out
+          status=${PIPESTATUS[0]}
+          {
+            echo "## Examples presence check"
+            echo ""
+            if [ "$status" -eq 0 ]; then
+              echo "OK — every resource and data source has an example."
+            else
+              echo '```'
+              cat examples-presence.out
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status

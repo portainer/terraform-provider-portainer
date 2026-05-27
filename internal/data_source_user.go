@@ -14,12 +14,14 @@ func dataSourceUser() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"username": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Username of the Portainer user to look up. The data source will fail if no matching user is found.",
 			},
 			"role": {
-				Type:     schema.TypeInt,
-				Computed: true,
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: "Role assigned to the user in Portainer: 1 = admin, 2 = user.",
 			},
 		},
 	}

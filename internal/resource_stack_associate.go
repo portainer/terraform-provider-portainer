@@ -17,25 +17,29 @@ func resourceStackAssociate() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"stack_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the orphaned Portainer stack to associate with an endpoint.",
 			},
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the Portainer endpoint that should adopt the orphaned stack.",
 			},
 			"swarm_id": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Swarm cluster identifier (`Cluster.ID`) of the target endpoint when associating a Swarm stack.",
 			},
 			"orphaned_running": {
-				Type:     schema.TypeBool,
-				Optional: true,
-				Default:  false,
-				ForceNew: true,
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				ForceNew:    true,
+				Description: "Whether the orphaned stack is already running on the endpoint; controls Portainer's adoption behaviour.",
 			},
 		},
 	}

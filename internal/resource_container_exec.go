@@ -24,13 +24,13 @@ func resourceContainerExec() *schema.Resource {
 			Create: schema.DefaultTimeout(5 * time.Minute),
 		},
 		Schema: map[string]*schema.Schema{
-			"endpoint_id":  {Type: schema.TypeInt, Required: true, ForceNew: true},
-			"service_name": {Type: schema.TypeString, Required: true, ForceNew: true},
-			"user":         {Type: schema.TypeString, Optional: true, ForceNew: true, Default: "root:root"},
-			"command":      {Type: schema.TypeString, Required: true, ForceNew: true},
-			"wait":         {Type: schema.TypeInt, Optional: true, ForceNew: true, Default: 0},
+			"endpoint_id":  {Type: schema.TypeInt, Required: true, ForceNew: true, Description: "Identifier of the Portainer endpoint hosting the container or Swarm service."},
+			"service_name": {Type: schema.TypeString, Required: true, ForceNew: true, Description: "Name of the container (standalone) or Swarm service in which the command should be executed."},
+			"user":         {Type: schema.TypeString, Optional: true, ForceNew: true, Default: "root:root", Description: "User and optional group used to run the command inside the container (defaults to `root:root`)."},
+			"command":      {Type: schema.TypeString, Required: true, ForceNew: true, Description: "Shell command to execute inside the target container."},
+			"wait":         {Type: schema.TypeInt, Optional: true, ForceNew: true, Default: 0, Description: "Initial delay in seconds before executing the command."},
 			"mode":         {Type: schema.TypeString, Optional: true, ForceNew: true, Default: "standalone", Description: "Deployment mode: 'standalone' (default) or 'swarm'"},
-			"output":       {Type: schema.TypeString, Computed: true, ForceNew: true},
+			"output":       {Type: schema.TypeString, Computed: true, ForceNew: true, Description: "Standard output captured from the executed command."},
 		},
 	}
 }

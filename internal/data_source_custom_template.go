@@ -14,16 +14,19 @@ func dataSourceCustomTemplate() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"title": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Title of the custom template to look up in Portainer.",
 			},
 			"description": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Description of the matched custom template.",
 			},
 			"type": {
-				Type:     schema.TypeInt,
-				Computed: true,
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: "Template type: 1 = Swarm stack, 2 = Compose stack, 3 = Kubernetes manifest.",
 			},
 		},
 	}

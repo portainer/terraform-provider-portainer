@@ -25,14 +25,14 @@ func resourceOpenAMT() *schema.Resource {
 		Delete: resourceOpenAMTDelete,
 		Update: nil,
 		Schema: map[string]*schema.Schema{
-			"cert_file_content":  {Type: schema.TypeString, Required: true, ForceNew: true, Sensitive: true},
-			"cert_file_name":     {Type: schema.TypeString, Required: true, ForceNew: true},
-			"cert_file_password": {Type: schema.TypeString, Required: true, ForceNew: true, Sensitive: true},
-			"domain_name":        {Type: schema.TypeString, Required: true, ForceNew: true},
-			"enabled":            {Type: schema.TypeBool, Required: true, ForceNew: true},
-			"mpspassword":        {Type: schema.TypeString, Required: true, ForceNew: true, Sensitive: true},
-			"mpsserver":          {Type: schema.TypeString, Required: true, ForceNew: true},
-			"mpsuser":            {Type: schema.TypeString, Required: true, ForceNew: true},
+			"cert_file_content":  {Type: schema.TypeString, Required: true, ForceNew: true, Sensitive: true, Description: "Sensitive base64-encoded content of the OpenAMT provisioning certificate file."},
+			"cert_file_name":     {Type: schema.TypeString, Required: true, ForceNew: true, Description: "File name of the OpenAMT provisioning certificate."},
+			"cert_file_password": {Type: schema.TypeString, Required: true, ForceNew: true, Sensitive: true, Description: "Sensitive password protecting the OpenAMT provisioning certificate."},
+			"domain_name":        {Type: schema.TypeString, Required: true, ForceNew: true, Description: "Domain name configured for OpenAMT provisioning."},
+			"enabled":            {Type: schema.TypeBool, Required: true, ForceNew: true, Description: "Whether the OpenAMT integration is enabled in Portainer."},
+			"mpspassword":        {Type: schema.TypeString, Required: true, ForceNew: true, Sensitive: true, Description: "Sensitive password used to authenticate against the OpenAMT MPS (Management Presence Server)."},
+			"mpsserver":          {Type: schema.TypeString, Required: true, ForceNew: true, Description: "Hostname or URL of the OpenAMT MPS (Management Presence Server)."},
+			"mpsuser":            {Type: schema.TypeString, Required: true, ForceNew: true, Description: "Username used to authenticate against the OpenAMT MPS (Management Presence Server)."},
 		},
 	}
 }
@@ -51,9 +51,7 @@ func resourceOpenAMTCreate(d *schema.ResourceData, meta interface{}) error {
 		MpsUser:          d.Get("mpsuser").(string),
 	}
 
-	url := fmt.Sprintf("%s/open_amt", client.Endpoint)
-
-	resp, err := client.DoRequest("POST", url, nil, settings)
+	resp, err := client.DoRequest("POST", "/open_amt", nil, settings)
 	if err != nil {
 		return err
 	}

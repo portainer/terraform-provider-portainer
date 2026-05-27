@@ -39,3 +39,11 @@ resource "portainer_support_debug_log" "debug" {
 | Name | Description                                   |
 |------|-----------------------------------------------|
 | `id` | Set to string value of `true` or `false`      |
+
+## Import
+
+This is a singleton toggle resource; its ID is the string value of the `enabled` flag (`true` or `false`). Import using the current state:
+
+```shell
+terraform import portainer_support_debug_log.example true
+```

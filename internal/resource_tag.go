@@ -26,6 +26,7 @@ func resourceTag() *schema.Resource {
 				Required:     true,
 				ForceNew:     true,
 				ValidateFunc: validation.NoZeroValues,
+				Description:  "Name of the tag. Must be unique within the Portainer instance. Changing this value forces resource recreation.",
 			},
 		},
 	}

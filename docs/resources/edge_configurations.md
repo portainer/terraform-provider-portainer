@@ -53,3 +53,11 @@ resource "portainer_edge_configurations" "example_edge_configuration" {
 |----------------|-----------------------------------------------------------------------------|
 | `id`           | The Edge Configuration ID assigned by Portainer                             |
 | `file_sha256`  | SHA256 hex digest of the uploaded file's contents, used to detect in-place file changes between plans |
+
+## Import
+
+Edge configurations can be imported using their numeric ID:
+
+```shell
+terraform import portainer_edge_configurations.example 42
+```

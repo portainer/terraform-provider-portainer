@@ -16,8 +16,9 @@ func dataSourceDockerImage() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "Identifier of the Portainer endpoint where the Docker image resides.",
 			},
 			"name": {
 				Type:        schema.TypeString,

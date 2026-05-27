@@ -40,6 +40,7 @@ func resourceCloudCredentials() *schema.Resource {
 			"credentials": {
 				Type:        schema.TypeMap,
 				Required:    true,
+				Sensitive:   true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
 				Description: "JSON-encoded credentials for the provider",
 			},
