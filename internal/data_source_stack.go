@@ -15,20 +15,24 @@ func dataSourceStack() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Name of the Portainer stack to look up. Combined with endpoint_id to uniquely identify the stack.",
 			},
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "Identifier of the Portainer environment (endpoint) where the stack is deployed.",
 			},
 			"type": {
-				Type:     schema.TypeInt,
-				Computed: true,
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: "Type of the Portainer stack: 1 = Swarm, 2 = Compose, 3 = Kubernetes.",
 			},
 			"swarm_id": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Identifier of the Docker Swarm cluster the stack is deployed to. Empty for non-Swarm stacks.",
 			},
 		},
 	}

@@ -23,24 +23,28 @@ func resourceEndpointGroupAccess() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_group_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the Portainer endpoint group to which the access policy applies.",
 			},
 			"team_id": {
-				Type:     schema.TypeInt,
-				Optional: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Identifier of the team granted access to the endpoint group. Mutually exclusive with `user_id`.",
 			},
 			"user_id": {
-				Type:     schema.TypeInt,
-				Optional: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Identifier of the user granted access to the endpoint group. Mutually exclusive with `team_id`.",
 			},
 			"role_id": {
-				Type:     schema.TypeInt,
-				Optional: true,
-				Default:  0,
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Default:     0,
+				Description: "Role identifier assigned to the user or team for this endpoint group.",
 			},
 		},
 	}

@@ -14,16 +14,19 @@ func dataSourceRegistry() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Name of the Portainer registry to look up. The data source will fail if no matching registry is found.",
 			},
 			"url": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "URL of the container registry as registered in Portainer.",
 			},
 			"type": {
-				Type:     schema.TypeInt,
-				Computed: true,
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: "Type of the Portainer registry (e.g. Quay, Azure, custom, GitLab, ProGet, DockerHub, ECR, GitHub).",
 			},
 		},
 	}

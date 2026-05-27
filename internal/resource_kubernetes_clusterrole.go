@@ -20,13 +20,15 @@ func resourceKubernetesClusterRoles() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the Portainer Kubernetes environment (endpoint) where the cluster-scoped ClusterRole is managed. Changing this value forces resource recreation.",
 			},
 			"manifest": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Raw YAML or JSON manifest defining the Kubernetes ClusterRole.",
 			},
 		},
 	}

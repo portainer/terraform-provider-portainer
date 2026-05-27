@@ -15,12 +15,14 @@ func dataSourceCloudCredentials() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Name of the cloud credentials entry to look up in Portainer.",
 			},
 			"cloud_provider": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Cloud provider associated with the credentials (e.g. `civo`, `digitalocean`, `linode`, `gke`, `aws`, `azure`).",
 			},
 		},
 	}

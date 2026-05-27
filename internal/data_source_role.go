@@ -21,8 +21,9 @@ func dataSourceRole() *schema.Resource {
 				Description: "Filter by role name. If set, only the matching role is returned.",
 			},
 			"roles": {
-				Type:     schema.TypeList,
-				Computed: true,
+				Type:        schema.TypeList,
+				Computed:    true,
+				Description: "List of Portainer roles returned from the API, optionally filtered by name.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"id": {

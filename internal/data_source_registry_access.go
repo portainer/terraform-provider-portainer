@@ -14,24 +14,29 @@ func dataSourceRegistryAccess() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"registry_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "Identifier of the Portainer registry whose access policy is queried.",
 			},
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "Identifier of the Portainer endpoint to which the registry access policy applies.",
 			},
 			"team_id": {
-				Type:     schema.TypeInt,
-				Optional: true,
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "Identifier of the team whose access policy should be returned. Mutually exclusive with `user_id`.",
 			},
 			"user_id": {
-				Type:     schema.TypeInt,
-				Optional: true,
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "Identifier of the user whose access policy should be returned. Mutually exclusive with `team_id`.",
 			},
 			"role_id": {
-				Type:     schema.TypeInt,
-				Computed: true,
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: "Role identifier assigned to the user or team for the registry on the given endpoint.",
 			},
 		},
 	}

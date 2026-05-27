@@ -14,20 +14,24 @@ func dataSourceEndpointGroupAccess() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_group_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "Identifier of the Portainer endpoint group whose access policy is being looked up.",
 			},
 			"team_id": {
-				Type:     schema.TypeInt,
-				Optional: true,
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "Identifier of the Portainer team for which the access policy on the endpoint group is returned. Either team_id or user_id must be provided.",
 			},
 			"user_id": {
-				Type:     schema.TypeInt,
-				Optional: true,
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "Identifier of the Portainer user for which the access policy on the endpoint group is returned. Either team_id or user_id must be provided.",
 			},
 			"role_id": {
-				Type:     schema.TypeInt,
-				Computed: true,
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: "Identifier of the Portainer role granted to the team or user on the endpoint group.",
 			},
 		},
 	}

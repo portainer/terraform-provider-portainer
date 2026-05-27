@@ -17,21 +17,24 @@ func resourceAuth() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"username": {
-				Type:      schema.TypeString,
-				Required:  true,
-				Sensitive: true,
-				ForceNew:  true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Sensitive:   true,
+				ForceNew:    true,
+				Description: "Username used to authenticate against the Portainer API. Stored in state as a sensitive value. Changing this value forces resource recreation.",
 			},
 			"password": {
-				Type:      schema.TypeString,
-				Required:  true,
-				Sensitive: true,
-				ForceNew:  true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Sensitive:   true,
+				ForceNew:    true,
+				Description: "Password used to authenticate against the Portainer API. Stored in state as a sensitive value. Changing this value forces resource recreation.",
 			},
 			"jwt": {
-				Type:      schema.TypeString,
-				Computed:  true,
-				Sensitive: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Sensitive:   true,
+				Description: "JWT bearer token issued by Portainer after successful authentication. Computed and stored in state as a sensitive value.",
 			},
 		},
 	}

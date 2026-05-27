@@ -62,13 +62,13 @@ func resourcePortainerEdgeConfigurations() *schema.Resource {
 			State: schema.ImportStatePassthrough,
 		},
 		Schema: map[string]*schema.Schema{
-			"name":           {Type: schema.TypeString, Required: true, ForceNew: true, ValidateFunc: validation.NoZeroValues},
-			"type":           {Type: schema.TypeString, Required: true, DiffSuppressFunc: edgeConfigTypeDiffSuppress},
-			"category":       {Type: schema.TypeString, Optional: true, Default: "", ForceNew: true, ValidateFunc: validation.StringInSlice([]string{"configuration", "secret", ""}, false)},
-			"base_dir":       {Type: schema.TypeString, Optional: true, Default: ""},
-			"edge_group_ids": {Type: schema.TypeList, Required: true, Elem: &schema.Schema{Type: schema.TypeInt}},
-			"file_path":      {Type: schema.TypeString, Required: true},
-			"file_sha256":    {Type: schema.TypeString, Computed: true},
+			"name":           {Type: schema.TypeString, Required: true, ForceNew: true, ValidateFunc: validation.NoZeroValues, Description: "Name of the Portainer edge configuration."},
+			"type":           {Type: schema.TypeString, Required: true, DiffSuppressFunc: edgeConfigTypeDiffSuppress, Description: "Edge configuration type. Accepts the textual form `general` or the numeric form `1`."},
+			"category":       {Type: schema.TypeString, Optional: true, Default: "", ForceNew: true, ValidateFunc: validation.StringInSlice([]string{"configuration", "secret", ""}, false), Description: "Category of the edge configuration. One of `configuration`, `secret`, or empty string."},
+			"base_dir":       {Type: schema.TypeString, Optional: true, Default: "", Description: "Base directory on edge agents where the configuration files are written."},
+			"edge_group_ids": {Type: schema.TypeList, Required: true, Elem: &schema.Schema{Type: schema.TypeInt}, Description: "List of edge group identifiers that should receive this configuration."},
+			"file_path":      {Type: schema.TypeString, Required: true, Description: "Path on the local filesystem to the file or archive uploaded as the edge configuration payload."},
+			"file_sha256":    {Type: schema.TypeString, Computed: true, Description: "SHA256 hash of the uploaded edge configuration file used to detect content changes."},
 		},
 	}
 }
@@ -309,15 +309,22 @@ func resourcePortainerEdgeConfigurationsUpdate(d *schema.ResourceData, meta inte
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	edgeGroupIDs := convertToIntSlice(d.Get("edge_group_ids").([]interface{}))
-	edgeGroupIDsBytes, err := json.Marshal(edgeGroupIDs)
-	if err != nil {
-		return fmt.Errorf("failed to marshal edgeGroupIDs: %w", err)
+	// Portainer API docs are incorrect. API expects form data as follows,
+	// note lower case naming as well:
+	// edgeConfiguration: {"edgeGroupIDs":[...],"type":"..."}
+	// file:              (binary file)
+	payload := map[string]interface{}{
+		"type":         d.Get("type").(string),
+		"edgeGroupIDs": convertToIntSlice(d.Get("edge_group_ids").([]interface{})),
 	}
-	_ = writer.WriteField("EdgeGroupIDs", string(edgeGroupIDsBytes))
-	_ = writer.WriteField("Type", d.Get("type").(string))
 
-	part, err := writer.CreateFormFile("File", filepath.Base(filePath))
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal edgeConfiguration payload: %w", err)
+	}
+	_ = writer.WriteField("edgeConfiguration", string(payloadBytes))
+
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
 		return fmt.Errorf("failed to create form file: %w", err)
 	}

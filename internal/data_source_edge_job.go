@@ -15,12 +15,14 @@ func dataSourceEdgeJob() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Name of the edge job to look up in Portainer.",
 			},
 			"cron_expression": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Cron expression that schedules execution of the edge job.",
 			},
 		},
 	}

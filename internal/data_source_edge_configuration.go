@@ -15,16 +15,19 @@ func dataSourceEdgeConfiguration() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Name of the edge configuration to look up.",
 			},
 			"type": {
-				Type:     schema.TypeInt,
-				Computed: true,
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: "Edge configuration type identifier as returned by the Portainer API.",
 			},
 			"category": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Category of the edge configuration (e.g. `configuration` or `secret`).",
 			},
 		},
 	}

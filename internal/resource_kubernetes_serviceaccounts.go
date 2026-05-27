@@ -20,17 +20,20 @@ func resourceKubernetesServiceAccounts() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the Portainer Kubernetes endpoint where the ServiceAccount is created.",
 			},
 			"namespace": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Kubernetes namespace in which the ServiceAccount manifest is applied.",
 			},
 			"manifest": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "YAML or JSON manifest describing the Kubernetes ServiceAccount to deploy.",
 			},
 		},
 	}

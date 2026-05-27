@@ -18,10 +18,11 @@ func resourceBackup() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"password": {
-				Type:      schema.TypeString,
-				Required:  true,
-				Sensitive: true,
-				ForceNew:  true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Sensitive:   true,
+				ForceNew:    true,
+				Description: "Sensitive password used to encrypt the Portainer backup archive.",
 			},
 			"output_path": {
 				Type:        schema.TypeString,

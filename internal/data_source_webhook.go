@@ -14,20 +14,24 @@ func dataSourceWebhook() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"resource_id": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Identifier of the resource (e.g. service) the Portainer webhook is attached to. Combined with endpoint_id to find the webhook.",
 			},
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "Identifier of the Portainer environment (endpoint) where the webhook is registered.",
 			},
 			"webhook_type": {
-				Type:     schema.TypeInt,
-				Computed: true,
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: "Type of the Portainer webhook (e.g. service webhook, container webhook).",
 			},
 			"token": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Token used to invoke the Portainer webhook URL.",
 			},
 		},
 	}

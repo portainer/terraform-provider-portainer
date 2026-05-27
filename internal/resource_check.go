@@ -19,14 +19,16 @@ func resourceCheck() *schema.Resource {
 		Update: nil,
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the Portainer endpoint hosting the stack to check.",
 			},
 			"stack_name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Name of the Portainer stack whose service status is being validated.",
 			},
 			"revision": {
 				Type:        schema.TypeString,
@@ -69,9 +71,10 @@ func resourceCheck() *schema.Resource {
 				Description: "Maximum retries for each service check.",
 			},
 			"output": {
-				Type:     schema.TypeString,
-				Computed: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				ForceNew:    true,
+				Description: "Human-readable summary of the check results returned by the provider.",
 			},
 		},
 	}

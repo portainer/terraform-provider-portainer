@@ -30,29 +30,35 @@ func resourcePortainerChat() *schema.Resource {
 		Delete: schema.RemoveFromState,
 		Schema: map[string]*schema.Schema{
 			"context": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Conversation context identifier passed to the Portainer chat assistant.",
 			},
 			"environment_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "Identifier of the Portainer environment the chat request is scoped to.",
 			},
 			"message": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "User prompt sent to the Portainer chat assistant.",
 			},
 			"model": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Default:  "gpt-3.5-turbo",
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "gpt-3.5-turbo",
+				Description: "AI model name used to generate the chat response (defaults to `gpt-3.5-turbo`).",
 			},
 			"response_message": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Textual response returned by the Portainer chat assistant.",
 			},
 			"response_yaml": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "YAML manifest extracted from the chat response, when applicable.",
 			},
 		},
 	}

@@ -20,13 +20,15 @@ func resourceKubernetesVolumes() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the Portainer Kubernetes endpoint where the volume resource is managed.",
 			},
 			"namespace": {
-				Type:     schema.TypeString,
-				Optional: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Kubernetes namespace for namespaced volume resources (required for `persistent-volume-claim`).",
 			},
 			"type": {
 				Type:     schema.TypeString,
@@ -42,10 +44,12 @@ func resourceKubernetesVolumes() *schema.Resource {
 					errs = append(errs, fmt.Errorf("%q must be one of: %v", key, allowed))
 					return
 				},
+				Description: "Type of Kubernetes volume resource: `persistent-volume-claim`, `persistent-volume`, or `volume-attachment`.",
 			},
 			"manifest": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "YAML or JSON manifest describing the Kubernetes volume resource to deploy.",
 			},
 		},
 	}

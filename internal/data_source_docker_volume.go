@@ -15,20 +15,24 @@ func dataSourceDockerVolume() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "ID of the Portainer environment (Docker host or Swarm) where the volume is located.",
 			},
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Name of the Docker volume to look up.",
 			},
 			"driver": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Driver used by the Docker volume (e.g., local, nfs, btrfs).",
 			},
 			"mount_point": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Filesystem path on the Docker host where the volume is mounted.",
 			},
 		},
 	}

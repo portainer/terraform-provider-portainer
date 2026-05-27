@@ -27,8 +27,9 @@ func dataSourceKubernetesCRD() *schema.Resource {
 			},
 			// Computed attributes
 			"crds": {
-				Type:     schema.TypeList,
-				Computed: true,
+				Type:        schema.TypeList,
+				Computed:    true,
+				Description: "List of Kubernetes Custom Resource Definitions returned by the Portainer API.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"name": {

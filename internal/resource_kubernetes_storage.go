@@ -20,13 +20,15 @@ func resourceKubernetesStorage() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Identifier of the Portainer Kubernetes endpoint where the storage class manifest is applied.",
 			},
 			"manifest": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "YAML or JSON manifest describing the Kubernetes StorageClass or related storage resources.",
 			},
 		},
 	}

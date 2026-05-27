@@ -80,13 +80,14 @@ func resourcePortainerStack() *schema.Resource {
 					"string", "file", "repository", "url",
 				}, false),
 			},
-			"name":        {Type: schema.TypeString, Required: true, ForceNew: true},
-			"endpoint_id": {Type: schema.TypeInt, Required: true, ForceNew: true},
-			"swarm_id":    {Type: schema.TypeString, Optional: true, ForceNew: true, Computed: true},
-			"namespace":   {Type: schema.TypeString, Optional: true, ForceNew: true},
+			"name":        {Type: schema.TypeString, Required: true, ForceNew: true, Description: "Name of the Portainer stack. Must be unique within the target endpoint. Changing this value forces resource recreation."},
+			"endpoint_id": {Type: schema.TypeInt, Required: true, ForceNew: true, Description: "Identifier of the Portainer environment (endpoint) where the stack will be deployed. Changing this value forces resource recreation."},
+			"swarm_id":    {Type: schema.TypeString, Optional: true, ForceNew: true, Computed: true, Description: "Identifier of the Docker Swarm cluster used when deployment_type is 'swarm'. Automatically fetched from Portainer when not provided. Changing this value forces resource recreation."},
+			"namespace":   {Type: schema.TypeString, Optional: true, ForceNew: true, Description: "Kubernetes namespace used when deployment_type is 'kubernetes'. Changing this value forces resource recreation."},
 			"stack_file_content": {
-				Type:     schema.TypeString,
-				Optional: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Inline Compose or Kubernetes manifest content used to deploy the stack. Required when method is 'string'; populated from stack_file_path when method is 'file'.",
 				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
 					if d.Get("method").(string) != "file" {
 						return false
@@ -103,7 +104,7 @@ func resourcePortainerStack() *schema.Resource {
 					return strings.TrimSpace(old) == strings.TrimSpace(current)
 				},
 			},
-			"stack_file_path": {Type: schema.TypeString, Optional: true},
+			"stack_file_path": {Type: schema.TypeString, Optional: true, Description: "Local filesystem path to a Compose or manifest file. Contents are read and uploaded to Portainer when method is 'file'."},
 			"additional_files": {
 				Type:        schema.TypeList,
 				Optional:    true,
@@ -112,9 +113,10 @@ func resourcePortainerStack() *schema.Resource {
 				Description: "List of additional Compose file paths to use when deploying from Git repository.",
 			},
 			"git_repository_authentication": {
-				Type:     schema.TypeBool,
-				Optional: true,
-				Default:  false,
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Whether the Git repository requires authentication. When true, repository_username and repository_password (or their write-only equivalents) are sent to Portainer.",
 			},
 			"force_update": {
 				Type:        schema.TypeBool,
@@ -123,8 +125,9 @@ func resourcePortainerStack() *schema.Resource {
 				Description: "Whether to prune unused services/networks during stack update (default: true)",
 			},
 			"update_interval": {
-				Type:     schema.TypeString,
-				Optional: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "GitOps auto-update polling interval (e.g. '5m', '1h'). When set, Portainer periodically checks the Git repository for changes and redeploys the stack.",
 			},
 			"pull_image": {
 				Type:        schema.TypeBool,
@@ -153,17 +156,20 @@ func resourcePortainerStack() *schema.Resource {
 				Optional:      true,
 				ForceNew:      true,
 				ConflictsWith: []string{"repository_url_wo"},
+				Description:   "URL of the Git repository used to deploy the stack when method is 'repository'. Changing this value forces resource recreation.",
 			},
 			"repository_username": {
 				Type:          schema.TypeString,
 				Optional:      true,
 				ConflictsWith: []string{"repository_username_wo"},
+				Description:   "Username used to authenticate against the Git repository.",
 			},
 			"repository_password": {
 				Type:          schema.TypeString,
 				Optional:      true,
 				Sensitive:     true,
 				ConflictsWith: []string{"repository_password_wo"},
+				Description:   "Password or personal access token used to authenticate against the Git repository. Stored in state as a sensitive value.",
 			},
 			"repository_url_wo": {
 				Type:          schema.TypeString,
@@ -198,9 +204,10 @@ func resourcePortainerStack() *schema.Resource {
 				Description: "Version flag for write-only repository credentials; increment to trigger recreation.",
 			},
 			"repository_reference_name": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Default:  "refs/heads/main",
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "refs/heads/main",
+				Description: "Git reference (branch or tag) used by Portainer when deploying from the repository. Defaults to refs/heads/main.",
 			},
 			"file_path_in_repository": {
 				Type:        schema.TypeString,
@@ -208,8 +215,8 @@ func resourcePortainerStack() *schema.Resource {
 				Default:     "",
 				Description: "Path to Compose/manifest file in the repository. Defaults to docker-compose.yml for Docker/Swarm stacks. Not required when helm_chart_path is set.",
 			},
-			"manifest_url":   {Type: schema.TypeString, Optional: true, ForceNew: true},
-			"compose_format": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
+			"manifest_url":   {Type: schema.TypeString, Optional: true, ForceNew: true, Description: "URL to a remote Kubernetes manifest used when deployment_type is 'kubernetes' and method is 'url'. Changing this value forces resource recreation."},
+			"compose_format": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true, Description: "Whether the supplied content is in Docker Compose format (true) instead of native Kubernetes manifest (false). Only applies to Kubernetes stacks. Changing this value forces resource recreation."},
 			"helm_chart_path": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -222,19 +229,20 @@ func resourcePortainerStack() *schema.Resource {
 				Elem:        &schema.Schema{Type: schema.TypeString},
 				Description: "List of additional Helm values files (e.g. values-prod.yaml). Only used with helm_chart_path.",
 			},
-			"support_relative_path": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true},
-			"filesystem_path":       {Type: schema.TypeString, Optional: true},
+			"support_relative_path": {Type: schema.TypeBool, Optional: true, Default: false, ForceNew: true, Description: "Whether Portainer should support relative paths inside the Compose file for bind mounts referencing repository contents. Changing this value forces resource recreation."},
+			"filesystem_path":       {Type: schema.TypeString, Optional: true, Description: "Local filesystem path on the host used when support_relative_path is true. Maps to the repository working directory."},
 			"env": {
-				Type:     schema.TypeList,
-				Optional: true,
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "List of environment variables injected into the stack at deploy time.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"name":  {Type: schema.TypeString, Required: true},
-						"value": {Type: schema.TypeString, Required: true},
+						"name":  {Type: schema.TypeString, Required: true, Description: "Name of the environment variable."},
+						"value": {Type: schema.TypeString, Required: true, Description: "Value of the environment variable."},
 					},
 				},
 			},
-			"tlsskip_verify": {Type: schema.TypeBool, Optional: true, Computed: true, ForceNew: true},
+			"tlsskip_verify": {Type: schema.TypeBool, Optional: true, Computed: true, ForceNew: true, Description: "Whether to skip TLS verification when Portainer connects to the Git repository. Changing this value forces resource recreation."},
 			"prune": {
 				Type:        schema.TypeBool,
 				Optional:    true,
@@ -247,8 +255,9 @@ func resourcePortainerStack() *schema.Resource {
 				Description: "ID of the Git credentials to use for authentication.",
 			},
 			"resource_control_id": {
-				Type:     schema.TypeInt,
-				Computed: true,
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: "Identifier of the Portainer resource control entry associated with the stack. Computed by Portainer.",
 			},
 			"registries": {
 				Type:        schema.TypeList,

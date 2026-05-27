@@ -19,16 +19,19 @@ func resourceKubernetesNamespaceSystem() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "Identifier of the Portainer Kubernetes environment owning the namespace.",
 			},
 			"namespace": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Name of the Kubernetes namespace whose system flag is being toggled.",
 			},
 			"system": {
-				Type:     schema.TypeBool,
-				Required: true,
+				Type:        schema.TypeBool,
+				Required:    true,
+				Description: "Whether the namespace should be marked as a Portainer system namespace.",
 			},
 		},
 	}

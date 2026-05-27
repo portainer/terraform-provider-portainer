@@ -15,12 +15,14 @@ func dataSourceEdgeGroup() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Name of the edge group to look up in Portainer.",
 			},
 			"dynamic": {
-				Type:     schema.TypeBool,
-				Computed: true,
+				Type:        schema.TypeBool,
+				Computed:    true,
+				Description: "Whether the edge group is dynamic (membership computed from tags) or static (explicit endpoint list).",
 			},
 		},
 	}

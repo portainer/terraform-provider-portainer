@@ -15,20 +15,24 @@ func dataSourceDockerNode() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
-				Type:     schema.TypeInt,
-				Required: true,
+				Type:        schema.TypeInt,
+				Required:    true,
+				Description: "ID of the Portainer environment (Docker Swarm cluster) where the node is located.",
 			},
 			"hostname": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Hostname of the Docker Swarm node to look up.",
 			},
 			"role": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Role of the Swarm node (worker or manager).",
 			},
 			"status": {
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Current status state of the Swarm node (e.g., ready, down, disconnected).",
 			},
 		},
 	}
