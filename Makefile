@@ -303,6 +303,10 @@ sensitive-lint:
 docs-check:
 	@bash scripts/docs-presence-check.sh
 
+.PHONY: examples-check
+examples-check:
+	@bash scripts/examples-presence-check.sh
+
 .PHONY: import-doc-lint
 import-doc-lint:
 	@echo "Linting import documentation..."
