@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -53,10 +54,12 @@ func resourceCustomTemplate() *schema.Resource {
 }
 
 func findExistingCustomTemplateByTitle(client *APIClient, title string) (int, error) {
+	ctx, errBody := withErrorCapture(context.Background())
 	params := custom_templates.NewCustomTemplateListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.CustomTemplates.CustomTemplateList(params, client.AuthInfo)
 	if err != nil {
-		return 0, fmt.Errorf("failed to list custom templates: %w", err)
+		return 0, fmt.Errorf("failed to list custom templates: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, tmpl := range resp.Payload {
@@ -106,7 +109,9 @@ func createTemplateFromString(d *schema.ResourceData, client *APIClient, content
 	description := d.Get("description").(string)
 	templateType := int64(d.Get("type").(int))
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := custom_templates.NewCustomTemplateCreateStringParams()
+	params.SetContext(ctx)
 	params.Body = &models.CustomtemplatesCustomTemplateFromFileContentPayload{
 		Title:        &title,
 		Description:  &description,
@@ -121,7 +126,7 @@ func createTemplateFromString(d *schema.ResourceData, client *APIClient, content
 
 	resp, err := client.Client.CustomTemplates.CustomTemplateCreateString(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create custom template from string: %w", err)
+		return fmt.Errorf("failed to create custom template from string: %w", decorateSDKError(err, errBody))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
@@ -134,7 +139,9 @@ func createTemplateFromRepository(d *schema.ResourceData, client *APIClient, rep
 	templateType := int64(d.Get("type").(int))
 	useAuth := d.Get("repository_authentication").(bool)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := custom_templates.NewCustomTemplateCreateRepositoryParams()
+	params.SetContext(ctx)
 	composePath := d.Get("compose_file_path").(string)
 	params.Body = &models.CustomtemplatesCustomTemplateFromGitRepositoryPayload{
 		Title:                       &title,
@@ -160,7 +167,7 @@ func createTemplateFromRepository(d *schema.ResourceData, client *APIClient, rep
 
 	resp, err := client.Client.CustomTemplates.CustomTemplateCreateRepository(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create custom template from repository: %w", err)
+		return fmt.Errorf("failed to create custom template from repository: %w", decorateSDKError(err, errBody))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
@@ -198,7 +205,9 @@ func resourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) error 
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := custom_templates.NewCustomTemplateInspectParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	resp, err := client.Client.CustomTemplates.CustomTemplateInspect(params, client.AuthInfo)
@@ -208,7 +217,7 @@ func resourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) error 
 			d.SetId("")
 			return nil
 		}
-		return fmt.Errorf("failed to read custom template: %w", err)
+		return fmt.Errorf("failed to read custom template: %w", decorateSDKError(err, errBody))
 	}
 
 	d.Set("title", resp.Payload.Title)
@@ -246,7 +255,9 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 	composePath := d.Get("compose_file_path").(string)
 	useAuth := d.Get("repository_authentication").(bool)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := custom_templates.NewCustomTemplateUpdateParams()
+	params.SetContext(ctx)
 	params.ID = id
 	params.Body = &models.CustomtemplatesCustomTemplateUpdatePayload{
 		Title:                       &title,
@@ -278,15 +289,17 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 
 	_, err := client.Client.CustomTemplates.CustomTemplateUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update custom template: %w", err)
+		return fmt.Errorf("failed to update custom template: %w", decorateSDKError(err, errBody))
 	}
 
 	if isGitBased {
+		gitCtx, gitErrBody := withErrorCapture(context.Background())
 		gitParams := custom_templates.NewCustomTemplateGitFetchParams()
+		gitParams.SetContext(gitCtx)
 		gitParams.ID = id
 		_, err := client.Client.CustomTemplates.CustomTemplateGitFetch(gitParams, client.AuthInfo)
 		if err != nil {
-			return fmt.Errorf("failed to git_fetch template: %w", err)
+			return fmt.Errorf("failed to git_fetch template: %w", decorateSDKError(err, gitErrBody))
 		}
 	}
 
@@ -297,7 +310,9 @@ func resourceCustomTemplateDelete(d *schema.ResourceData, meta interface{}) erro
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := custom_templates.NewCustomTemplateDeleteParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	_, err := client.Client.CustomTemplates.CustomTemplateDelete(params, client.AuthInfo)
@@ -306,7 +321,7 @@ func resourceCustomTemplateDelete(d *schema.ResourceData, meta interface{}) erro
 		if errors.As(err, &notFound) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete custom template: %w", err)
+		return fmt.Errorf("failed to delete custom template: %w", decorateSDKError(err, errBody))
 	}
 	return nil
 }

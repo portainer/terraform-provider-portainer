@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -37,10 +38,12 @@ func dataSourceTeamMembershipRead(d *schema.ResourceData, meta interface{}) erro
 	teamID := int64(d.Get("team_id").(int))
 	userID := int64(d.Get("user_id").(int))
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := team_memberships.NewTeamMembershipListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.TeamMemberships.TeamMembershipList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to fetch team memberships list: %w", err)
+		return fmt.Errorf("failed to fetch team memberships list: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, m := range resp.Payload {

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -197,9 +198,11 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 		}
 	}
 
+	ctx, errBody := withErrorCapture(context.Background())
+	params.SetContext(ctx)
 	resp, err := client.Client.Endpoints.EndpointCreate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create environment: %w", err)
+		return fmt.Errorf("failed to create environment: %w", decorateSDKError(err, errBody))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
@@ -235,10 +238,12 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func findExistingEnvironmentByName(client *APIClient, name string) (int, error) {
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoints.NewEndpointListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.Endpoints.EndpointList(params, client.AuthInfo)
 	if err != nil {
-		return 0, fmt.Errorf("failed to list environments: %w", err)
+		return 0, fmt.Errorf("failed to list environments: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, e := range resp.Payload {
@@ -253,7 +258,9 @@ func resourceEnvironmentRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoints.NewEndpointInspectParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	resp, err := client.Client.Endpoints.EndpointInspect(params, client.AuthInfo)
@@ -263,7 +270,7 @@ func resourceEnvironmentRead(d *schema.ResourceData, meta interface{}) error {
 			d.SetId("")
 			return nil
 		}
-		return fmt.Errorf("failed to read environment: %w", err)
+		return fmt.Errorf("failed to read environment: %w", decorateSDKError(err, errBody))
 	}
 
 	d.Set("name", resp.Payload.Name)
@@ -292,7 +299,9 @@ func resourceEnvironmentUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoints.NewEndpointUpdateParams()
+	params.SetContext(ctx)
 	params.ID = id
 	params.Body = &models.EndpointsEndpointUpdatePayload{}
 
@@ -342,7 +351,7 @@ func resourceEnvironmentUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Endpoints.EndpointUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update environment: %w", err)
+		return fmt.Errorf("failed to update environment: %w", decorateSDKError(err, errBody))
 	}
 
 	return resourceEnvironmentRead(d, meta)
@@ -352,7 +361,9 @@ func resourceEnvironmentDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoints.NewEndpointDeleteParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	_, err := client.Client.Endpoints.EndpointDelete(params, client.AuthInfo)
@@ -361,7 +372,7 @@ func resourceEnvironmentDelete(d *schema.ResourceData, meta interface{}) error {
 		if errors.As(err, &notFound) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete environment: %w", err)
+		return fmt.Errorf("failed to delete environment: %w", decorateSDKError(err, errBody))
 	}
 
 	return nil

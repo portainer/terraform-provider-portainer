@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -38,10 +39,12 @@ func resourceTeamCreate(d *schema.ResourceData, meta interface{}) error {
 	teamName := d.Get("name").(string)
 
 	// Check if team already exists
+	listCtx, listErrBody := withErrorCapture(context.Background())
 	paramsList := teams.NewTeamListParams()
+	paramsList.SetContext(listCtx)
 	respList, err := client.Client.Teams.TeamList(paramsList, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list teams: %w", err)
+		return fmt.Errorf("failed to list teams: %w", decorateSDKError(err, listErrBody))
 	}
 
 	for _, t := range respList.Payload {
@@ -54,14 +57,16 @@ func resourceTeamCreate(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Team not found, create new
+	createCtx, createErrBody := withErrorCapture(context.Background())
 	paramsCreate := teams.NewTeamCreateParams()
+	paramsCreate.SetContext(createCtx)
 	paramsCreate.Body = &models.TeamsTeamCreatePayload{
 		Name: &teamName,
 	}
 
 	respCreate, err := client.Client.Teams.TeamCreate(paramsCreate, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create team: %w", err)
+		return fmt.Errorf("failed to create team: %w", decorateSDKError(err, createErrBody))
 	}
 
 	d.SetId(strconv.FormatInt(respCreate.Payload.ID, 10))
@@ -72,7 +77,9 @@ func resourceTeamRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := teams.NewTeamInspectParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	resp, err := client.Client.Teams.TeamInspect(params, client.AuthInfo)
@@ -82,7 +89,7 @@ func resourceTeamRead(d *schema.ResourceData, meta interface{}) error {
 			d.SetId("")
 			return nil
 		}
-		return fmt.Errorf("failed to read team: %w", err)
+		return fmt.Errorf("failed to read team: %w", decorateSDKError(err, errBody))
 	}
 
 	d.Set("name", resp.Payload.Name)
@@ -94,7 +101,9 @@ func resourceTeamUpdate(d *schema.ResourceData, meta interface{}) error {
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 	name := d.Get("name").(string)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := teams.NewTeamUpdateParams()
+	params.SetContext(ctx)
 	params.ID = id
 	params.Body = &models.TeamsTeamUpdatePayload{
 		Name: name,
@@ -102,7 +111,7 @@ func resourceTeamUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Teams.TeamUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update team: %w", err)
+		return fmt.Errorf("failed to update team: %w", decorateSDKError(err, errBody))
 	}
 
 	return resourceTeamRead(d, meta)
@@ -112,7 +121,9 @@ func resourceTeamDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := teams.NewTeamDeleteParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	_, err := client.Client.Teams.TeamDelete(params, client.AuthInfo)
@@ -121,7 +132,7 @@ func resourceTeamDelete(d *schema.ResourceData, meta interface{}) error {
 		if errors.As(err, &notFoundDel) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete team: %w", err)
+		return fmt.Errorf("failed to delete team: %w", decorateSDKError(err, errBody))
 	}
 
 	return nil

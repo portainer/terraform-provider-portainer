@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -36,10 +37,12 @@ func dataSourceRegistryRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := registries.NewRegistryListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.Registries.RegistryList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list registries: %w", err)
+		return fmt.Errorf("failed to list registries: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, r := range resp.Payload {

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -41,10 +42,12 @@ func dataSourceEnvironmentRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoints.NewEndpointListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.Endpoints.EndpointList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list environments: %w", err)
+		return fmt.Errorf("failed to list environments: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, e := range resp.Payload {

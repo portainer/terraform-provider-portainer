@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -26,10 +27,12 @@ func dataSourceTeamRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	teamName := d.Get("name").(string)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := teams.NewTeamListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.Teams.TeamList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list teams: %w", err)
+		return fmt.Errorf("failed to list teams: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, t := range resp.Payload {
