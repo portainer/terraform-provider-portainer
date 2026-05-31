@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -48,7 +49,9 @@ func resourceSSLSettings() *schema.Resource {
 func resourceSSLSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := ssl.NewSSLUpdateParams()
+	params.SetContext(ctx)
 	params.Body = &models.SslSslUpdatePayload{
 		Cert:        d.Get("cert").(string),
 		Key:         d.Get("key").(string),
@@ -58,7 +61,7 @@ func resourceSSLSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Ssl.SSLUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update SSL settings: %w", err)
+		return fmt.Errorf("failed to update SSL settings: %w", decorateSDKError(err, errBody))
 	}
 
 	d.SetId("portainer-ssl")
@@ -68,10 +71,12 @@ func resourceSSLSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
 func resourceSSLSettingsRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := ssl.NewSSLInspectParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.Ssl.SSLInspect(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to read SSL settings: %w", err)
+		return fmt.Errorf("failed to read SSL settings: %w", decorateSDKError(err, errBody))
 	}
 
 	d.Set("http_enabled", resp.Payload.HTTPEnabled)

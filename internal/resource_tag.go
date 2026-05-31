@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -36,14 +37,16 @@ func resourceTagCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := tags.NewTagCreateParams()
+	params.SetContext(ctx)
 	params.Body = &models.TagsTagCreatePayload{
 		Name: &name,
 	}
 
 	resp, err := client.Client.Tags.TagCreate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create tag: %w", err)
+		return fmt.Errorf("failed to create tag: %w", decorateSDKError(err, errBody))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
@@ -55,10 +58,12 @@ func resourceTagRead(d *schema.ResourceData, meta interface{}) error {
 
 	// SDK does not expose GetTagByID, so we list and filter.
 	// This matches the fallback logic of the previous implementation.
+	ctx, errBody := withErrorCapture(context.Background())
 	params := tags.NewTagListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.Tags.TagList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list tags: %w", err)
+		return fmt.Errorf("failed to list tags: %w", decorateSDKError(err, errBody))
 	}
 
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
@@ -77,7 +82,9 @@ func resourceTagDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := tags.NewTagDeleteParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	_, err := client.Client.Tags.TagDelete(params, client.AuthInfo)
@@ -86,7 +93,7 @@ func resourceTagDelete(d *schema.ResourceData, meta interface{}) error {
 		if errors.As(err, &notFound) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete tag: %w", err)
+		return fmt.Errorf("failed to delete tag: %w", decorateSDKError(err, errBody))
 	}
 
 	return nil

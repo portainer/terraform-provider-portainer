@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -55,7 +56,9 @@ func resourceEndpointGroupCreate(d *schema.ResourceData, meta interface{}) error
 		return resourceEndpointGroupUpdate(d, meta)
 	}
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoint_groups.NewPostEndpointGroupsParams()
+	params.SetContext(ctx)
 	params.Body = &models.EndpointgroupsEndpointGroupCreatePayload{
 		Name: &name,
 	}
@@ -75,7 +78,7 @@ func resourceEndpointGroupCreate(d *schema.ResourceData, meta interface{}) error
 
 	resp, err := client.Client.EndpointGroups.PostEndpointGroups(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create endpoint group: %w", err)
+		return fmt.Errorf("failed to create endpoint group: %w", decorateSDKError(err, errBody))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
@@ -83,10 +86,12 @@ func resourceEndpointGroupCreate(d *schema.ResourceData, meta interface{}) error
 }
 
 func findExistingEndpointGroupByName(client *APIClient, name string) (int, error) {
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoint_groups.NewEndpointGroupListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.EndpointGroups.EndpointGroupList(params, client.AuthInfo)
 	if err != nil {
-		return 0, fmt.Errorf("failed to list endpoint groups: %w", err)
+		return 0, fmt.Errorf("failed to list endpoint groups: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, g := range resp.Payload {
@@ -101,7 +106,9 @@ func resourceEndpointGroupRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoint_groups.NewGetEndpointGroupsIDParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	resp, err := client.Client.EndpointGroups.GetEndpointGroupsID(params, client.AuthInfo)
@@ -111,7 +118,7 @@ func resourceEndpointGroupRead(d *schema.ResourceData, meta interface{}) error {
 			d.SetId("")
 			return nil
 		}
-		return fmt.Errorf("failed to read endpoint group: %w", err)
+		return fmt.Errorf("failed to read endpoint group: %w", decorateSDKError(err, errBody))
 	}
 
 	d.Set("name", resp.Payload.Name)
@@ -131,7 +138,9 @@ func resourceEndpointGroupUpdate(d *schema.ResourceData, meta interface{}) error
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 	name := d.Get("name").(string)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoint_groups.NewEndpointGroupUpdateParams()
+	params.SetContext(ctx)
 	params.ID = id
 	params.Body = &models.EndpointgroupsEndpointGroupUpdatePayload{
 		Name: name,
@@ -151,7 +160,7 @@ func resourceEndpointGroupUpdate(d *schema.ResourceData, meta interface{}) error
 
 	_, err := client.Client.EndpointGroups.EndpointGroupUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update endpoint group: %w", err)
+		return fmt.Errorf("failed to update endpoint group: %w", decorateSDKError(err, errBody))
 	}
 
 	return resourceEndpointGroupRead(d, meta)
@@ -161,7 +170,9 @@ func resourceEndpointGroupDelete(d *schema.ResourceData, meta interface{}) error
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoint_groups.NewEndpointGroupDeleteParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	_, err := client.Client.EndpointGroups.EndpointGroupDelete(params, client.AuthInfo)
@@ -170,7 +181,7 @@ func resourceEndpointGroupDelete(d *schema.ResourceData, meta interface{}) error
 		if errors.As(err, &notFound) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete endpoint group: %w", err)
+		return fmt.Errorf("failed to delete endpoint group: %w", decorateSDKError(err, errBody))
 	}
 
 	return nil

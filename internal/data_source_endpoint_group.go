@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -31,10 +32,12 @@ func dataSourceEndpointGroupRead(d *schema.ResourceData, meta interface{}) error
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoint_groups.NewEndpointGroupListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.EndpointGroups.EndpointGroupList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list endpoint groups: %w", err)
+		return fmt.Errorf("failed to list endpoint groups: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, g := range resp.Payload {

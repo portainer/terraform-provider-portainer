@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -49,7 +50,9 @@ func resourceTeamMembershipCreate(d *schema.ResourceData, meta interface{}) erro
 	teamID := int64(d.Get("team_id").(int))
 	userID := int64(d.Get("user_id").(int))
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := team_memberships.NewTeamMembershipCreateParams()
+	params.SetContext(ctx)
 	params.Body = &models.TeammembershipsTeamMembershipCreatePayload{
 		Role:   &role,
 		TeamID: &teamID,
@@ -58,7 +61,7 @@ func resourceTeamMembershipCreate(d *schema.ResourceData, meta interface{}) erro
 
 	resp, err := client.Client.TeamMemberships.TeamMembershipCreate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create team membership: %w", err)
+		return fmt.Errorf("failed to create team membership: %w", decorateSDKError(err, errBody))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
@@ -69,10 +72,12 @@ func resourceTeamMembershipRead(d *schema.ResourceData, meta interface{}) error 
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := team_memberships.NewTeamMembershipListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.TeamMemberships.TeamMembershipList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to fetch team memberships list: %w", err)
+		return fmt.Errorf("failed to fetch team memberships list: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, m := range resp.Payload {
@@ -95,7 +100,9 @@ func resourceTeamMembershipUpdate(d *schema.ResourceData, meta interface{}) erro
 	teamID := int64(d.Get("team_id").(int))
 	userID := int64(d.Get("user_id").(int))
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := team_memberships.NewTeamMembershipUpdateParams()
+	params.SetContext(ctx)
 	params.ID = id
 	params.Body = &models.TeammembershipsTeamMembershipUpdatePayload{
 		Role:   &role,
@@ -105,7 +112,7 @@ func resourceTeamMembershipUpdate(d *schema.ResourceData, meta interface{}) erro
 
 	_, err := client.Client.TeamMemberships.TeamMembershipUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update team membership: %w", err)
+		return fmt.Errorf("failed to update team membership: %w", decorateSDKError(err, errBody))
 	}
 
 	return resourceTeamMembershipRead(d, meta)
@@ -122,7 +129,9 @@ func resourceTeamMembershipDelete(d *schema.ResourceData, meta interface{}) erro
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := team_memberships.NewTeamMembershipDeleteParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	_, err := client.Client.TeamMemberships.TeamMembershipDelete(params, client.AuthInfo)
@@ -131,7 +140,7 @@ func resourceTeamMembershipDelete(d *schema.ResourceData, meta interface{}) erro
 		if errors.As(err, &notFound) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete team membership: %w", err)
+		return fmt.Errorf("failed to delete team membership: %w", decorateSDKError(err, errBody))
 	}
 
 	return nil

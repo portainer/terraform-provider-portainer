@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -47,7 +48,9 @@ func resourceUserAdminCreate(d *schema.ResourceData, meta interface{}) error {
 	username := d.Get("username").(string)
 	password := d.Get("password").(string)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := users.NewUserAdminInitParams()
+	params.SetContext(ctx)
 	params.Body = &models.UsersAdminInitPayload{
 		Username: &username,
 		Password: &password,
@@ -64,7 +67,7 @@ func resourceUserAdminCreate(d *schema.ResourceData, meta interface{}) error {
 			_ = d.Set("initialized", true)
 			return nil
 		}
-		return fmt.Errorf("failed to initialize admin user: %w", err)
+		return fmt.Errorf("failed to initialize admin user: %w", decorateSDKError(err, errBody))
 	}
 
 	if resp.Payload.ID != 0 {

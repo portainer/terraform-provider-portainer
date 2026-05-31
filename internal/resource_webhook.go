@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -53,7 +54,9 @@ func resourceWebhook() *schema.Resource {
 func resourceWebhookCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := webhooks.NewPostWebhooksParams()
+	params.SetContext(ctx)
 	params.Body = &models.WebhooksWebhookCreatePayload{
 		EndpointID:  int64(d.Get("endpoint_id").(int)),
 		RegistryID:  int64(d.Get("registry_id").(int)),
@@ -63,7 +66,7 @@ func resourceWebhookCreate(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.Client.Webhooks.PostWebhooks(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create webhook: %w", err)
+		return fmt.Errorf("failed to create webhook: %w", decorateSDKError(err, errBody))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
@@ -80,7 +83,9 @@ func resourceWebhookUpdate(d *schema.ResourceData, meta interface{}) error {
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
 	if d.HasChange("registry_id") {
+		ctx, errBody := withErrorCapture(context.Background())
 		params := webhooks.NewPutWebhooksIDParams()
+		params.SetContext(ctx)
 		params.ID = id
 		params.Body = &models.WebhooksWebhookUpdatePayload{
 			RegistryID: int64(d.Get("registry_id").(int)),
@@ -88,7 +93,7 @@ func resourceWebhookUpdate(d *schema.ResourceData, meta interface{}) error {
 
 		_, err := client.Client.Webhooks.PutWebhooksID(params, client.AuthInfo)
 		if err != nil {
-			return fmt.Errorf("failed to update webhook: %w", err)
+			return fmt.Errorf("failed to update webhook: %w", decorateSDKError(err, errBody))
 		}
 	}
 
@@ -99,12 +104,14 @@ func resourceWebhookDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := webhooks.NewDeleteWebhooksIDParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	_, err := client.Client.Webhooks.DeleteWebhooksID(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to delete webhook: %w", err)
+		return fmt.Errorf("failed to delete webhook: %w", decorateSDKError(err, errBody))
 	}
 
 	d.SetId("")

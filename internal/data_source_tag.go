@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -26,10 +27,12 @@ func dataSourceTagRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := tags.NewTagListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.Tags.TagList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list tags: %w", err)
+		return fmt.Errorf("failed to list tags: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, t := range resp.Payload {

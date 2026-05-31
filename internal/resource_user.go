@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -92,10 +93,12 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Check if user already exists
+	listCtx, listErrBody := withErrorCapture(context.Background())
 	paramsList := users.NewUserListParams()
+	paramsList.SetContext(listCtx)
 	respList, err := client.Client.Users.UserList(paramsList, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list users: %w", err)
+		return fmt.Errorf("failed to list users: %w", decorateSDKError(err, listErrBody))
 	}
 
 	for _, u := range respList.Payload {
@@ -105,7 +108,9 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 		}
 	}
 
+	createCtx, createErrBody := withErrorCapture(context.Background())
 	paramsCreate := users.NewUserCreateParams()
+	paramsCreate.SetContext(createCtx)
 	paramsCreate.Body = &models.UsersUserCreatePayload{
 		Username: &username,
 		Role:     &role,
@@ -116,7 +121,7 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 
 	respCreate, err := client.Client.Users.UserCreate(paramsCreate, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
+		return fmt.Errorf("failed to create user: %w", decorateSDKError(err, createErrBody))
 	}
 
 	d.SetId(strconv.FormatInt(respCreate.Payload.ID, 10))
@@ -129,7 +134,9 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 		userID := respCreate.Payload.ID
 		roleMember := int64(2)
 
+		teamCtx, teamErrBody := withErrorCapture(context.Background())
 		paramsTeam := team_memberships.NewTeamMembershipCreateParams()
+		paramsTeam.SetContext(teamCtx)
 		paramsTeam.Body = &models.TeammembershipsTeamMembershipCreatePayload{
 			UserID: &userID,
 			TeamID: &teamID,
@@ -138,7 +145,7 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 
 		_, err := client.Client.TeamMemberships.TeamMembershipCreate(paramsTeam, client.AuthInfo)
 		if err != nil {
-			return fmt.Errorf("failed to assign user to team: %w", err)
+			return fmt.Errorf("failed to assign user to team: %w", decorateSDKError(err, teamErrBody))
 		}
 	}
 
@@ -149,7 +156,9 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 		}
 
 		// Authenticate as new user
+		authCtx, authErrBody := withErrorCapture(context.Background())
 		paramsAuth := auth.NewAuthenticateUserParams()
+		paramsAuth.SetContext(authCtx)
 		paramsAuth.Body = &models.AuthAuthenticatePayload{
 			Username: &username,
 			Password: &password,
@@ -157,12 +166,14 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 
 		respAuth, err := client.Client.Auth.AuthenticateUser(paramsAuth)
 		if err != nil {
-			return fmt.Errorf("failed to authenticate as new user: %w", err)
+			return fmt.Errorf("failed to authenticate as new user: %w", decorateSDKError(err, authErrBody))
 		}
 
 		userAuthInfo := httptransport.BearerToken(respAuth.Payload.Jwt)
 
+		keyCtx, keyErrBody := withErrorCapture(context.Background())
 		paramsKey := users.NewUserGenerateAPIKeyParams()
+		paramsKey.SetContext(keyCtx)
 		paramsKey.ID = respCreate.Payload.ID
 		paramsKey.Body = &models.UsersUserAccessTokenCreatePayload{
 			Description: &description,
@@ -171,7 +182,7 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 
 		respKey, err := client.Client.Users.UserGenerateAPIKey(paramsKey, userAuthInfo)
 		if err != nil {
-			return fmt.Errorf("failed to generate API key: %w", err)
+			return fmt.Errorf("failed to generate API key: %w", decorateSDKError(err, keyErrBody))
 		}
 
 		d.Set("api_key_raw", respKey.Payload.RawAPIKey)
@@ -184,7 +195,9 @@ func resourceUserRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := users.NewUserInspectParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	resp, err := client.Client.Users.UserInspect(params, client.AuthInfo)
@@ -194,13 +207,14 @@ func resourceUserRead(d *schema.ResourceData, meta interface{}) error {
 			d.SetId("")
 			return nil
 		}
-		return fmt.Errorf("failed to read user: %w", err)
+		return fmt.Errorf("failed to read user: %w", decorateSDKError(err, errBody))
 	}
 
 	d.Set("username", resp.Payload.Username)
 	d.Set("role", resp.Payload.Role)
 
-	// Attempt to find team_id for standard users
+	// Attempt to find team_id for standard users. Best-effort: errors here
+	// don't fail Read, so we don't decorate them.
 	if resp.Payload.Role == 2 {
 		paramsTM := team_memberships.NewTeamMembershipListParams()
 		respTM, err := client.Client.TeamMemberships.TeamMembershipList(paramsTM, client.AuthInfo)
@@ -231,10 +245,12 @@ func resourceUserImport(d *schema.ResourceData, meta interface{}) ([]*schema.Res
 
 	// It's not a numeric ID, so treat it as a username
 	username := d.Id()
+	ctx, errBody := withErrorCapture(context.Background())
 	params := users.NewUserListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.Users.UserList(params, client.AuthInfo)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list users for import: %w", err)
+		return nil, fmt.Errorf("failed to list users for import: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, u := range resp.Payload {
@@ -262,7 +278,9 @@ func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
 		// Skip password update when old password is unknown (e.g. after import).
 		// The Portainer API requires the current password to change it.
 		if oldPwString != "" && newPwString != "" {
+			pwCtx, pwErrBody := withErrorCapture(context.Background())
 			paramsPwd := users.NewUserUpdatePasswordParams()
+			paramsPwd.SetContext(pwCtx)
 			paramsPwd.ID = id
 			paramsPwd.Body = &models.UsersUserUpdatePasswordPayload{
 				Password:    &oldPwString,
@@ -271,7 +289,7 @@ func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
 
 			_, err := client.Client.Users.UserUpdatePassword(paramsPwd, client.AuthInfo)
 			if err != nil {
-				return fmt.Errorf("failed to update password: %w", err)
+				return fmt.Errorf("failed to update password: %w", decorateSDKError(err, pwErrBody))
 			}
 		}
 	}
@@ -280,7 +298,9 @@ func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
 	role := int64(d.Get("role").(int))
 	useCache := true
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := users.NewUserUpdateParams()
+	params.SetContext(ctx)
 	params.ID = id
 	params.Body = &models.UsersUserUpdatePayload{
 		Username: &username,
@@ -290,7 +310,7 @@ func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Users.UserUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update user: %w", err)
+		return fmt.Errorf("failed to update user: %w", decorateSDKError(err, errBody))
 	}
 
 	return resourceUserRead(d, meta)
@@ -300,11 +320,9 @@ func resourceUserDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	// API key deletion is implicit or we should list and delete?
-	// Original code tried to delete specific token if api_key_id was present (which wasn't in schema?)
-	// But it also had keyID check. The SDK UserDelete will delete the user and their tokens.
-
+	ctx, errBody := withErrorCapture(context.Background())
 	params := users.NewUserDeleteParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	_, err := client.Client.Users.UserDelete(params, client.AuthInfo)
@@ -313,7 +331,7 @@ func resourceUserDelete(d *schema.ResourceData, meta interface{}) error {
 		if errors.As(err, &notFoundDel) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete user: %w", err)
+		return fmt.Errorf("failed to delete user: %w", decorateSDKError(err, errBody))
 	}
 
 	return nil

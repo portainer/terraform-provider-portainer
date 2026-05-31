@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -31,10 +32,12 @@ func dataSourceUserRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	username := d.Get("username").(string)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := users.NewUserListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.Users.UserList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list users: %w", err)
+		return fmt.Errorf("failed to list users: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, u := range resp.Payload {

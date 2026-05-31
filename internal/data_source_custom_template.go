@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -36,10 +37,12 @@ func dataSourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) erro
 	client := meta.(*APIClient)
 	title := d.Get("title").(string)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := custom_templates.NewCustomTemplateListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.CustomTemplates.CustomTemplateList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list custom templates: %w", err)
+		return fmt.Errorf("failed to list custom templates: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, t := range resp.Payload {

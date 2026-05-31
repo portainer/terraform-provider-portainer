@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -57,7 +58,9 @@ func resourceRegistryCreate(d *schema.ResourceData, meta interface{}) error {
 	baseURL := d.Get("base_url").(string)
 	auth := d.Get("authentication").(bool)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := registries.NewRegistryCreateParams()
+	params.SetContext(ctx)
 	params.Body = &models.RegistriesRegistryCreatePayload{
 		Name:           &name,
 		Type:           &registryType,
@@ -94,7 +97,7 @@ func resourceRegistryCreate(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.Client.Registries.RegistryCreate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create registry: %w", err)
+		return fmt.Errorf("failed to create registry: %w", decorateSDKError(err, errBody))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
@@ -102,10 +105,12 @@ func resourceRegistryCreate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func findRegistryByName(client *APIClient, name string) (int, error) {
+	ctx, errBody := withErrorCapture(context.Background())
 	params := registries.NewRegistryListParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.Registries.RegistryList(params, client.AuthInfo)
 	if err != nil {
-		return 0, fmt.Errorf("failed to list registries: %w", err)
+		return 0, fmt.Errorf("failed to list registries: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, r := range resp.Payload {
@@ -121,7 +126,9 @@ func resourceRegistryRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := registries.NewRegistryInspectParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	resp, err := client.Client.Registries.RegistryInspect(params, client.AuthInfo)
@@ -131,7 +138,7 @@ func resourceRegistryRead(d *schema.ResourceData, meta interface{}) error {
 			d.SetId("")
 			return nil
 		}
-		return fmt.Errorf("failed to read registry: %w", err)
+		return fmt.Errorf("failed to read registry: %w", decorateSDKError(err, errBody))
 	}
 
 	d.Set("name", resp.Payload.Name)
@@ -167,7 +174,9 @@ func resourceRegistryUpdate(d *schema.ResourceData, meta interface{}) error {
 	url := d.Get("url").(string)
 	auth := d.Get("authentication").(bool)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := registries.NewRegistryUpdateParams()
+	params.SetContext(ctx)
 	params.ID = id
 	params.Body = &models.RegistriesRegistryUpdatePayload{
 		Name:           &name,
@@ -200,7 +209,7 @@ func resourceRegistryUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Registries.RegistryUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update registry: %w", err)
+		return fmt.Errorf("failed to update registry: %w", decorateSDKError(err, errBody))
 	}
 
 	return resourceRegistryRead(d, meta)
@@ -210,7 +219,9 @@ func resourceRegistryDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := registries.NewRegistryDeleteParams()
+	params.SetContext(ctx)
 	params.ID = id
 
 	_, err := client.Client.Registries.RegistryDelete(params, client.AuthInfo)
@@ -223,7 +234,7 @@ func resourceRegistryDelete(d *schema.ResourceData, meta interface{}) error {
 		if strings.Contains(err.Error(), "status 200") {
 			return nil
 		}
-		return fmt.Errorf("failed to delete registry: %w", err)
+		return fmt.Errorf("failed to delete registry: %w", decorateSDKError(err, errBody))
 	}
 	return nil
 }

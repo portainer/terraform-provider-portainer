@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -56,7 +57,9 @@ func resourceRegistryAccess() *schema.Resource {
 }
 
 func getRegistryPolicies(client *APIClient, registryID int, endpointID int) (*models.PortainerRegistryAccessPolicies, error) {
+	ctx, errBody := withErrorCapture(context.Background())
 	params := registries.NewRegistryInspectParams()
+	params.SetContext(ctx)
 	params.ID = int64(registryID)
 
 	resp, err := client.Client.Registries.RegistryInspect(params, client.AuthInfo)
@@ -65,7 +68,7 @@ func getRegistryPolicies(client *APIClient, registryID int, endpointID int) (*mo
 		if errors.As(err, &notFound) {
 			return nil, ErrRegistryNotFound
 		}
-		return nil, fmt.Errorf("failed to fetch registry: %w", err)
+		return nil, fmt.Errorf("failed to fetch registry: %w", decorateSDKError(err, errBody))
 	}
 
 	eidStr := strconv.Itoa(endpointID)
@@ -113,7 +116,9 @@ func resourceRegistryAccessCreate(d *schema.ResourceData, meta interface{}) erro
 		policies.UserAccessPolicies[uidStr] = models.PortainerAccessPolicy{RoleID: roleID}
 	}
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoints.NewEndpointRegistryAccessParams()
+	params.SetContext(ctx)
 	params.ID = int64(endpointID)
 	params.RegistryID = int64(registryID)
 	params.Body = &models.EndpointsRegistryAccessPayload{
@@ -124,7 +129,7 @@ func resourceRegistryAccessCreate(d *schema.ResourceData, meta interface{}) erro
 
 	_, err = client.Client.Endpoints.EndpointRegistryAccess(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update registry access: %w", err)
+		return fmt.Errorf("failed to update registry access: %w", decorateSDKError(err, errBody))
 	}
 
 	id := fmt.Sprintf("%d/%d/", registryID, endpointID)
@@ -202,7 +207,9 @@ func resourceRegistryAccessDelete(d *schema.ResourceData, meta interface{}) erro
 		delete(policies.UserAccessPolicies, strconv.Itoa(userID.(int)))
 	}
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoints.NewEndpointRegistryAccessParams()
+	params.SetContext(ctx)
 	params.ID = int64(endpointID)
 	params.RegistryID = int64(registryID)
 	params.Body = &models.EndpointsRegistryAccessPayload{
@@ -217,7 +224,7 @@ func resourceRegistryAccessDelete(d *schema.ResourceData, meta interface{}) erro
 		if errors.As(err, &notFound) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete registry access: %w", err)
+		return fmt.Errorf("failed to delete registry access: %w", decorateSDKError(err, errBody))
 	}
 
 	return nil

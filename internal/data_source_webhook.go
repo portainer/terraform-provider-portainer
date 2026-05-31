@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -43,10 +44,12 @@ func dataSourceWebhookRead(d *schema.ResourceData, meta interface{}) error {
 	resourceID := d.Get("resource_id").(string)
 	endpointID := int64(d.Get("endpoint_id").(int))
 
+	ctx, errBody := withErrorCapture(context.Background())
 	params := webhooks.NewGetWebhooksParams()
+	params.SetContext(ctx)
 	resp, err := client.Client.Webhooks.GetWebhooks(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list webhooks: %w", err)
+		return fmt.Errorf("failed to list webhooks: %w", decorateSDKError(err, errBody))
 	}
 
 	for _, w := range resp.Payload {

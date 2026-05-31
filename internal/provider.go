@@ -320,8 +320,13 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		}
 	}
 
+	// Wrap with error-capture transport so SDK call sites can surface the real
+	// Portainer response body via withErrorCapture/decorateSDKError instead of
+	// the generated SDK placeholder messages.
+	transportWithErrCapture := &errorCaptureTransport{next: transportWithCustomHeaders}
+
 	http_client := &http.Client{
-		Transport: transportWithCustomHeaders,
+		Transport: transportWithErrCapture,
 	}
 
 	// Prepare SDK transport
@@ -340,7 +345,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	schemes := []string{u.Scheme}
 
 	sdkTransport := httptransport.New(host, basePath, schemes)
-	sdkTransport.Transport = transportWithCustomHeaders
+	sdkTransport.Transport = transportWithErrCapture
 
 	if !strings.HasSuffix(endpoint, "/api") {
 		endpoint = strings.TrimRight(endpoint, "/") + "/api"
