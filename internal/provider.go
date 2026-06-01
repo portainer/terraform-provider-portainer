@@ -320,10 +320,14 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		}
 	}
 
+	// Rewrite repeated multipart TagIds form fields into the bracketed-string
+	// form Portainer expects (POST /endpoints). See sdk_request_rewrite.go.
+	transportWithTagRewrite := &tagIDsRewriteTransport{next: transportWithCustomHeaders}
+
 	// Wrap with error-capture transport so SDK call sites can surface the real
 	// Portainer response body via withErrorCapture/decorateSDKError instead of
 	// the generated SDK placeholder messages.
-	transportWithErrCapture := &errorCaptureTransport{next: transportWithCustomHeaders}
+	transportWithErrCapture := &errorCaptureTransport{next: transportWithTagRewrite}
 
 	http_client := &http.Client{
 		Transport: transportWithErrCapture,
