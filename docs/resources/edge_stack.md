@@ -185,3 +185,12 @@ Edge stacks can be imported using their numeric ID:
 ```shell
 terraform import portainer_edge_stack.example 42
 ```
+
+After import, run `terraform show` to verify the imported state, then `terraform plan` to confirm no changes are pending. For git-backed stacks, the plan should show **no changes** when your `.tf` config matches the live stack.
+
+### Which fields update in place vs. force recreation
+
+Portainer's `PUT /edge_stacks/{id}/git` endpoint only honors a subset of the git config:
+
+- **Updated in place:** `repository_reference_name` (and edge group / deployment-type changes via the same endpoint). The stack ID, edge agent bindings, and webhook are preserved.
+- **Forces recreation (`ForceNew`):** `repository_url`, `file_path_in_repository`, `repository_username`, `repository_password`, `relative_path`, and `stack_file_path`. The Portainer git-update endpoint does not expose source URL or in-repo file-path mutation; changing the source means a different stack from Portainer's perspective.

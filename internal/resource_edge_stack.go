@@ -95,9 +95,8 @@ func resourceEdgeStack() *schema.Resource {
 			"repository_reference_name": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				ForceNew:    true,
 				Default:     "refs/heads/main",
-				Description: "Git reference (branch or tag) to check out from the repository. Changing this value forces resource recreation.",
+				Description: "Git reference (branch or tag) to check out from the repository.",
 			},
 			"file_path_in_repository": {
 				Type:        schema.TypeString,
@@ -470,6 +469,11 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Repository-based update via /git
+	// Portainer's PUT /edge_stacks/{id}/git endpoint silently ignores any
+	// `repositoryURL` / `filePathInRepository` fields in the payload — only
+	// `refName` and the authentication block are honored. Changing the source
+	// URL or in-repo file path requires recreating the stack (enforced via
+	// ForceNew on the matching schema attributes).
 	if repoURL, ok := d.GetOk("repository_url"); ok && repoURL.(string) != "" {
 		payload := map[string]interface{}{
 			"deploymentType": deploymentType,
@@ -617,22 +621,36 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	var stack struct {
-		Name    string `json:"Name"`
-		EnvVars []struct {
+		Name                              string `json:"Name"`
+		EdgeGroups                        []int  `json:"EdgeGroups"`
+		DeploymentType                    int    `json:"DeploymentType"`
+		UseManifestNamespaces             bool   `json:"UseManifestNamespaces"`
+		Registries                        []int  `json:"Registries"`
+		PrePullImage                      bool   `json:"PrePullImage"`
+		RePullImage                       bool   `json:"RePullImage"`
+		RetryDeploy                       bool   `json:"RetryDeploy"`
+		SupportRelativePath               bool   `json:"SupportRelativePath"`
+		FilesystemPath                    string `json:"FilesystemPath"`
+		AlwaysCloneGitRepoForRelativePath bool   `json:"AlwaysCloneGitRepoForRelativePath"`
+		EnvVars                           []struct {
 			Name  string `json:"name"`
 			Value string `json:"value"`
-		} `json:"envVars"`
+		} `json:"EnvVars"`
 		GitConfig *struct {
-			Authentication struct {
-				GitCredentialID int `json:"GitCredentialID"`
+			URL            string `json:"URL"`
+			ReferenceName  string `json:"ReferenceName"`
+			ConfigFilePath string `json:"ConfigFilePath"`
+			Authentication *struct {
+				Username        string `json:"Username"`
+				GitCredentialID int    `json:"GitCredentialID"`
 			} `json:"Authentication"`
 		} `json:"GitConfig"`
 		AutoUpdate *struct {
 			Interval       string `json:"Interval"`
 			Webhook        string `json:"Webhook"`
 			ForcePullImage bool   `json:"ForcePullImage"`
+			ForceUpdate    bool   `json:"ForceUpdate"`
 		} `json:"AutoUpdate,omitempty"`
-		AlwaysCloneGitRepoForRelativePath bool `json:"AlwaysCloneGitRepoForRelativePath"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
@@ -640,22 +658,74 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	d.Set("name", stack.Name)
-	envMap := make(map[string]string)
+	d.Set("deployment_type", stack.DeploymentType)
+	d.Set("dryrun", false) // write-only creation flag, API never returns it
+	d.Set("edge_groups", stack.EdgeGroups)
+	d.Set("registries", stack.Registries)
+	d.Set("use_manifest_namespaces", stack.UseManifestNamespaces)
+	d.Set("pre_pull_image", stack.PrePullImage)
+	d.Set("retry_deploy", stack.RetryDeploy)
+	d.Set("always_clone", stack.AlwaysCloneGitRepoForRelativePath)
+
+	envMap := make(map[string]string, len(stack.EnvVars))
 	for _, env := range stack.EnvVars {
 		envMap[env.Name] = env.Value
 	}
+
 	if len(envMap) > 0 {
 		d.Set("environment", envMap)
 	}
 
+	if stack.SupportRelativePath {
+		d.Set("relative_path", stack.FilesystemPath)
+	}
+
 	if stack.GitConfig != nil {
-		d.Set("repository_git_credential_id", stack.GitConfig.Authentication.GitCredentialID)
+		d.Set("repository_url", stack.GitConfig.URL)
+		d.Set("repository_reference_name", stack.GitConfig.ReferenceName)
+		d.Set("file_path_in_repository", stack.GitConfig.ConfigFilePath)
+		if stack.GitConfig.Authentication != nil {
+			d.Set("git_repository_authentication", true)
+			d.Set("repository_username", stack.GitConfig.Authentication.Username)
+			d.Set("repository_git_credential_id", stack.GitConfig.Authentication.GitCredentialID)
+		} else {
+			d.Set("git_repository_authentication", false)
+		}
 	}
+
+	// pull_image is sent to two different places in Create/Update payloads:
+	// top-level rePullImage (always) and autoUpdate.forcePullImage (only when
+	// GitOps is configured). The API persists both. Use top-level RePullImage
+	// as the source of truth, and let AutoUpdate.ForcePullImage override when
+	// AutoUpdate exists since that's the value the user-configured GitOps block
+	// carries.
+	d.Set("pull_image", stack.RePullImage)
+
 	if stack.AutoUpdate != nil {
-		d.Set("pull_image", stack.AutoUpdate.ForcePullImage)
 		d.Set("update_interval", stack.AutoUpdate.Interval)
+		d.Set("pull_image", stack.AutoUpdate.ForcePullImage)
+		d.Set("force_update", stack.AutoUpdate.ForceUpdate)
+		if stack.AutoUpdate.Webhook != "" {
+			d.Set("stack_webhook", true)
+			d.Set("webhook_id", stack.AutoUpdate.Webhook)
+			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
+			d.Set("webhook_url", fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, stack.AutoUpdate.Webhook))
+		} else {
+			// AutoUpdate exists but webhook was cleared — drop any stale
+			// computed outputs so state reflects reality.
+			d.Set("stack_webhook", false)
+			d.Set("webhook_id", "")
+			d.Set("webhook_url", "")
+		}
+	} else {
+		// No GitOps configured — clear all AutoUpdate-derived fields,
+		// including webhook outputs that may have been set previously.
+		d.Set("force_update", false)
+		d.Set("stack_webhook", false)
+		d.Set("update_interval", "")
+		d.Set("webhook_id", "")
+		d.Set("webhook_url", "")
 	}
-	d.Set("always_clone", stack.AlwaysCloneGitRepoForRelativePath)
 
 	return nil
 }
