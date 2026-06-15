@@ -31,7 +31,7 @@ spec:
 	_ = d.Set("namespace", "default")
 	_ = d.Set("manifest", manifest)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "1:default:my-app" {
@@ -74,7 +74,7 @@ func TestKubernetesApplicationCreate_InvalidManifest(t *testing.T) {
 	// Manifest without metadata.name.
 	_ = d.Set("manifest", `{"kind":"Deployment","metadata":{}}`)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on manifest missing metadata.name, got nil")
 	}
 }
@@ -92,7 +92,7 @@ func TestKubernetesApplicationCreate_HTTPError(t *testing.T) {
 	_ = d.Set("namespace", "team")
 	_ = d.Set("manifest", `{"kind":"Deployment","metadata":{"name":"bad"}}`)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {
@@ -112,7 +112,7 @@ func TestKubernetesApplicationDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("1:default:my-app")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -131,7 +131,7 @@ func TestKubernetesApplicationRead_Noop(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("1:default:my-app")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should be a no-op, got error: %v", err)
 	}
 }

@@ -1,24 +1,26 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourcePortainerSharedGitCredential() *schema.Resource {
 	return &schema.Resource{
-		Create: resourcePortainerSharedGitCredentialCreate,
-		Read:   resourcePortainerSharedGitCredentialRead,
-		Update: resourcePortainerSharedGitCredentialUpdate,
-		Delete: resourcePortainerSharedGitCredentialDelete,
+		CreateContext: resourcePortainerSharedGitCredentialCreate,
+		ReadContext:   resourcePortainerSharedGitCredentialRead,
+		UpdateContext: resourcePortainerSharedGitCredentialUpdate,
+		DeleteContext: resourcePortainerSharedGitCredentialDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -54,7 +56,7 @@ func resourcePortainerSharedGitCredential() *schema.Resource {
 	}
 }
 
-func resourcePortainerSharedGitCredentialCreate(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerSharedGitCredentialCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	payload := map[string]interface{}{
@@ -66,13 +68,13 @@ func resourcePortainerSharedGitCredentialCreate(d *schema.ResourceData, meta int
 
 	resp, err := client.DoRequest(http.MethodPost, "/cloud/gitcredentials", nil, payload)
 	if err != nil {
-		return fmt.Errorf("failed to create shared git credential: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to create shared git credential: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create shared git credential: HTTP %d - %s", resp.StatusCode, string(body))
+		return diag.FromErr(fmt.Errorf("failed to create shared git credential: HTTP %d - %s", resp.StatusCode, string(body)))
 	}
 
 	var result struct {
@@ -81,32 +83,32 @@ func resourcePortainerSharedGitCredentialCreate(d *schema.ResourceData, meta int
 		} `json:"gitCredential"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode shared git credential response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode shared git credential response: %w", err))
 	}
 
 	d.SetId(strconv.Itoa(result.GitCredential.ID))
-	return resourcePortainerSharedGitCredentialRead(d, meta)
+	return resourcePortainerSharedGitCredentialRead(ctx, d, meta)
 }
 
-func resourcePortainerSharedGitCredentialRead(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerSharedGitCredentialRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Id()
 
 	path := fmt.Sprintf("/cloud/gitcredentials/%s", id)
 	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to read shared git credential: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to read shared git credential: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
 	}
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read shared git credential: HTTP %d - %s", resp.StatusCode, string(body))
+		return diag.FromErr(fmt.Errorf("failed to read shared git credential: HTTP %d - %s", resp.StatusCode, string(body)))
 	}
 
 	var result struct {
@@ -117,7 +119,7 @@ func resourcePortainerSharedGitCredentialRead(d *schema.ResourceData, meta inter
 		UserID            int    `json:"userId"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode shared git credential response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode shared git credential response: %w", err))
 	}
 
 	_ = d.Set("name", result.Name)
@@ -128,7 +130,7 @@ func resourcePortainerSharedGitCredentialRead(d *schema.ResourceData, meta inter
 	return nil
 }
 
-func resourcePortainerSharedGitCredentialUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerSharedGitCredentialUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Id()
 
@@ -142,32 +144,32 @@ func resourcePortainerSharedGitCredentialUpdate(d *schema.ResourceData, meta int
 	path := fmt.Sprintf("/cloud/gitcredentials/%s", id)
 	resp, err := client.DoRequest(http.MethodPut, path, nil, payload)
 	if err != nil {
-		return fmt.Errorf("failed to update shared git credential: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to update shared git credential: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update shared git credential: HTTP %d - %s", resp.StatusCode, string(body))
+		return diag.FromErr(fmt.Errorf("failed to update shared git credential: HTTP %d - %s", resp.StatusCode, string(body)))
 	}
 
-	return resourcePortainerSharedGitCredentialRead(d, meta)
+	return resourcePortainerSharedGitCredentialRead(ctx, d, meta)
 }
 
-func resourcePortainerSharedGitCredentialDelete(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerSharedGitCredentialDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Id()
 
 	path := fmt.Sprintf("/cloud/gitcredentials/%s", id)
 	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to delete shared git credential: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to delete shared git credential: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 && resp.StatusCode != 404 {
+	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete shared git credential: HTTP %d - %s", resp.StatusCode, string(body))
+		return diag.FromErr(fmt.Errorf("failed to delete shared git credential: HTTP %d - %s", resp.StatusCode, string(body)))
 	}
 
 	d.SetId("")

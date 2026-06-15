@@ -19,7 +19,7 @@ func TestDataSourceDockerSecretRead_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 8)
 	_ = d.Set("name", "db-password")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -41,7 +41,7 @@ func TestDataSourceDockerSecretRead_NotFound(t *testing.T) {
 	_ = d.Set("endpoint_id", 8)
 	_ = d.Set("name", "missing")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error for missing docker secret, got nil")
 	}
 }
@@ -60,7 +60,7 @@ func TestDataSourceDockerSecretRead_HTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 8)
 	_ = d.Set("name", "db-password")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 502, got nil")
 	}
 }

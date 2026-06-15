@@ -1,19 +1,21 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceStackAssociate() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceStackAssociateCreate,
-		Read:   resourceStackAssociateRead,
-		Delete: resourceStackAssociateDelete,
+		CreateContext: resourceStackAssociateCreate,
+		ReadContext:   resourceStackAssociateRead,
+		DeleteContext: resourceStackAssociateDelete,
 
 		Schema: map[string]*schema.Schema{
 			"stack_id": {
@@ -45,7 +47,7 @@ func resourceStackAssociate() *schema.Resource {
 	}
 }
 
-func resourceStackAssociateCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceStackAssociateCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	stackID := d.Get("stack_id").(int)
@@ -60,37 +62,37 @@ func resourceStackAssociateCreate(d *schema.ResourceData, meta interface{}) erro
 	params.Add("swarmId", swarmID)
 	params.Add("orphanedRunning", strconv.FormatBool(orphanedRunning))
 
-	req, err := http.NewRequest("PUT", apiURL+"?"+params.Encode(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, apiURL+"?"+params.Encode(), nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to associate stack %d to endpoint %d: status code %d", stackID, endpointID, resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to associate stack %d to endpoint %d: status code %d", stackID, endpointID, resp.StatusCode))
 	}
 
 	d.SetId(fmt.Sprintf("%d", stackID))
 	return nil
 }
 
-func resourceStackAssociateRead(d *schema.ResourceData, meta interface{}) error {
+func resourceStackAssociateRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil
 }
 
-func resourceStackAssociateDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceStackAssociateDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }

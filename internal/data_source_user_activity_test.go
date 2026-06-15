@@ -34,7 +34,7 @@ func TestDataSourceUserActivityRead_Activity(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("log_type", "activity")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -81,7 +81,7 @@ func TestDataSourceUserActivityRead_Auth(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("log_type", "auth")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -107,7 +107,7 @@ func TestDataSourceUserActivityRead_InvalidLogType(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("log_type", "bogus")
 
-	err := ds.Read(d, mock.Client())
+	err := rcRead(ds, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error for invalid log_type, got nil")
 	}
@@ -126,7 +126,7 @@ func TestDataSourceUserActivityRead_HTTPError(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("log_type", "activity")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }

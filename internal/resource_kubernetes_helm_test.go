@@ -22,7 +22,7 @@ func TestKubernetesHelmCreate_HappyPath(t *testing.T) {
 	_ = d.Set("repo", "https://charts.bitnami.com/bitnami")
 	_ = d.Set("values", "replicaCount: 2\n")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "3:web:my-nginx" {
@@ -69,7 +69,7 @@ func TestKubernetesHelmCreate_HTTPError(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("repo", "https://example.com/charts")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 	if d.Id() != "" {
@@ -90,7 +90,7 @@ func TestKubernetesHelmDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("3:web:my-nginx")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -113,7 +113,7 @@ func TestKubernetesHelmRead_Noop(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("3:web:my-nginx")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should be a no-op, got error: %v", err)
 	}
 }

@@ -15,23 +15,24 @@ import (
 	"github.com/hashicorp/go-cty/cty"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourcePortainerStack() *schema.Resource {
 	return &schema.Resource{
-		Create: resourcePortainerStackCreate,
-		Read:   resourcePortainerStackRead,
-		Delete: resourcePortainerStackDelete,
-		Update: resourcePortainerStackUpdate,
+		CreateContext: resourcePortainerStackCreate,
+		ReadContext:   resourcePortainerStackRead,
+		DeleteContext: resourcePortainerStackDelete,
+		UpdateContext: resourcePortainerStackUpdate,
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(30 * time.Minute),
 			Update: schema.DefaultTimeout(30 * time.Minute),
 			Delete: schema.DefaultTimeout(10 * time.Minute),
 		},
 		Importer: &schema.ResourceImporter{
-			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+			StateContext: func(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 				// "<endpoint_id>-<stack_id>-<deployment_type>"
 				// "<endpoint_id>-<stack_id>-<deployment_type>-<method>"
 
@@ -53,10 +54,16 @@ func resourcePortainerStack() *schema.Resource {
 				deploymentType := parts[2]
 
 				if len(parts) > 3 {
-					d.Set("method", parts[3])
+					if err := d.Set("method", parts[3]); err != nil {
+						return nil, err
+					}
 				}
-				d.Set("endpoint_id", endpointID)
-				d.Set("deployment_type", deploymentType)
+				if err := d.Set("endpoint_id", endpointID); err != nil {
+					return nil, err
+				}
+				if err := d.Set("deployment_type", deploymentType); err != nil {
+					return nil, err
+				}
 				d.SetId(fmt.Sprintf("%d", stackID))
 				return []*schema.ResourceData{d}, nil
 			},
@@ -318,9 +325,9 @@ func expandIntList(rawList []interface{}) []int {
 	return result
 }
 
-func findExistingStackByName(client *APIClient, name string, endpointID int) (int, error) {
+func findExistingStackByName(ctx context.Context, client *APIClient, name string, endpointID int) (int, error) {
 	url := fmt.Sprintf("%s/stacks", client.Endpoint)
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -335,7 +342,7 @@ func findExistingStackByName(client *APIClient, name string, endpointID int) (in
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return 0, fmt.Errorf("failed to list stacks: %s", string(data))
 	}
@@ -357,7 +364,7 @@ func findExistingStackByName(client *APIClient, name string, endpointID int) (in
 	return 0, nil // not found
 }
 
-func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerStackCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	deployment := d.Get("deployment_type").(string)
 	method := d.Get("method").(string)
@@ -365,18 +372,18 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 	endpointID := d.Get("endpoint_id").(int)
 
 	if deployment == "swarm" && d.Get("swarm_id") == "" {
-		swarmID, err := fetchSwarmID(client, endpointID)
+		swarmID, err := fetchSwarmID(ctx, client, endpointID)
 		if err != nil {
-			return fmt.Errorf("failed to fetch swarm_id: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to fetch swarm_id: %w", err))
 		}
 		_ = d.Set("swarm_id", swarmID)
 	}
 
-	if existingID, err := findExistingStackByName(client, name, endpointID); err != nil {
-		return fmt.Errorf("error checking for existing stack: %w", err)
+	if existingID, err := findExistingStackByName(ctx, client, name, endpointID); err != nil {
+		return diag.FromErr(fmt.Errorf("error checking for existing stack: %w", err))
 	} else if existingID != 0 {
 		d.SetId(strconv.Itoa(existingID))
-		return resourcePortainerStackUpdate(d, meta)
+		return resourcePortainerStackUpdate(ctx, d, meta)
 	}
 
 	var err error
@@ -385,57 +392,57 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 	case "standalone":
 		switch method {
 		case "string":
-			err = createStackStandaloneString(d, client)
+			err = createStackStandaloneString(ctx, d, client)
 		case "file":
 			path := d.Get("stack_file_path").(string)
 			content, readErr := os.ReadFile(path)
 			if readErr != nil {
-				return fmt.Errorf("failed to read stack file from path: %w", readErr)
+				return diag.FromErr(fmt.Errorf("failed to read stack file from path: %w", readErr))
 			}
 			_ = d.Set("stack_file_content", string(content))
-			err = createStackStandaloneString(d, client)
+			err = createStackStandaloneString(ctx, d, client)
 		case "repository":
-			err = createStackStandaloneRepo(d, client)
+			err = createStackStandaloneRepo(ctx, d, client)
 		default:
-			return fmt.Errorf("invalid method %q for standalone deployment", method)
+			return diag.FromErr(fmt.Errorf("invalid method %q for standalone deployment", method))
 		}
 
 	case "swarm":
 		switch method {
 		case "string":
-			err = createStackSwarmString(d, client)
+			err = createStackSwarmString(ctx, d, client)
 		case "file":
 			path := d.Get("stack_file_path").(string)
 			content, readErr := os.ReadFile(path)
 			if readErr != nil {
-				return fmt.Errorf("failed to read stack file from path: %w", readErr)
+				return diag.FromErr(fmt.Errorf("failed to read stack file from path: %w", readErr))
 			}
 			_ = d.Set("stack_file_content", string(content))
-			err = createStackSwarmString(d, client)
+			err = createStackSwarmString(ctx, d, client)
 		case "repository":
-			err = createStackSwarmRepo(d, client)
+			err = createStackSwarmRepo(ctx, d, client)
 		default:
-			return fmt.Errorf("invalid method %q for swarm deployment", method)
+			return diag.FromErr(fmt.Errorf("invalid method %q for swarm deployment", method))
 		}
 
 	case "kubernetes":
 		switch method {
 		case "string":
-			err = createStackK8sString(d, client)
+			err = createStackK8sString(ctx, d, client)
 		case "repository":
-			err = createStackK8sRepo(d, client)
+			err = createStackK8sRepo(ctx, d, client)
 		case "url":
-			err = createStackK8sURL(d, client)
+			err = createStackK8sURL(ctx, d, client)
 		default:
-			return fmt.Errorf("invalid method %q for kubernetes deployment", method)
+			return diag.FromErr(fmt.Errorf("invalid method %q for kubernetes deployment", method))
 		}
 
 	default:
-		return fmt.Errorf("invalid deployment_type %q", deployment)
+		return diag.FromErr(fmt.Errorf("invalid deployment_type %q", deployment))
 	}
 
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	if method != "repository" {
@@ -460,13 +467,13 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 
 		jsonBody, err := json.Marshal(payload)
 		if err != nil {
-			return fmt.Errorf("failed to marshal stack update (create) payload: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to marshal stack update (create) payload: %w", err))
 		}
 
 		url := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, d.Id(), endpointID)
-		req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
 		if err != nil {
-			return fmt.Errorf("failed to build stack update (create) request: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to build stack update (create) request: %w", err))
 		}
 
 		if client.APIKey != "" {
@@ -474,19 +481,19 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 		} else if client.JWTToken != "" {
 			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+			return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
-			return fmt.Errorf("failed to perform stack update (create) request: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to perform stack update (create) request: %w", err))
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			data, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to finalize stack creation (prune/webhook), status %d: %s", resp.StatusCode, string(data))
+			return diag.FromErr(fmt.Errorf("failed to finalize stack creation (prune/webhook), status %d: %s", resp.StatusCode, string(data)))
 		}
 
 		if webhookToken != "" {
@@ -499,39 +506,39 @@ func resourcePortainerStackCreate(d *schema.ResourceData, meta interface{}) erro
 
 	// ACCESS CONTROL UPDATE
 	if err := updateStackAccessControl(d, client, d.Id()); err != nil {
-		return fmt.Errorf("failed to update stack access control: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to update stack access control: %w", err))
 	}
 
-	return resourcePortainerStackRead(d, meta)
+	return resourcePortainerStackRead(ctx, d, meta)
 }
 
-func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerStackRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	stackID := d.Id()
 
 	url := fmt.Sprintf("%s/stacks/%s", client.Endpoint, stackID)
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to fetch stack: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to fetch stack: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
 	}
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read stack, status: %d, body: %s", resp.StatusCode, string(body))
+		return diag.FromErr(fmt.Errorf("failed to read stack, status: %d, body: %s", resp.StatusCode, string(body)))
 	}
 
 	var stack struct {
@@ -582,15 +589,25 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 		} `json:"Portainer"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
-		return fmt.Errorf("failed to decode stack response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode stack response: %w", err))
 	}
 
-	d.Set("name", stack.Name)
+	if err := d.Set("name", stack.Name); err != nil {
+		return diag.FromErr(err)
+	}
 	// Portainer API: Status 1 = active, 2 = inactive
-	d.Set("active", stack.Status == 1)
-	d.Set("swarm_id", stack.SwarmID)
-	d.Set("namespace", stack.Namespace)
-	d.Set("compose_format", stack.ComposeFmt)
+	if err := d.Set("active", stack.Status == 1); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("swarm_id", stack.SwarmID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("namespace", stack.Namespace); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("compose_format", stack.ComposeFmt); err != nil {
+		return diag.FromErr(err)
+	}
 
 	var webhookToken string
 	if stack.AutoUpdate != nil && stack.AutoUpdate.Webhook != "" {
@@ -615,45 +632,49 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 	method := d.Get("method").(string)
 	if method != "repository" {
 		fileURL := fmt.Sprintf("%s/stacks/%s/file", client.Endpoint, stackID)
-		fileReq, _ := http.NewRequest("GET", fileURL, nil)
+		fileReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
 		if client.APIKey != "" {
 			fileReq.Header.Set("X-API-Key", client.APIKey)
 		} else if client.JWTToken != "" {
 			fileReq.Header.Set("Authorization", "Bearer "+client.JWTToken)
 		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+			return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 		}
 
 		fileResp, err := client.HTTPClient.Do(fileReq)
 		if err != nil {
-			return fmt.Errorf("failed to fetch stack file: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to fetch stack file: %w", err))
 		}
 		defer fileResp.Body.Close()
 
 		if fileResp.StatusCode >= 400 {
 			body, _ := io.ReadAll(fileResp.Body)
-			return fmt.Errorf("failed to fetch stack file, status: %d, body: %s", fileResp.StatusCode, string(body))
+			return diag.FromErr(fmt.Errorf("failed to fetch stack file, status: %d, body: %s", fileResp.StatusCode, string(body)))
 		}
 
 		var fileContent struct {
 			StackFileContent string `json:"StackFileContent"`
 		}
 		if err := json.NewDecoder(fileResp.Body).Decode(&fileContent); err != nil {
-			return fmt.Errorf("failed to decode stack file content: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to decode stack file content: %w", err))
 		}
 
-		d.Set("stack_file_content", fileContent.StackFileContent)
+		if err := d.Set("stack_file_content", fileContent.StackFileContent); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	// Env → Terraform
-	var tfEnvs []map[string]interface{}
+	tfEnvs := make([]map[string]interface{}, 0, len(stack.Env))
 	for _, env := range stack.Env {
 		tfEnvs = append(tfEnvs, map[string]interface{}{
 			"name":  env.Name,
 			"value": env.Value,
 		})
 	}
-	d.Set("env", tfEnvs)
+	if err := d.Set("env", tfEnvs); err != nil {
+		return diag.FromErr(err)
+	}
 	_ = d.Set("method", method)
 	_ = d.Set("endpoint_id", stack.EndpointID)
 	_ = d.Set("support_relative_path", stack.SupportRelativePath)
@@ -690,16 +711,16 @@ func resourcePortainerStackRead(d *schema.ResourceData, meta interface{}) error 
 		// Read Access Control
 		rcID := strconv.Itoa(stack.Portainer.ResourceControl.Id)
 		if err := readStackAccessControl(d, client, rcID); err != nil {
-			return fmt.Errorf("failed to read stack access control: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to read stack access control: %w", err))
 		}
 	}
 
 	return nil
 }
 
-func fetchSwarmID(client *APIClient, endpointID int) (string, error) {
+func fetchSwarmID(ctx context.Context, client *APIClient, endpointID int) (string, error) {
 	url := fmt.Sprintf("%s/endpoints/%d/docker/swarm", client.Endpoint, endpointID)
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -714,7 +735,7 @@ func fetchSwarmID(client *APIClient, endpointID int) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("failed to fetch swarm info: %s", string(data))
 	}
@@ -728,43 +749,43 @@ func fetchSwarmID(client *APIClient, endpointID int) (string, error) {
 	return swarm.ID, nil
 }
 
-func resourcePortainerStackDelete(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerStackDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Id()
 	endpointID := d.Get("endpoint_id").(int)
 
 	timeout := d.Timeout(schema.TimeoutDelete)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	retryInterval := 15 * time.Second
 
 	for {
 		deleteURL := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, id, endpointID)
-		req, err := http.NewRequest("DELETE", deleteURL, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL, nil)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		if client.APIKey != "" {
 			req.Header.Set("X-API-Key", client.APIKey)
 		} else if client.JWTToken != "" {
 			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+			return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 		}
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 
-		if resp.StatusCode == 204 || resp.StatusCode == 404 {
+		if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound {
 			return nil
 		}
 
-		if resp.StatusCode == 200 {
+		if resp.StatusCode == http.StatusOK {
 			return nil
 		}
 
@@ -772,17 +793,17 @@ func resourcePortainerStackDelete(d *schema.ResourceData, meta interface{}) erro
 		if resp.StatusCode >= 500 {
 			select {
 			case <-ctx.Done():
-				return fmt.Errorf("timeout deleting stack %s after %s: last error: %s", id, timeout, string(body))
+				return diag.FromErr(fmt.Errorf("timeout deleting stack %s after %s: last error: %s", id, timeout, string(body)))
 			case <-time.After(retryInterval):
 				continue
 			}
 		}
 
-		return fmt.Errorf("failed to delete stack: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to delete stack: %s", string(body)))
 	}
 }
 
-func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	stackID := d.Id()
 	endpointID := d.Get("endpoint_id").(int)
@@ -798,27 +819,27 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 			action = "stop"
 		}
 		actionURL := fmt.Sprintf("%s/stacks/%s/%s?endpointId=%d", client.Endpoint, stackID, action, endpointID)
-		req, err := http.NewRequest("POST", actionURL, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, actionURL, nil)
 		if err != nil {
-			return fmt.Errorf("failed to create %s request: %w", action, err)
+			return diag.FromErr(fmt.Errorf("failed to create %s request: %w", action, err))
 		}
 		if client.APIKey != "" {
 			req.Header.Set("X-API-Key", client.APIKey)
 		} else if client.JWTToken != "" {
 			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+			return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 		}
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
-			return fmt.Errorf("failed to %s stack: %w", action, err)
+			return diag.FromErr(fmt.Errorf("failed to %s stack: %w", action, err))
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode >= 400 {
 			body, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to %s stack: %s", action, string(body))
+			return diag.FromErr(fmt.Errorf("failed to %s stack: %s", action, string(body)))
 		}
 	}
 
@@ -826,7 +847,7 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		path := d.Get("stack_file_path").(string)
 		content, err := os.ReadFile(path)
 		if err != nil {
-			return fmt.Errorf("failed to read stack file for update: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to read stack file for update: %w", err))
 		}
 		_ = d.Set("stack_file_content", string(content))
 	}
@@ -885,32 +906,32 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 
 		jsonBody, err := json.Marshal(payload)
 		if err != nil {
-			return fmt.Errorf("failed to marshal git update payload: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to marshal git update payload: %w", err))
 		}
 
 		url := fmt.Sprintf("%s/stacks/%s/git?endpointId=%d", client.Endpoint, stackID, endpointID)
-		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 		if err != nil {
-			return fmt.Errorf("failed to build git update request: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to build git update request: %w", err))
 		}
 		if client.APIKey != "" {
 			req.Header.Set("X-API-Key", client.APIKey)
 		} else if client.JWTToken != "" {
 			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+			return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
-			return fmt.Errorf("failed to perform git update request: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to perform git update request: %w", err))
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to update git stack settings: %s", string(body))
+			return diag.FromErr(fmt.Errorf("failed to update git stack settings: %s", string(body)))
 		}
 
 		redeployPayload := map[string]interface{}{
@@ -929,39 +950,39 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 
 		redeployBody, err := json.Marshal(redeployPayload)
 		if err != nil {
-			return fmt.Errorf("failed to marshal git redeploy payload: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to marshal git redeploy payload: %w", err))
 		}
 
 		redeployURL := fmt.Sprintf("%s/stacks/%s/git/redeploy?endpointId=%d", client.Endpoint, stackID, endpointID)
-		reqRedeploy, err := http.NewRequest("PUT", redeployURL, bytes.NewBuffer(redeployBody))
+		reqRedeploy, err := http.NewRequestWithContext(ctx, http.MethodPut, redeployURL, bytes.NewBuffer(redeployBody))
 		if err != nil {
-			return fmt.Errorf("failed to build git redeploy request: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to build git redeploy request: %w", err))
 		}
 		if client.APIKey != "" {
 			reqRedeploy.Header.Set("X-API-Key", client.APIKey)
 		} else if client.JWTToken != "" {
 			reqRedeploy.Header.Set("Authorization", "Bearer "+client.JWTToken)
 		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+			return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 		}
 		reqRedeploy.Header.Set("Content-Type", "application/json")
 
 		respRedeploy, err := client.HTTPClient.Do(reqRedeploy)
 		if err != nil {
-			return fmt.Errorf("failed to perform git redeploy request: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to perform git redeploy request: %w", err))
 		}
 		defer respRedeploy.Body.Close()
 
-		if respRedeploy.StatusCode != 200 {
+		if respRedeploy.StatusCode != http.StatusOK {
 			data, _ := io.ReadAll(respRedeploy.Body)
-			return fmt.Errorf("failed to redeploy git stack: %s", string(data))
+			return diag.FromErr(fmt.Errorf("failed to redeploy git stack: %s", string(data)))
 		}
 
-		return resourcePortainerStackRead(d, meta)
+		return resourcePortainerStackRead(ctx, d, meta)
 	}
 
 	if err := updateStackAccessControl(d, client, stackID); err != nil {
-		return fmt.Errorf("failed to update stack access control: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to update stack access control: %w", err))
 	}
 
 	// ---------------- NON-REPOSITORY STACKS ----------------
@@ -975,32 +996,32 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 
 		jsonBody, err := json.Marshal(payload)
 		if err != nil {
-			return fmt.Errorf("failed to marshal standard update payload: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to marshal standard update payload: %w", err))
 		}
 
 		url := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, stackID, endpointID)
-		req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
 		if err != nil {
-			return fmt.Errorf("failed to build standard update request: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to build standard update request: %w", err))
 		}
 		if client.APIKey != "" {
 			req.Header.Set("X-API-Key", client.APIKey)
 		} else if client.JWTToken != "" {
 			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+			return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
-			return fmt.Errorf("failed to perform standard update request: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to perform standard update request: %w", err))
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			data, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to update stack: %s", string(data))
+			return diag.FromErr(fmt.Errorf("failed to update stack: %s", string(data)))
 		}
 	}
 
@@ -1021,32 +1042,32 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 
 		jsonBody, err := json.Marshal(payload)
 		if err != nil {
-			return fmt.Errorf("failed to marshal webhook update payload: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to marshal webhook update payload: %w", err))
 		}
 
 		url := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, d.Id(), endpointID)
-		req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
 		if err != nil {
-			return fmt.Errorf("failed to build webhook update request: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to build webhook update request: %w", err))
 		}
 		if client.APIKey != "" {
 			req.Header.Set("X-API-Key", client.APIKey)
 		} else if client.JWTToken != "" {
 			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+			return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
-			return fmt.Errorf("failed to perform webhook update request: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to perform webhook update request: %w", err))
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			data, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to update stack webhook, status %d: %s", resp.StatusCode, string(data))
+			return diag.FromErr(fmt.Errorf("failed to update stack webhook, status %d: %s", resp.StatusCode, string(data)))
 		}
 
 		_ = d.Set("webhook_id", webhookToken)
@@ -1055,11 +1076,11 @@ func resourcePortainerStackUpdate(d *schema.ResourceData, meta interface{}) erro
 		_ = d.Set("webhook_url", webhookURL)
 	}
 
-	return resourcePortainerStackRead(d, meta)
+	return resourcePortainerStackRead(ctx, d, meta)
 }
 
 func flattenEnvList(envList []interface{}) []map[string]string {
-	var out []map[string]string
+	out := make([]map[string]string, 0, len(envList))
 	for _, v := range envList {
 		item := v.(map[string]interface{})
 		out = append(out, map[string]string{
@@ -1072,7 +1093,7 @@ func flattenEnvList(envList []interface{}) []map[string]string {
 
 // --------------------- STANDALONE ----------------------
 
-func createStackStandaloneString(d *schema.ResourceData, client *APIClient) error {
+func createStackStandaloneString(ctx context.Context, d *schema.ResourceData, client *APIClient) error {
 	payload := map[string]interface{}{
 		"name":             d.Get("name").(string),
 		"stackFileContent": d.Get("stack_file_content").(string),
@@ -1084,7 +1105,7 @@ func createStackStandaloneString(d *schema.ResourceData, client *APIClient) erro
 	url := fmt.Sprintf("%s/stacks/create/standalone/string?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -1099,7 +1120,7 @@ func createStackStandaloneString(d *schema.ResourceData, client *APIClient) erro
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to create standalone stack: %s", string(data))
 	}
@@ -1114,7 +1135,7 @@ func createStackStandaloneString(d *schema.ResourceData, client *APIClient) erro
 	return nil
 }
 
-func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error {
+func createStackStandaloneRepo(ctx context.Context, d *schema.ResourceData, client *APIClient) error {
 	repoURL := d.Get("repository_url").(string)
 	repoUser := d.Get("repository_username").(string)
 	repoPass := d.Get("repository_password").(string)
@@ -1170,10 +1191,14 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 		}
 		payload["autoUpdate"] = autoUpdate
 		if webhookID != "" {
-			d.Set("webhook_id", webhookID)
+			if err := d.Set("webhook_id", webhookID); err != nil {
+				return err
+			}
 			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
 			webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
-			d.Set("webhook_url", webhookURL)
+			if err := d.Set("webhook_url", webhookURL); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1182,7 +1207,7 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 	url := fmt.Sprintf("%s/stacks/create/standalone/repository?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -1197,7 +1222,7 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to create standalone stack from repository: %s", string(data))
 	}
@@ -1214,7 +1239,7 @@ func createStackStandaloneRepo(d *schema.ResourceData, client *APIClient) error 
 
 // --------------------- SWARM ----------------------
 
-func createStackSwarmString(d *schema.ResourceData, client *APIClient) error {
+func createStackSwarmString(ctx context.Context, d *schema.ResourceData, client *APIClient) error {
 	payload := map[string]interface{}{
 		"name":             d.Get("name").(string),
 		"stackFileContent": d.Get("stack_file_content").(string),
@@ -1227,7 +1252,7 @@ func createStackSwarmString(d *schema.ResourceData, client *APIClient) error {
 	url := fmt.Sprintf("%s/stacks/create/swarm/string?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -1242,7 +1267,7 @@ func createStackSwarmString(d *schema.ResourceData, client *APIClient) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to create swarm stack: %s", string(data))
 	}
@@ -1257,7 +1282,7 @@ func createStackSwarmString(d *schema.ResourceData, client *APIClient) error {
 	return nil
 }
 
-func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
+func createStackSwarmRepo(ctx context.Context, d *schema.ResourceData, client *APIClient) error {
 	repoURL := d.Get("repository_url").(string)
 	repoUser := d.Get("repository_username").(string)
 	repoPass := d.Get("repository_password").(string)
@@ -1314,10 +1339,14 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 		}
 		payload["autoUpdate"] = autoUpdate
 		if webhookID != "" {
-			d.Set("webhook_id", webhookID)
+			if err := d.Set("webhook_id", webhookID); err != nil {
+				return err
+			}
 			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
 			webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
-			d.Set("webhook_url", webhookURL)
+			if err := d.Set("webhook_url", webhookURL); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1326,7 +1355,7 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 	url := fmt.Sprintf("%s/stacks/create/swarm/repository?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -1341,7 +1370,7 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to create swarm stack from repository: %s", string(data))
 	}
@@ -1356,8 +1385,8 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 
 	if d.Get("prune").(bool) {
 		fmt.Println("[INFO] Performing immediate redeploy with prune=true after stack creation")
-		if err := resourcePortainerStackUpdate(d, client); err != nil {
-			fmt.Printf("[WARN] prune redeploy failed: %v\n", err)
+		if diags := resourcePortainerStackUpdate(context.Background(), d, client); diags.HasError() {
+			fmt.Printf("[WARN] prune redeploy failed: %v\n", diags)
 		} else {
 			fmt.Println("[INFO] prune redeploy succeeded")
 		}
@@ -1368,7 +1397,7 @@ func createStackSwarmRepo(d *schema.ResourceData, client *APIClient) error {
 
 // --------------------- KUBERNETES ----------------------
 
-func createStackK8sString(d *schema.ResourceData, client *APIClient) error {
+func createStackK8sString(ctx context.Context, d *schema.ResourceData, client *APIClient) error {
 	payload := map[string]interface{}{
 		"stackName":        d.Get("name").(string),
 		"stackFileContent": d.Get("stack_file_content").(string),
@@ -1381,7 +1410,7 @@ func createStackK8sString(d *schema.ResourceData, client *APIClient) error {
 	url := fmt.Sprintf("%s/stacks/create/kubernetes/string?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -1396,7 +1425,7 @@ func createStackK8sString(d *schema.ResourceData, client *APIClient) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to create kubernetes stack from string: %s", string(data))
 	}
@@ -1411,7 +1440,7 @@ func createStackK8sString(d *schema.ResourceData, client *APIClient) error {
 	return nil
 }
 
-func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
+func createStackK8sRepo(ctx context.Context, d *schema.ResourceData, client *APIClient) error {
 	repoURL := d.Get("repository_url").(string)
 	repoUser := d.Get("repository_username").(string)
 	repoPass := d.Get("repository_password").(string)
@@ -1475,10 +1504,14 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 		}
 		payload["autoUpdate"] = autoUpdate
 		if webhookID != "" {
-			d.Set("webhook_id", webhookID)
+			if err := d.Set("webhook_id", webhookID); err != nil {
+				return err
+			}
 			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
 			webhookURL := fmt.Sprintf("%s/api/stacks/webhooks/%s", baseURL, webhookID)
-			d.Set("webhook_url", webhookURL)
+			if err := d.Set("webhook_url", webhookURL); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1487,7 +1520,7 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 	url := fmt.Sprintf("%s/stacks/create/kubernetes/repository?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -1502,7 +1535,7 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to create kubernetes stack from repository: %s", string(data))
 	}
@@ -1517,7 +1550,7 @@ func createStackK8sRepo(d *schema.ResourceData, client *APIClient) error {
 	return nil
 }
 
-func createStackK8sURL(d *schema.ResourceData, client *APIClient) error {
+func createStackK8sURL(ctx context.Context, d *schema.ResourceData, client *APIClient) error {
 	payload := map[string]interface{}{
 		"stackName":     d.Get("name").(string),
 		"manifestURL":   d.Get("manifest_url").(string),
@@ -1529,7 +1562,7 @@ func createStackK8sURL(d *schema.ResourceData, client *APIClient) error {
 	url := fmt.Sprintf("%s/stacks/create/kubernetes/url?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -1544,7 +1577,7 @@ func createStackK8sURL(d *schema.ResourceData, client *APIClient) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to create kubernetes stack from URL: %s", string(data))
 	}
@@ -1653,24 +1686,34 @@ func readStackAccessControl(d *schema.ResourceData, client *APIClient, rcID stri
 	}
 
 	if rc.Public {
-		d.Set("ownership", "public")
+		if err := d.Set("ownership", "public"); err != nil {
+			return err
+		}
 	} else if rc.AdministratorsOnly {
-		d.Set("ownership", "administrators")
+		if err := d.Set("ownership", "administrators"); err != nil {
+			return err
+		}
 	} else {
-		d.Set("ownership", "restricted")
+		if err := d.Set("ownership", "restricted"); err != nil {
+			return err
+		}
 	}
 
 	users := []int{}
 	for _, u := range rc.UserAccesses {
 		users = append(users, u.UserID)
 	}
-	d.Set("authorized_users", users)
+	if err := d.Set("authorized_users", users); err != nil {
+		return err
+	}
 
 	teams := []int{}
 	for _, t := range rc.TeamAccesses {
 		teams = append(teams, t.TeamID)
 	}
-	d.Set("authorized_teams", teams)
+	if err := d.Set("authorized_teams", teams); err != nil {
+		return err
+	}
 
 	return nil
 }

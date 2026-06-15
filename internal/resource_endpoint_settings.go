@@ -2,12 +2,14 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -52,10 +54,10 @@ type EndpointSettingsPayload struct {
 
 func resourceEndpointSettings() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceEndpointSettingsUpdate,
-		Read:   resourceEndpointSettingsRead,
-		Update: resourceEndpointSettingsUpdate,
-		Delete: resourceEndpointSettingsDelete,
+		CreateContext: resourceEndpointSettingsUpdate,
+		ReadContext:   resourceEndpointSettingsRead,
+		UpdateContext: resourceEndpointSettingsUpdate,
+		DeleteContext: resourceEndpointSettingsDelete,
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id":               {Type: schema.TypeInt, Required: true, ForceNew: true, Description: "ID of the Portainer environment whose runtime settings are managed."},
@@ -122,7 +124,7 @@ func resourceEndpointSettings() *schema.Resource {
 	}
 }
 
-func resourceEndpointSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointSettingsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 
@@ -189,13 +191,13 @@ func resourceEndpointSettingsUpdate(d *schema.ResourceData, meta interface{}) er
 
 	jsonBody, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal request body: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to marshal request body: %w", err))
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/settings", client.Endpoint, endpointID)
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to create request: %w", err))
 	}
 
 	if client.APIKey != "" {
@@ -203,31 +205,31 @@ func resourceEndpointSettingsUpdate(d *schema.ResourceData, meta interface{}) er
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return diag.FromErr(fmt.Errorf("request failed: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update endpoint settings: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to update endpoint settings: %s", string(data)))
 	}
 	d.SetId(strconv.Itoa(endpointID))
 	return nil
 }
 
-func resourceEndpointSettingsRead(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointSettingsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId(strconv.Itoa(d.Get("endpoint_id").(int)))
 	return nil
 }
 
-func resourceEndpointSettingsDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointSettingsDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }

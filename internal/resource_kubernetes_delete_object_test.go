@@ -22,7 +22,7 @@ func TestKubernetesDeleteObjectCreate_HappyPath(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("names", []interface{}{"web", "api"})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestKubernetesDeleteObjectCreate_HTTPError(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("names", []interface{}{"x"})
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on 400, got nil")
 	}
@@ -81,7 +81,7 @@ func TestKubernetesDeleteObjectDelete_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("3:services:web")
 
-	if err := r.Delete(d, nil); err != nil {
+	if err := rcDelete(r, d, nil); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {

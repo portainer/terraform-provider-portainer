@@ -2,11 +2,13 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -24,10 +26,10 @@ type ChatResponse struct {
 
 func resourcePortainerChat() *schema.Resource {
 	return &schema.Resource{
-		Create: resourcePortainerChatSend,
-		Read:   schema.Noop,
-		Update: schema.Noop,
-		Delete: schema.RemoveFromState,
+		CreateContext: resourcePortainerChatSend,
+		ReadContext:   schema.NoopContext,
+		UpdateContext: schema.NoopContext,
+		DeleteContext: removeFromStateContext,
 		Schema: map[string]*schema.Schema{
 			"context": {
 				Type:        schema.TypeString,
@@ -64,7 +66,7 @@ func resourcePortainerChat() *schema.Resource {
 	}
 }
 
-func resourcePortainerChatSend(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerChatSend(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	reqBody := ChatRequest{
@@ -76,36 +78,36 @@ func resourcePortainerChatSend(d *schema.ResourceData, meta interface{}) error {
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/chat", client.Endpoint), bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/chat", client.Endpoint), bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to send chat: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to send chat: %s", string(body)))
 	}
 
 	var chatResp ChatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	_ = d.Set("response_message", chatResp.Message)

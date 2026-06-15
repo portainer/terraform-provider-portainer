@@ -34,7 +34,7 @@ func TestCloudCredentialsCreate_HappyPath(t *testing.T) {
 		"secretKey": "secret",
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "18" {
@@ -81,7 +81,7 @@ func TestCloudCredentialsRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("3")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if got := d.Get("name"); got != "prod-aws" {
@@ -114,7 +114,7 @@ func TestCloudCredentialsUpdate_HappyPath(t *testing.T) {
 		"accessKey": "AKIA-NEW",
 	})
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 	if mock.FindRequest("PUT", "/cloud/credentials/3") == nil {
@@ -132,7 +132,7 @@ func TestCloudCredentialsDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("5")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/cloud/credentials/5") == nil {
@@ -158,7 +158,7 @@ func TestCloudCredentialsCreate_HTTPError(t *testing.T) {
 	_ = d.Set("name", "x")
 	_ = d.Set("credentials", map[string]interface{}{"k": "v"})
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,16 +9,17 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceDockerPlugin() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceDockerPluginCreate,
-		Delete: resourceDockerPluginDelete,
-		Read:   resourceDockerPluginRead,
+		CreateContext: resourceDockerPluginCreate,
+		DeleteContext: resourceDockerPluginDelete,
+		ReadContext:   resourceDockerPluginRead,
 		Importer: &schema.ResourceImporter{
-			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+			StateContext: func(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 				parts := strings.SplitN(d.Id(), ":", 2)
 				if len(parts) != 2 {
 					return nil, fmt.Errorf("unexpected ID format (%s), expected endpoint_id:plugin_name", d.Id())
@@ -96,7 +98,7 @@ func resourceDockerPlugin() *schema.Resource {
 	}
 }
 
-func resourceDockerPluginCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerPluginCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	remote := d.Get("remote").(string)
@@ -131,13 +133,13 @@ func resourceDockerPluginCreate(d *schema.ResourceData, meta interface{}) error 
 	path := fmt.Sprintf("/endpoints/%d/docker/plugins/pull%s", endpointID, query)
 	resp, err := client.DoRequest(http.MethodPost, path, headers, settings)
 	if err != nil {
-		return fmt.Errorf("failed to install plugin: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to install plugin: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to install plugin: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to install plugin: %s", string(body)))
 	}
 
 	// enable if desired
@@ -146,13 +148,13 @@ func resourceDockerPluginCreate(d *schema.ResourceData, meta interface{}) error 
 		enablePath := fmt.Sprintf("/endpoints/%d/docker/plugins/%s/enable", endpointID, name)
 		enableResp, err := client.DoRequest(http.MethodPost, enablePath, nil, nil)
 		if err != nil {
-			return fmt.Errorf("plugin installed but failed to enable: %w", err)
+			return diag.FromErr(fmt.Errorf("plugin installed but failed to enable: %w", err))
 		}
 		defer enableResp.Body.Close()
 
 		if enableResp.StatusCode >= 300 {
 			body, _ := io.ReadAll(enableResp.Body)
-			return fmt.Errorf("plugin installed but failed to enable: %s", string(body))
+			return diag.FromErr(fmt.Errorf("plugin installed but failed to enable: %s", string(body)))
 		}
 	}
 
@@ -160,7 +162,7 @@ func resourceDockerPluginCreate(d *schema.ResourceData, meta interface{}) error 
 	return nil
 }
 
-func resourceDockerPluginDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerPluginDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	plugin := d.Id()
@@ -168,47 +170,47 @@ func resourceDockerPluginDelete(d *schema.ResourceData, meta interface{}) error 
 	path := fmt.Sprintf("/endpoints/%d/docker/plugins/%s", endpointID, plugin)
 	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to delete plugin: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to delete plugin: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 && resp.StatusCode != 204 && resp.StatusCode != 404 {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete plugin: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to delete plugin: %s", string(body)))
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func resourceDockerPluginRead(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerPluginRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	pluginName := d.Id()
 	url := fmt.Sprintf("%s/endpoints/%d/docker/plugins/%s/json", client.Endpoint, endpointID, pluginName)
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to fetch docker plugin: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to fetch docker plugin: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
 	}
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read docker plugin, status: %d, body: %s", resp.StatusCode, string(body))
+		return diag.FromErr(fmt.Errorf("failed to read docker plugin, status: %d, body: %s", resp.StatusCode, string(body)))
 	}
 
 	var plugin struct {
@@ -228,14 +230,18 @@ func resourceDockerPluginRead(d *schema.ResourceData, meta interface{}) error {
 		} `json:"Config"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&plugin); err != nil {
-		return fmt.Errorf("failed to decode plugin data: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode plugin data: %w", err))
 	}
 
-	d.Set("enable", plugin.Enabled)
-	d.Set("remote", plugin.Config.Remote)
+	if err := d.Set("enable", plugin.Enabled); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("remote", plugin.Config.Remote); err != nil {
+		return diag.FromErr(err)
+	}
 
 	// settings reconstruction (limited to env-based ones)
-	var settings []map[string]interface{}
+	settings := make([]map[string]interface{}, 0, len(plugin.Config.Settings.Env))
 	for _, env := range plugin.Config.Settings.Env {
 		// env is of form "KEY=value"
 		var name, value string
@@ -253,7 +259,9 @@ func resourceDockerPluginRead(d *schema.ResourceData, meta interface{}) error {
 		})
 	}
 	if len(settings) > 0 {
-		d.Set("settings", settings)
+		if err := d.Set("settings", settings); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil

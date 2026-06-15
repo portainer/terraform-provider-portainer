@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,18 +13,19 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourceEdgeJob() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceEdgeJobCreate,
-		Read:   resourceEdgeJobRead,
-		Update: resourceEdgeJobUpdate,
-		Delete: resourceEdgeJobDelete,
+		CreateContext: resourceEdgeJobCreate,
+		ReadContext:   resourceEdgeJobRead,
+		UpdateContext: resourceEdgeJobUpdate,
+		DeleteContext: resourceEdgeJobDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -72,8 +74,8 @@ func resourceEdgeJob() *schema.Resource {
 	}
 }
 
-func findExistingEdgeJobByName(client *APIClient, name string) (int, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_jobs", client.Endpoint), nil)
+func findExistingEdgeJobByName(ctx context.Context, client *APIClient, name string) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_jobs", client.Endpoint), nil)
 	if err != nil {
 		return 0, err
 	}
@@ -91,7 +93,7 @@ func findExistingEdgeJobByName(client *APIClient, name string) (int, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return 0, fmt.Errorf("failed to list edge jobs: %s", string(data))
 	}
@@ -112,16 +114,16 @@ func findExistingEdgeJobByName(client *APIClient, name string) (int, error) {
 	return 0, nil
 }
 
-func resourceEdgeJobCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceEdgeJobCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	name := d.Get("name").(string)
 
-	if existingID, err := findExistingEdgeJobByName(client, name); err != nil {
-		return fmt.Errorf("failed to check for existing edge job: %w", err)
+	if existingID, err := findExistingEdgeJobByName(ctx, client, name); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to check for existing edge job: %w", err))
 	} else if existingID != 0 {
 		d.SetId(strconv.Itoa(existingID))
-		return resourceEdgeJobUpdate(d, meta)
+		return resourceEdgeJobUpdate(ctx, d, meta)
 	}
 
 	cron := d.Get("cron_expression").(string)
@@ -143,35 +145,35 @@ func resourceEdgeJobCreate(d *schema.ResourceData, meta interface{}) error {
 		}
 
 		jsonBody, _ := json.Marshal(body)
-		req, err := http.NewRequest("POST", fmt.Sprintf("%s/edge_jobs/create/string", client.Endpoint), bytes.NewBuffer(jsonBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/edge_jobs/create/string", client.Endpoint), bytes.NewBuffer(jsonBody))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		if client.APIKey != "" {
 			req.Header.Set("X-API-Key", client.APIKey)
 		} else if client.JWTToken != "" {
 			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+			return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			data, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to create edge job: %s", string(data))
+			return diag.FromErr(fmt.Errorf("failed to create edge job: %s", string(data)))
 		}
 
 		var result struct {
 			Id int `json:"Id"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		d.SetId(strconv.Itoa(result.Id))
 		return nil
@@ -179,7 +181,7 @@ func resourceEdgeJobCreate(d *schema.ResourceData, meta interface{}) error {
 		path := v.(string)
 		file, err := os.Open(path)
 		if err != nil {
-			return fmt.Errorf("cannot open file: %w", err)
+			return diag.FromErr(fmt.Errorf("cannot open file: %w", err))
 		}
 		defer file.Close()
 
@@ -193,80 +195,80 @@ func resourceEdgeJobCreate(d *schema.ResourceData, meta interface{}) error {
 
 		part, err := writer.CreateFormFile("file", filepath.Base(path))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		_, err = io.Copy(part, file)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		writer.Close()
 
-		req, err := http.NewRequest("POST", fmt.Sprintf("%s/edge_jobs/create/file", client.Endpoint), &body)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/edge_jobs/create/file", client.Endpoint), &body)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		if client.APIKey != "" {
 			req.Header.Set("X-API-Key", client.APIKey)
 		} else if client.JWTToken != "" {
 			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+			return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 		}
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			data, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to create edge job from file: %s", string(data))
+			return diag.FromErr(fmt.Errorf("failed to create edge job from file: %s", string(data)))
 		}
 
 		var result struct {
 			Id int `json:"Id"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		d.SetId(strconv.Itoa(result.Id))
 		return nil
 	}
 
-	return errors.New("either file_content or file_path must be provided")
+	return diag.FromErr(errors.New("either file_content or file_path must be provided"))
 }
 
-func resourceEdgeJobRead(d *schema.ResourceData, meta interface{}) error {
+func resourceEdgeJobRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	jobID := d.Id()
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_jobs/%s", client.Endpoint, jobID), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_jobs/%s", client.Endpoint, jobID), nil)
 	if err != nil {
-		return fmt.Errorf("failed to build edge job read request: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to build edge job read request: %w", err))
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send edge job read request: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to send edge job read request: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read edge job: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to read edge job: %s", string(data)))
 	}
 
 	var result struct {
@@ -279,13 +281,21 @@ func resourceEdgeJobRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode edge job response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode edge job response: %w", err))
 	}
 
-	d.Set("name", result.Name)
-	d.Set("cron_expression", result.CronExpression)
-	d.Set("edge_groups", result.EdgeGroups)
-	d.Set("recurring", result.Recurring)
+	if err := d.Set("name", result.Name); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("cron_expression", result.CronExpression); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("edge_groups", result.EdgeGroups); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("recurring", result.Recurring); err != nil {
+		return diag.FromErr(err)
+	}
 
 	endpointIDs := make([]int, 0, len(result.Endpoints))
 	for k := range result.Endpoints {
@@ -293,12 +303,14 @@ func resourceEdgeJobRead(d *schema.ResourceData, meta interface{}) error {
 			endpointIDs = append(endpointIDs, id)
 		}
 	}
-	d.Set("endpoints", endpointIDs)
+	if err := d.Set("endpoints", endpointIDs); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
 
-func resourceEdgeJobUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceEdgeJobUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	payload := map[string]interface{}{
@@ -315,53 +327,53 @@ func resourceEdgeJobUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	jsonBody, _ := json.Marshal(payload)
 
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/edge_jobs/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/edge_jobs/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update edge job: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to update edge job: %s", string(data)))
 	}
 
 	return nil
 }
 
-func resourceEdgeJobDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceEdgeJobDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/edge_jobs/%s", client.Endpoint, d.Id()), nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("%s/edge_jobs/%s", client.Endpoint, d.Id()), nil)
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 204 {
-		return fmt.Errorf("failed to delete edge job")
+	if resp.StatusCode != http.StatusNoContent {
+		return diag.FromErr(fmt.Errorf("failed to delete edge job"))
 	}
 
 	return nil

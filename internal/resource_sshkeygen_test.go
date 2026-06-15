@@ -22,7 +22,7 @@ func TestSSHKeygenCreate_HappyPath(t *testing.T) {
 	r := resourcePortainerSSHKeygen()
 	d := r.TestResourceData()
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -58,7 +58,7 @@ func TestSSHKeygenCreate_HTTPError(t *testing.T) {
 	r := resourcePortainerSSHKeygen()
 	d := r.TestResourceData()
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on 500, got nil")
 	}

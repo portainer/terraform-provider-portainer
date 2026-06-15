@@ -2,21 +2,23 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceKubernetesSecrets() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceKubernetesSecretsCreate,
-		Read:   resourceKubernetesSecretsRead,
-		Update: resourceKubernetesSecretsUpdate,
-		Delete: resourceKubernetesSecretsDelete,
+		CreateContext: resourceKubernetesSecretsCreate,
+		ReadContext:   resourceKubernetesSecretsRead,
+		UpdateContext: resourceKubernetesSecretsUpdate,
+		DeleteContext: resourceKubernetesSecretsDelete,
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
@@ -39,7 +41,7 @@ func resourceKubernetesSecrets() *schema.Resource {
 	}
 }
 
-func resourceKubernetesSecretsCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesSecretsCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	endpointID := d.Get("endpoint_id").(int)
@@ -48,28 +50,28 @@ func resourceKubernetesSecretsCreate(d *schema.ResourceData, meta interface{}) e
 
 	parsed, err := parseManifest(manifest)
 	if err != nil {
-		return fmt.Errorf("manifest must be valid JSON or YAML: %w", err)
+		return diag.FromErr(fmt.Errorf("manifest must be valid JSON or YAML: %w", err))
 	}
 
 	metadata, ok := parsed["metadata"].(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("missing metadata in manifest")
+		return diag.FromErr(fmt.Errorf("missing metadata in manifest"))
 	}
 	name, ok := metadata["name"].(string)
 	if !ok || name == "" {
-		return fmt.Errorf("missing metadata.name in manifest")
+		return diag.FromErr(fmt.Errorf("missing metadata.name in manifest"))
 	}
 
 	jsonBody, err := json.Marshal(parsed)
 	if err != nil {
-		return fmt.Errorf("failed to encode manifest body: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to encode manifest body: %w", err))
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/api/v1/namespaces/%s/secrets", client.Endpoint, endpointID, namespace)
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if client.APIKey != "" {
@@ -77,66 +79,66 @@ func resourceKubernetesSecretsCreate(d *schema.ResourceData, meta interface{}) e
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to create Kubernetes Job: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to create Kubernetes Job: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create Job (%d): %s", resp.StatusCode, string(body))
+		return diag.FromErr(fmt.Errorf("failed to create Job (%d): %s", resp.StatusCode, string(body)))
 	}
 
 	d.SetId(fmt.Sprintf("%d:%s:%s", endpointID, namespace, name))
 	return nil
 }
 
-func resourceKubernetesSecretsDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesSecretsDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	endpointID, namespace, name := parseSecretsID(d.Id())
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/api/v1/namespaces/%s/secrets/%s", client.Endpoint, endpointID, namespace, name)
 
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to delete Job: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to delete Job: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 && resp.StatusCode != 204 && resp.StatusCode != 404 {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete Job: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to delete Job: %s", string(body)))
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func resourceKubernetesSecretsUpdate(d *schema.ResourceData, meta interface{}) error {
-	if err := resourceKubernetesSecretsDelete(d, meta); err != nil {
-		return fmt.Errorf("delete during update failed: %w", err)
+func resourceKubernetesSecretsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	if diags := resourceKubernetesSecretsDelete(ctx, d, meta); diags.HasError() {
+		return diags
 	}
-	return resourceKubernetesSecretsCreate(d, meta)
+	return resourceKubernetesSecretsCreate(ctx, d, meta)
 }
 
-func resourceKubernetesSecretsRead(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesSecretsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil
 }
 

@@ -35,7 +35,7 @@ func TestUserCreate_HappyPath(t *testing.T) {
 	_ = d.Set("password", "secret-pw")
 	_ = d.Set("role", 2)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "42" {
@@ -91,7 +91,7 @@ func TestUserCreate_LDAP(t *testing.T) {
 	_ = d.Set("ldap_user", true)
 	_ = d.Set("role", 1)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "55" {
@@ -123,7 +123,7 @@ func TestUserCreate_LDAPWithPasswordRejected(t *testing.T) {
 	_ = d.Set("ldap_user", true)
 	_ = d.Set("password", "should-not-be-set")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when password is set for LDAP user, got nil")
 	}
@@ -138,7 +138,7 @@ func TestUserCreate_NoPasswordRejected(t *testing.T) {
 	_ = d.Set("ldap_user", false)
 	// password intentionally empty
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when password is empty for non-LDAP user, got nil")
 	}
@@ -162,7 +162,7 @@ func TestUserRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("7")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if got := d.Get("username"); got != "charlie" {
@@ -189,7 +189,7 @@ func TestUserRead_404_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("404")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404, got: %v", err)
 	}
 	if d.Id() != "" {
@@ -207,7 +207,7 @@ func TestUserDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("13")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/users/13") == nil {
@@ -238,7 +238,7 @@ func TestUserUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("username", "renamed")
 	_ = d.Set("role", 2)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 	put := mock.FindRequest("PUT", "/users/6")

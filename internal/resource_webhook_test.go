@@ -24,7 +24,7 @@ func TestWebhookCreate_HappyPath(t *testing.T) {
 	_ = d.Set("resource_id", "abc123")
 	_ = d.Set("webhook_type", 1)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "77" {
@@ -68,7 +68,7 @@ func TestWebhookCreate_HTTPError(t *testing.T) {
 	_ = d.Set("resource_id", "abc")
 	_ = d.Set("webhook_type", 1)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }
@@ -81,7 +81,7 @@ func TestWebhookRead_NoOp(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("42")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if len(mock.Requests()) != 0 {
@@ -104,7 +104,7 @@ func TestWebhookUpdate_NoChangeIsNoOp(t *testing.T) {
 	_ = d.Set("webhook_type", 1)
 	_ = d.Set("registry_id", 4)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 	if mock.FindRequest("PUT", "/webhooks/9") != nil {
@@ -124,7 +124,7 @@ func TestWebhookDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("12")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/webhooks/12") == nil {

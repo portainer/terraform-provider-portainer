@@ -2,21 +2,23 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceKubernetesNamespaceIngress() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceKubernetesNamespaceIngressCreate,
-		Read:   resourceKubernetesNamespaceIngressRead,
-		Update: resourceKubernetesNamespaceIngressUpdate,
-		Delete: resourceKubernetesNamespaceIngressDelete,
+		CreateContext: resourceKubernetesNamespaceIngressCreate,
+		ReadContext:   resourceKubernetesNamespaceIngressRead,
+		UpdateContext: resourceKubernetesNamespaceIngressUpdate,
+		DeleteContext: resourceKubernetesNamespaceIngressDelete,
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
@@ -115,17 +117,17 @@ func resourceKubernetesNamespaceIngress() *schema.Resource {
 	}
 }
 
-func resourceKubernetesNamespaceIngressCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesNamespaceIngressCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
-	return createOrUpdateIngress(d, client, "POST")
+	return diag.FromErr(createOrUpdateIngress(ctx, d, client, "POST"))
 }
 
-func resourceKubernetesNamespaceIngressUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesNamespaceIngressUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
-	return createOrUpdateIngress(d, client, "PUT")
+	return diag.FromErr(createOrUpdateIngress(ctx, d, client, "PUT"))
 }
 
-func createOrUpdateIngress(d *schema.ResourceData, client *APIClient, method string) error {
+func createOrUpdateIngress(ctx context.Context, d *schema.ResourceData, client *APIClient, method string) error {
 	envID := d.Get("environment_id").(int)
 	namespace := d.Get("namespace").(string)
 	name := d.Get("name").(string)
@@ -184,7 +186,7 @@ func createOrUpdateIngress(d *schema.ResourceData, client *APIClient, method str
 
 	jsonBody, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s/ingresses", client.Endpoint, envID, namespace)
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
@@ -212,10 +214,10 @@ func createOrUpdateIngress(d *schema.ResourceData, client *APIClient, method str
 	return nil
 }
 
-func resourceKubernetesNamespaceIngressRead(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesNamespaceIngressRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil // No-op
 }
 
-func resourceKubernetesNamespaceIngressDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesNamespaceIngressDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil // Not yet supported by API
 }

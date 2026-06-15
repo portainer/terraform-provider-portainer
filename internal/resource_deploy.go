@@ -10,15 +10,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceDeploy() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceDeployCreate,
-		Read:   resourceDeployRead,   // stateless
-		Delete: resourceDeployDelete, // stateless
-		Update: nil,
+		CreateContext: resourceDeployCreate,
+		ReadContext:   resourceDeployRead,   // stateless
+		DeleteContext: resourceDeployDelete, // stateless
+		UpdateContext: nil,
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(15 * time.Minute),
 		},
@@ -84,9 +85,9 @@ func resourceDeploy() *schema.Resource {
 	}
 }
 
-func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	timeout := d.Timeout(schema.TimeoutCreate)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	client := meta.(*APIClient)
@@ -101,7 +102,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 	servicesListRaw := d.Get("services_list").(string)
 	trimmed := strings.TrimSpace(servicesListRaw)
 	if trimmed == "" {
-		return fmt.Errorf("services_list must not be empty")
+		return diag.FromErr(fmt.Errorf("services_list must not be empty"))
 	}
 	shortServices := splitAndTrimCSV(trimmed)
 	fullServices := make([]string, 0, len(shortServices))
@@ -115,7 +116,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 	swURL := fmt.Sprintf("%s/endpoints/%d/docker/swarm", client.Endpoint, endpointID)
 	swBody, swCode, err := apiGETWithCodeCtx(ctx, swURL, client.APIKey, client)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	isSwarm := swCode == 200 && bytes.Contains(swBody, []byte(`"ID"`))
 
@@ -132,7 +133,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 		stacksURL := fmt.Sprintf("%s/stacks?filters=%s", client.Endpoint, url.QueryEscape(fmt.Sprintf(`{"SwarmID": "%s"}`, swarm.ID)))
 		stacksBytes, err := apiGETCtx(ctx, stacksURL, client.APIKey, client)
 		if err != nil {
-			return fmt.Errorf("failed to query stacks: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to query stacks: %w", err))
 		}
 		var stacks []struct {
 			ID   int    `json:"Id"`
@@ -143,7 +144,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			} `json:"Env"`
 		}
 		if err := json.Unmarshal(stacksBytes, &stacks); err != nil {
-			return fmt.Errorf("failed to parse stacks response: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to parse stacks response: %w", err))
 		}
 		var stackSpec *struct {
 			ID   int    `json:"Id"`
@@ -160,7 +161,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			}
 		}
 		if stackSpec == nil {
-			return fmt.Errorf("stack %q not found in swarm", stackName)
+			return diag.FromErr(fmt.Errorf("stack %q not found in swarm", stackName))
 		}
 
 		// Query services by stack prefix
@@ -168,11 +169,11 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			client.Endpoint, endpointID, url.QueryEscape(fmt.Sprintf(`{"name":{"%s":true}}`, stackName)))
 		servicesBytes, err := apiGETCtx(ctx, servicesURL, client.APIKey, client)
 		if err != nil {
-			return fmt.Errorf("failed to query services: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to query services: %w", err))
 		}
 		var services []map[string]interface{}
 		if err := json.Unmarshal(servicesBytes, &services); err != nil {
-			return fmt.Errorf("failed to parse services response: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to parse services response: %w", err))
 		}
 
 		updatedAny := false
@@ -219,10 +220,10 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			postBody, _ := json.Marshal(spec)
 			respBytes, code, err := apiPOSTWithCodeCtx(ctx, postURL, client.APIKey, client, postBody)
 			if err != nil {
-				return fmt.Errorf("service %s update request failed: %w", svcName, err)
+				return diag.FromErr(fmt.Errorf("service %s update request failed: %w", svcName, err))
 			}
 			if code != 200 {
-				return fmt.Errorf("service %s update failed: status %d, body: %s", svcName, code, string(respBytes))
+				return diag.FromErr(fmt.Errorf("service %s update failed: status %d, body: %s", svcName, code, string(respBytes)))
 			}
 			updatedAny = true
 			out.WriteString(fmt.Sprintf("Service %q updated to %q\n", svcName, newImage))
@@ -266,13 +267,13 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			sfURL := fmt.Sprintf("%s/stacks/%d/file", client.Endpoint, stackSpec.ID)
 			sfBytes, code, err := apiGETWithCodeCtx(ctx, sfURL, client.APIKey, client)
 			if err != nil || code != 200 {
-				return fmt.Errorf("failed to read stack file (%d): %w", code, err)
+				return diag.FromErr(fmt.Errorf("failed to read stack file (%d): %w", code, err))
 			}
 			var sf struct {
 				StackFileContent string `json:"StackFileContent"`
 			}
 			if err := json.Unmarshal(sfBytes, &sf); err != nil {
-				return fmt.Errorf("failed to parse stack file content: %w", err)
+				return diag.FromErr(fmt.Errorf("failed to parse stack file content: %w", err))
 			}
 
 			// ensure/update stack_env_var in Env
@@ -312,7 +313,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			updURL := fmt.Sprintf("%s/stacks/%d?endpointId=%d", client.Endpoint, stackSpec.ID, endpointID)
 			resp, code, err := apiPUTWithCodeCtx(ctx, updURL, client.APIKey, client, body)
 			if err != nil || code != 200 {
-				return fmt.Errorf("failed to update stack %s (status %d): %s", stackEnvVar, code, string(resp))
+				return diag.FromErr(fmt.Errorf("failed to update stack %s (status %d): %s", stackEnvVar, code, string(resp)))
 			}
 			out.WriteString(fmt.Sprintf("Stack %q %s updated to %q\n", stackName, stackEnvVar, revision))
 		}
@@ -325,7 +326,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 		stacksURL := fmt.Sprintf("%s/stacks", client.Endpoint)
 		stacksBytes, err := apiGETCtx(ctx, stacksURL, client.APIKey, client)
 		if err != nil {
-			return fmt.Errorf("failed to list stacks: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to list stacks: %w", err))
 		}
 		var stacks []struct {
 			ID   int    `json:"Id"`
@@ -336,7 +337,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			} `json:"Env"`
 		}
 		if err := json.Unmarshal(stacksBytes, &stacks); err != nil {
-			return fmt.Errorf("failed to parse stacks: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to parse stacks: %w", err))
 		}
 		var stackSpec *struct {
 			ID   int    `json:"Id"`
@@ -353,7 +354,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			}
 		}
 		if stackSpec == nil {
-			return fmt.Errorf("stack %q not found", stackName)
+			return diag.FromErr(fmt.Errorf("stack %q not found", stackName))
 		}
 
 		// standalone: pouze update stack_env_var v env + pullImage=true, prune=true
@@ -361,13 +362,13 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			sfURL := fmt.Sprintf("%s/stacks/%d/file", client.Endpoint, stackSpec.ID)
 			sfBytes, code, err := apiGETWithCodeCtx(ctx, sfURL, client.APIKey, client)
 			if err != nil || code != 200 {
-				return fmt.Errorf("failed to read stack file (%d): %w", code, err)
+				return diag.FromErr(fmt.Errorf("failed to read stack file (%d): %w", code, err))
 			}
 			var sf struct {
 				StackFileContent string `json:"StackFileContent"`
 			}
 			if err := json.Unmarshal(sfBytes, &sf); err != nil {
-				return fmt.Errorf("failed to parse stack file content: %w", err)
+				return diag.FromErr(fmt.Errorf("failed to parse stack file content: %w", err))
 			}
 
 			// ensure/update stack_env_var in Env
@@ -407,7 +408,7 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 			updURL := fmt.Sprintf("%s/stacks/%d?endpointId=%d", client.Endpoint, stackSpec.ID, endpointID)
 			resp, code, err := apiPUTWithCodeCtx(ctx, updURL, client.APIKey, client, body)
 			if err != nil || code != 200 {
-				return fmt.Errorf("failed to update stack (standalone) (status %d): %s", code, string(resp))
+				return diag.FromErr(fmt.Errorf("failed to update stack (standalone) (status %d): %s", code, string(resp)))
 			}
 			out.WriteString(fmt.Sprintf("Standalone stack %q updated with %s=%q\n", stackName, stackEnvVar, revision))
 		} else {
@@ -416,17 +417,19 @@ func resourceDeployCreate(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Save output and ID
-	d.Set("output", out.String())
+	if err := d.Set("output", out.String()); err != nil {
+		return diag.FromErr(err)
+	}
 	d.SetId(fmt.Sprintf("deploy-%d", time.Now().Unix()))
 	return nil
 }
 
-func resourceDeployRead(d *schema.ResourceData, meta interface{}) error {
+func resourceDeployRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// Stateless resource: nothing to read/refresh that makes sense.
 	return nil
 }
 
-func resourceDeployDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceDeployDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// Stateless effect; nothing to delete.
 	d.SetId("")
 	return nil

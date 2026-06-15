@@ -22,7 +22,7 @@ func TestDataSourceDockerVolumeRead_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("name", "data")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -52,7 +52,7 @@ func TestDataSourceDockerVolumeRead_NotFound(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("name", "missing")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error for missing docker volume, got nil")
 	}
 }
@@ -71,7 +71,7 @@ func TestDataSourceDockerVolumeRead_HTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("name", "data")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }

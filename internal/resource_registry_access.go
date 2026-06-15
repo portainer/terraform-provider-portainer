@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/portainer/client-api-go/v2/pkg/client/endpoints"
 	"github.com/portainer/client-api-go/v2/pkg/client/registries"
@@ -16,10 +17,10 @@ var ErrRegistryNotFound = errors.New("registry not found")
 
 func resourceRegistryAccess() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceRegistryAccessCreate,
-		Read:   resourceRegistryAccessRead,
-		Update: resourceRegistryAccessUpdate,
-		Delete: resourceRegistryAccessDelete,
+		CreateContext: resourceRegistryAccessCreate,
+		ReadContext:   resourceRegistryAccessRead,
+		UpdateContext: resourceRegistryAccessUpdate,
+		DeleteContext: resourceRegistryAccessDelete,
 
 		Schema: map[string]*schema.Schema{
 			"registry_id": {
@@ -90,7 +91,7 @@ func getRegistryPolicies(client *APIClient, registryID int, endpointID int) (*mo
 	return &policies, nil
 }
 
-func resourceRegistryAccessCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceRegistryAccessCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	registryID := d.Get("registry_id").(int)
 	endpointID := d.Get("endpoint_id").(int)
@@ -99,12 +100,12 @@ func resourceRegistryAccessCreate(d *schema.ResourceData, meta interface{}) erro
 	roleID := int64(d.Get("role_id").(int))
 
 	if !hasTeam && !hasUser {
-		return fmt.Errorf("either team_id or user_id must be provided")
+		return diag.FromErr(fmt.Errorf("either team_id or user_id must be provided"))
 	}
 
 	policies, err := getRegistryPolicies(client, registryID, endpointID)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	if hasTeam {
@@ -116,7 +117,7 @@ func resourceRegistryAccessCreate(d *schema.ResourceData, meta interface{}) erro
 		policies.UserAccessPolicies[uidStr] = models.PortainerAccessPolicy{RoleID: roleID}
 	}
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := endpoints.NewEndpointRegistryAccessParams()
 	params.SetContext(ctx)
 	params.ID = int64(endpointID)
@@ -129,7 +130,7 @@ func resourceRegistryAccessCreate(d *schema.ResourceData, meta interface{}) erro
 
 	_, err = client.Client.Endpoints.EndpointRegistryAccess(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update registry access: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to update registry access: %w", decorateSDKError(err, errBody)))
 	}
 
 	id := fmt.Sprintf("%d/%d/", registryID, endpointID)
@@ -140,10 +141,10 @@ func resourceRegistryAccessCreate(d *schema.ResourceData, meta interface{}) erro
 	}
 	d.SetId(id)
 
-	return resourceRegistryAccessRead(d, meta)
+	return resourceRegistryAccessRead(ctx, d, meta)
 }
 
-func resourceRegistryAccessRead(d *schema.ResourceData, meta interface{}) error {
+func resourceRegistryAccessRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	registryID := d.Get("registry_id").(int)
 	endpointID := d.Get("endpoint_id").(int)
@@ -156,20 +157,24 @@ func resourceRegistryAccessRead(d *schema.ResourceData, meta interface{}) error 
 			d.SetId("")
 			return nil
 		}
-		return err
+		return diag.FromErr(err)
 	}
 
 	found := false
 	if hasTeam {
 		tidStr := strconv.Itoa(teamID.(int))
 		if p, ok := policies.TeamAccessPolicies[tidStr]; ok {
-			d.Set("role_id", int(p.RoleID))
+			if err := d.Set("role_id", int(p.RoleID)); err != nil {
+				return diag.FromErr(err)
+			}
 			found = true
 		}
 	} else if hasUser {
 		uidStr := strconv.Itoa(userID.(int))
 		if p, ok := policies.UserAccessPolicies[uidStr]; ok {
-			d.Set("role_id", int(p.RoleID))
+			if err := d.Set("role_id", int(p.RoleID)); err != nil {
+				return diag.FromErr(err)
+			}
 			found = true
 		}
 	}
@@ -181,11 +186,11 @@ func resourceRegistryAccessRead(d *schema.ResourceData, meta interface{}) error 
 	return nil
 }
 
-func resourceRegistryAccessUpdate(d *schema.ResourceData, meta interface{}) error {
-	return resourceRegistryAccessCreate(d, meta)
+func resourceRegistryAccessUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	return resourceRegistryAccessCreate(ctx, d, meta)
 }
 
-func resourceRegistryAccessDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceRegistryAccessDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	registryID := d.Get("registry_id").(int)
 	endpointID := d.Get("endpoint_id").(int)
@@ -197,7 +202,7 @@ func resourceRegistryAccessDelete(d *schema.ResourceData, meta interface{}) erro
 		if errors.Is(err, ErrRegistryNotFound) {
 			return nil
 		}
-		return err
+		return diag.FromErr(err)
 	}
 
 	if hasTeam {
@@ -207,7 +212,7 @@ func resourceRegistryAccessDelete(d *schema.ResourceData, meta interface{}) erro
 		delete(policies.UserAccessPolicies, strconv.Itoa(userID.(int)))
 	}
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := endpoints.NewEndpointRegistryAccessParams()
 	params.SetContext(ctx)
 	params.ID = int64(endpointID)
@@ -224,7 +229,7 @@ func resourceRegistryAccessDelete(d *schema.ResourceData, meta interface{}) erro
 		if errors.As(err, &notFound) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete registry access: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to delete registry access: %w", decorateSDKError(err, errBody)))
 	}
 
 	return nil

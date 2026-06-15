@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/portainer/client-api-go/v2/pkg/client/endpoint_groups"
@@ -14,13 +15,13 @@ import (
 
 func resourceEndpointGroup() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceEndpointGroupCreate,
-		Read:   resourceEndpointGroupRead,
-		Delete: resourceEndpointGroupDelete,
-		Update: resourceEndpointGroupUpdate,
+		CreateContext: resourceEndpointGroupCreate,
+		ReadContext:   resourceEndpointGroupRead,
+		DeleteContext: resourceEndpointGroupDelete,
+		UpdateContext: resourceEndpointGroupUpdate,
 
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -45,18 +46,18 @@ func resourceEndpointGroup() *schema.Resource {
 	}
 }
 
-func resourceEndpointGroupCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointGroupCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
 	if existingID, err := findExistingEndpointGroupByName(client, name); err != nil {
-		return fmt.Errorf("failed to check for existing endpoint group: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to check for existing endpoint group: %w", err))
 	} else if existingID != 0 {
 		d.SetId(strconv.Itoa(existingID))
-		return resourceEndpointGroupUpdate(d, meta)
+		return resourceEndpointGroupUpdate(ctx, d, meta)
 	}
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := endpoint_groups.NewPostEndpointGroupsParams()
 	params.SetContext(ctx)
 	params.Body = &models.EndpointgroupsEndpointGroupCreatePayload{
@@ -78,11 +79,11 @@ func resourceEndpointGroupCreate(d *schema.ResourceData, meta interface{}) error
 
 	resp, err := client.Client.EndpointGroups.PostEndpointGroups(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create endpoint group: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to create endpoint group: %w", decorateSDKError(err, errBody)))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
-	return resourceEndpointGroupRead(d, meta)
+	return resourceEndpointGroupRead(ctx, d, meta)
 }
 
 func findExistingEndpointGroupByName(client *APIClient, name string) (int, error) {
@@ -102,11 +103,11 @@ func findExistingEndpointGroupByName(client *APIClient, name string) (int, error
 	return 0, nil
 }
 
-func resourceEndpointGroupRead(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointGroupRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := endpoint_groups.NewGetEndpointGroupsIDParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -118,27 +119,33 @@ func resourceEndpointGroupRead(d *schema.ResourceData, meta interface{}) error {
 			d.SetId("")
 			return nil
 		}
-		return fmt.Errorf("failed to read endpoint group: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to read endpoint group: %w", decorateSDKError(err, errBody)))
 	}
 
-	d.Set("name", resp.Payload.Name)
-	d.Set("description", resp.Payload.Description)
+	if err := d.Set("name", resp.Payload.Name); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("description", resp.Payload.Description); err != nil {
+		return diag.FromErr(err)
+	}
 
 	tagIDs := []int{}
 	for _, tid := range resp.Payload.TagIds {
 		tagIDs = append(tagIDs, int(tid))
 	}
-	d.Set("tag_ids", tagIDs)
+	if err := d.Set("tag_ids", tagIDs); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
 
-func resourceEndpointGroupUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointGroupUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 	name := d.Get("name").(string)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := endpoint_groups.NewEndpointGroupUpdateParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -160,17 +167,17 @@ func resourceEndpointGroupUpdate(d *schema.ResourceData, meta interface{}) error
 
 	_, err := client.Client.EndpointGroups.EndpointGroupUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update endpoint group: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to update endpoint group: %w", decorateSDKError(err, errBody)))
 	}
 
-	return resourceEndpointGroupRead(d, meta)
+	return resourceEndpointGroupRead(ctx, d, meta)
 }
 
-func resourceEndpointGroupDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointGroupDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := endpoint_groups.NewEndpointGroupDeleteParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -181,7 +188,7 @@ func resourceEndpointGroupDelete(d *schema.ResourceData, meta interface{}) error
 		if errors.As(err, &notFound) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete endpoint group: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to delete endpoint group: %w", decorateSDKError(err, errBody)))
 	}
 
 	return nil

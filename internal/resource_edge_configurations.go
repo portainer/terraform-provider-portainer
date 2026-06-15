@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
@@ -53,13 +54,13 @@ type EdgeConfiguration struct {
 
 func resourcePortainerEdgeConfigurations() *schema.Resource {
 	return &schema.Resource{
-		Create:        resourcePortainerEdgeConfigurationsCreate,
-		Read:          resourcePortainerEdgeConfigurationsRead,
-		Update:        resourcePortainerEdgeConfigurationsUpdate,
-		Delete:        resourcePortainerEdgeConfigurationsDelete,
+		CreateContext: resourcePortainerEdgeConfigurationsCreate,
+		ReadContext:   resourcePortainerEdgeConfigurationsRead,
+		UpdateContext: resourcePortainerEdgeConfigurationsUpdate,
+		DeleteContext: resourcePortainerEdgeConfigurationsDelete,
 		CustomizeDiff: customizeDiffEdgeConfigurationFileHash,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"name":           {Type: schema.TypeString, Required: true, ForceNew: true, ValidateFunc: validation.NoZeroValues, Description: "Name of the Portainer edge configuration."},
@@ -119,8 +120,8 @@ func customizeDiffEdgeConfigurationFileHash(_ context.Context, d *schema.Resourc
 }
 
 // listEdgeConfigurations fetches all edge configurations from Portainer.
-func listEdgeConfigurations(client *APIClient) ([]EdgeConfiguration, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_configurations", client.Endpoint), nil)
+func listEdgeConfigurations(ctx context.Context, client *APIClient) ([]EdgeConfiguration, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_configurations", client.Endpoint), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build list request: %w", err)
 	}
@@ -153,7 +154,7 @@ func listEdgeConfigurations(client *APIClient) ([]EdgeConfiguration, error) {
 // case where a same-name config already exists.
 func resolveCreatedEdgeConfigID(configs []EdgeConfiguration, name string, preExistingIDs map[int]struct{}) (EdgeConfiguration, error) {
 	var newMatches []EdgeConfiguration
-	var allMatches []EdgeConfiguration
+	allMatches := make([]EdgeConfiguration, 0, len(configs))
 	for _, c := range configs {
 		if c.Name != name {
 			continue
@@ -183,7 +184,7 @@ func resolveCreatedEdgeConfigID(configs []EdgeConfiguration, name string, preExi
 	}
 }
 
-func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerEdgeConfigurationsCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
@@ -191,9 +192,9 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 	// Portainer's POST does not return the new ID, so after the create we
 	// diff the listing against this snapshot to identify the new entry. This
 	// is what prevents adopting a pre-existing same-name config (issue #115).
-	preCreate, err := listEdgeConfigurations(client)
+	preCreate, err := listEdgeConfigurations(ctx, client)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	preExistingIDs := make(map[int]struct{})
 	for _, c := range preCreate {
@@ -205,7 +206,7 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 	filePath := d.Get("file_path").(string)
 	file, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to open file: %w", err))
 	}
 	defer file.Close()
 
@@ -222,24 +223,24 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal edgeConfiguration payload: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to marshal edgeConfiguration payload: %w", err))
 	}
 	_ = writer.WriteField("edgeConfiguration", string(payloadBytes))
 
 	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
-		return fmt.Errorf("failed to create form file: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to create form file: %w", err))
 	}
 	_, err = io.Copy(part, file)
 	if err != nil {
-		return fmt.Errorf("failed to copy file content: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to copy file content: %w", err))
 	}
 
 	writer.Close()
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/edge_configurations", client.Endpoint), body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/edge_configurations", client.Endpoint), body)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	if client.APIKey != "" {
@@ -250,34 +251,34 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create edge configuration: %s", string(respBody))
+		return diag.FromErr(fmt.Errorf("failed to create edge configuration: %s", string(respBody)))
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read create response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to read create response: %w", err))
 	}
 
 	var created EdgeConfiguration
 	if len(respBody) > 0 {
 		if err := json.Unmarshal(respBody, &created); err != nil {
-			return fmt.Errorf("failed to decode create response: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to decode create response: %w", err))
 		}
 	}
 
 	if created.ID == 0 {
-		postCreate, err := listEdgeConfigurations(client)
+		postCreate, err := listEdgeConfigurations(ctx, client)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		created, err = resolveCreatedEdgeConfigID(postCreate, name, preExistingIDs)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 	}
 
@@ -288,13 +289,15 @@ func resourcePortainerEdgeConfigurationsCreate(d *schema.ResourceData, meta inte
 	// already computed this for the diff, but we re-compute here so the value
 	// stored matches the bytes we actually uploaded.
 	if hash, err := sha256File(filePath); err == nil {
-		d.Set("file_sha256", hash)
+		if err := d.Set("file_sha256", hash); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil
 }
 
-func resourcePortainerEdgeConfigurationsUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerEdgeConfigurationsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	rawID := filepath.Base(d.Id())
@@ -302,7 +305,7 @@ func resourcePortainerEdgeConfigurationsUpdate(d *schema.ResourceData, meta inte
 	filePath := d.Get("file_path").(string)
 	file, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to open file: %w", err))
 	}
 	defer file.Close()
 
@@ -320,24 +323,24 @@ func resourcePortainerEdgeConfigurationsUpdate(d *schema.ResourceData, meta inte
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal edgeConfiguration payload: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to marshal edgeConfiguration payload: %w", err))
 	}
 	_ = writer.WriteField("edgeConfiguration", string(payloadBytes))
 
 	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
-		return fmt.Errorf("failed to create form file: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to create form file: %w", err))
 	}
 	_, err = io.Copy(part, file)
 	if err != nil {
-		return fmt.Errorf("failed to copy file content: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to copy file content: %w", err))
 	}
 
 	writer.Close()
 
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/edge_configurations/%s", client.Endpoint, rawID), body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/edge_configurations/%s", client.Endpoint, rawID), body)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	if client.APIKey != "" {
@@ -348,31 +351,33 @@ func resourcePortainerEdgeConfigurationsUpdate(d *schema.ResourceData, meta inte
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update edge configuration: %s", string(respBody))
+		return diag.FromErr(fmt.Errorf("failed to update edge configuration: %s", string(respBody)))
 	}
 
 	if hash, err := sha256File(filePath); err == nil {
-		d.Set("file_sha256", hash)
+		if err := d.Set("file_sha256", hash); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
-	return resourcePortainerEdgeConfigurationsRead(d, meta)
+	return resourcePortainerEdgeConfigurationsRead(ctx, d, meta)
 }
 
-func resourcePortainerEdgeConfigurationsRead(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerEdgeConfigurationsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	id := d.Id()
 	rawID := filepath.Base(id)
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_configurations/%s", client.Endpoint, rawID), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_configurations/%s", client.Endpoint, rawID), nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	if client.APIKey != "" {
@@ -380,50 +385,62 @@ func resourcePortainerEdgeConfigurationsRead(d *schema.ResourceData, meta interf
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	res, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode == 404 {
+	if res.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
 	}
 	if res.StatusCode >= 400 {
 		body, _ := io.ReadAll(res.Body)
-		return fmt.Errorf("failed to read edge configuration: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to read edge configuration: %s", string(body)))
 	}
 
 	var config EdgeConfiguration
 	if err := json.NewDecoder(res.Body).Decode(&config); err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	d.Set("name", config.Name)
-	d.Set("category", config.Category)
-	d.Set("base_dir", config.BaseDir)
-	d.Set("edge_group_ids", config.EdgeGroupIDs)
+	if err := d.Set("name", config.Name); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("category", config.Category); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("base_dir", config.BaseDir); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("edge_group_ids", config.EdgeGroupIDs); err != nil {
+		return diag.FromErr(err)
+	}
 	if typeName, ok := edgeConfigTypeToString[config.Type]; ok {
-		d.Set("type", typeName)
+		if err := d.Set("type", typeName); err != nil {
+			return diag.FromErr(err)
+		}
 	} else {
-		d.Set("type", strconv.Itoa(config.Type))
+		if err := d.Set("type", strconv.Itoa(config.Type)); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil
 }
 
-func resourcePortainerEdgeConfigurationsDelete(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerEdgeConfigurationsDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	rawID := filepath.Base(d.Id())
 	url := fmt.Sprintf("%s/edge_configurations/%s", client.Endpoint, rawID)
 
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	if client.APIKey != "" {
@@ -431,23 +448,23 @@ func resourcePortainerEdgeConfigurationsDelete(d *schema.ResourceData, meta inte
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
 	}
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete edge configuration: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to delete edge configuration: %s", string(body)))
 	}
 
 	d.SetId("")

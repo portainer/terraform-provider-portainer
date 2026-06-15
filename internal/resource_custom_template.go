@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/portainer/client-api-go/v2/pkg/client/custom_templates"
@@ -15,13 +16,13 @@ import (
 
 func resourceCustomTemplate() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceCustomTemplateCreate,
-		Read:   resourceCustomTemplateRead,
-		Delete: resourceCustomTemplateDelete,
-		Update: resourceCustomTemplateUpdate,
+		CreateContext: resourceCustomTemplateCreate,
+		ReadContext:   resourceCustomTemplateRead,
+		DeleteContext: resourceCustomTemplateDelete,
+		UpdateContext: resourceCustomTemplateUpdate,
 
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -71,37 +72,39 @@ func findExistingCustomTemplateByTitle(client *APIClient, title string) (int, er
 	return 0, nil
 }
 
-func resourceCustomTemplateCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceCustomTemplateCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	title := d.Get("title").(string)
 
 	existingID, err := findExistingCustomTemplateByTitle(client, title)
 	if err != nil {
-		return fmt.Errorf("failed to check for existing custom template: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to check for existing custom template: %w", err))
 	} else if existingID != 0 {
 		d.SetId(strconv.Itoa(existingID))
-		return resourceCustomTemplateUpdate(d, meta)
+		return resourceCustomTemplateUpdate(ctx, d, meta)
 	}
 
 	if v, ok := d.GetOk("file_content"); ok {
-		return createTemplateFromString(d, client, v.(string))
+		return diag.FromErr(createTemplateFromString(d, client, v.(string)))
 	}
 
 	if v, ok := d.GetOk("file_path"); ok {
 		content, err := os.ReadFile(v.(string))
 		if err != nil {
-			return fmt.Errorf("failed to read template file from path: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to read template file from path: %w", err))
 		}
-		d.Set("file_content", string(content))
-		return createTemplateFromString(d, client, string(content))
+		if err := d.Set("file_content", string(content)); err != nil {
+			return diag.FromErr(err)
+		}
+		return diag.FromErr(createTemplateFromString(d, client, string(content)))
 	}
 
 	if v, ok := d.GetOk("repository_url"); ok {
-		return createTemplateFromRepository(d, client, v.(string))
+		return diag.FromErr(createTemplateFromRepository(d, client, v.(string)))
 	}
 
-	return fmt.Errorf("one of file_content, file_path, or repository_url must be provided")
+	return diag.FromErr(fmt.Errorf("one of file_content, file_path, or repository_url must be provided"))
 }
 
 func createTemplateFromString(d *schema.ResourceData, client *APIClient, content string) error {
@@ -201,11 +204,11 @@ func getVariablesSDK(d *schema.ResourceData) []*models.PortainerCustomTemplateVa
 	return nil
 }
 
-func resourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) error {
+func resourceCustomTemplateRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := custom_templates.NewCustomTemplateInspectParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -217,22 +220,38 @@ func resourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) error 
 			d.SetId("")
 			return nil
 		}
-		return fmt.Errorf("failed to read custom template: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to read custom template: %w", decorateSDKError(err, errBody)))
 	}
 
-	d.Set("title", resp.Payload.Title)
-	d.Set("description", resp.Payload.Description)
-	d.Set("note", resp.Payload.Note)
-	d.Set("platform", int(resp.Payload.Platform))
-	d.Set("type", int(resp.Payload.Type))
-	d.Set("logo", resp.Payload.Logo)
-	d.Set("edge_template", resp.Payload.EdgeTemplate)
-	d.Set("is_compose_format", resp.Payload.IsComposeFormat)
+	if err := d.Set("title", resp.Payload.Title); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("description", resp.Payload.Description); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("note", resp.Payload.Note); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("platform", int(resp.Payload.Platform)); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("type", int(resp.Payload.Type)); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("logo", resp.Payload.Logo); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("edge_template", resp.Payload.EdgeTemplate); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("is_compose_format", resp.Payload.IsComposeFormat); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
 
-func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceCustomTemplateUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
@@ -244,10 +263,12 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 	if v, ok := d.GetOk("file_path"); ok {
 		content, err := os.ReadFile(v.(string))
 		if err != nil {
-			return fmt.Errorf("failed to read template file from path: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to read template file from path: %w", err))
 		}
 		fileContent = string(content)
-		d.Set("file_content", fileContent)
+		if err := d.Set("file_content", fileContent); err != nil {
+			return diag.FromErr(err)
+		}
 	} else if v, ok := d.GetOk("file_content"); ok {
 		fileContent = v.(string)
 	}
@@ -255,7 +276,7 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 	composePath := d.Get("compose_file_path").(string)
 	useAuth := d.Get("repository_authentication").(bool)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := custom_templates.NewCustomTemplateUpdateParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -289,28 +310,28 @@ func resourceCustomTemplateUpdate(d *schema.ResourceData, meta interface{}) erro
 
 	_, err := client.Client.CustomTemplates.CustomTemplateUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update custom template: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to update custom template: %w", decorateSDKError(err, errBody)))
 	}
 
 	if isGitBased {
-		gitCtx, gitErrBody := withErrorCapture(context.Background())
+		gitCtx, gitErrBody := withErrorCapture(ctx)
 		gitParams := custom_templates.NewCustomTemplateGitFetchParams()
 		gitParams.SetContext(gitCtx)
 		gitParams.ID = id
 		_, err := client.Client.CustomTemplates.CustomTemplateGitFetch(gitParams, client.AuthInfo)
 		if err != nil {
-			return fmt.Errorf("failed to git_fetch template: %w", decorateSDKError(err, gitErrBody))
+			return diag.FromErr(fmt.Errorf("failed to git_fetch template: %w", decorateSDKError(err, gitErrBody)))
 		}
 	}
 
-	return resourceCustomTemplateRead(d, meta)
+	return resourceCustomTemplateRead(ctx, d, meta)
 }
 
-func resourceCustomTemplateDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceCustomTemplateDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := custom_templates.NewCustomTemplateDeleteParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -321,7 +342,7 @@ func resourceCustomTemplateDelete(d *schema.ResourceData, meta interface{}) erro
 		if errors.As(err, &notFound) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete custom template: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to delete custom template: %w", decorateSDKError(err, errBody)))
 	}
 	return nil
 }

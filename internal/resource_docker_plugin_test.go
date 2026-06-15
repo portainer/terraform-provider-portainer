@@ -23,7 +23,7 @@ func TestDockerPluginCreate_HappyPath(t *testing.T) {
 	// schema Default isn't materialized in TestResourceData; set explicitly.
 	_ = d.Set("registry_auth", "e30=")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -58,7 +58,7 @@ func TestDockerPluginCreate_EnableTrue(t *testing.T) {
 	_ = d.Set("name", "sshfs")
 	_ = d.Set("enable", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestDockerPluginRead_HappyPath(t *testing.T) {
 	d.SetId("sshfs")
 	_ = d.Set("endpoint_id", 1)
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -113,7 +113,7 @@ func TestDockerPluginRead_404ClearsID(t *testing.T) {
 	d.SetId("missing")
 	_ = d.Set("endpoint_id", 1)
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404, got error: %v", err)
 	}
 	if d.Id() != "" {
@@ -132,7 +132,7 @@ func TestDockerPluginDelete_HappyPath(t *testing.T) {
 	d.SetId("sshfs")
 	_ = d.Set("endpoint_id", 1)
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -159,7 +159,7 @@ func TestDockerPluginCreate_HTTPError(t *testing.T) {
 	_ = d.Set("remote", "bad/plugin:tag")
 	_ = d.Set("name", "bad")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}

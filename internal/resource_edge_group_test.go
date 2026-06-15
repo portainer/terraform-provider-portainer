@@ -34,7 +34,7 @@ func TestEdgeGroupCreate_HappyPath(t *testing.T) {
 	_ = d.Set("dynamic", true)
 	_ = d.Set("partial_match", false)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -91,7 +91,7 @@ func TestEdgeGroupCreate_ExistingNameTriggersUpdate(t *testing.T) {
 	_ = d.Set("name", "production")
 	_ = d.Set("dynamic", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -123,7 +123,7 @@ func TestEdgeGroupRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("7")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -148,7 +148,7 @@ func TestEdgeGroupRead_404_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("99")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404, got error: %v", err)
 	}
 	if d.Id() != "" {
@@ -166,7 +166,7 @@ func TestEdgeGroupDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("5")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -189,7 +189,7 @@ func TestEdgeGroupCreate_HTTPError(t *testing.T) {
 	_ = d.Set("name", "bad")
 	_ = d.Set("dynamic", true)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}

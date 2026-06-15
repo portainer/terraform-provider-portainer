@@ -25,7 +25,7 @@ func TestBackupS3Create_HappyPath(t *testing.T) {
 	_ = d.Set("password", "topsecret")
 	_ = d.Set("cron_rule", "0 3 * * *")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -78,7 +78,7 @@ func TestBackupS3Create_OmitsOptionalCronRule(t *testing.T) {
 	_ = d.Set("s3_compatible_host", "https://s3.amazonaws.com")
 	_ = d.Set("password", "topsecret")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -114,7 +114,7 @@ func TestBackupS3Create_HTTPError(t *testing.T) {
 	_ = d.Set("s3_compatible_host", "h")
 	_ = d.Set("password", "p")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on 500, got nil")
 	}
@@ -142,7 +142,7 @@ func TestBackupS3Read_PopulatesState(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer_backup_s3")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -167,7 +167,7 @@ func TestBackupS3Delete_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer_backup_s3")
 
-	if err := r.Delete(d, nil); err != nil {
+	if err := rcDelete(r, d, nil); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {

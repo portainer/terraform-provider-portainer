@@ -26,7 +26,7 @@ func TestOpenAMTCreate_HappyPath(t *testing.T) {
 	_ = d.Set("mpsserver", "https://mps.example.org")
 	_ = d.Set("mpsuser", "admin")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -68,7 +68,7 @@ func TestOpenAMTCreate_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("enabled", true)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
@@ -85,7 +85,7 @@ func TestOpenAMTRead_Noop(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("openamt-enabled")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should be a no-op, got error: %v", err)
 	}
 }
@@ -99,7 +99,7 @@ func TestOpenAMTDelete_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("openamt-enabled")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/portainer/client-api-go/v2/pkg/client/ssl"
 	"github.com/portainer/client-api-go/v2/pkg/models"
@@ -11,12 +12,12 @@ import (
 
 func resourceSSLSettings() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceSSLSettingsUpdate,
-		Read:   resourceSSLSettingsRead,
-		Update: resourceSSLSettingsUpdate,
-		Delete: resourceSSLSettingsDelete,
+		CreateContext: resourceSSLSettingsUpdate,
+		ReadContext:   resourceSSLSettingsRead,
+		UpdateContext: resourceSSLSettingsUpdate,
+		DeleteContext: resourceSSLSettingsDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"cert": {
@@ -46,10 +47,10 @@ func resourceSSLSettings() *schema.Resource {
 	}
 }
 
-func resourceSSLSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceSSLSettingsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := ssl.NewSSLUpdateParams()
 	params.SetContext(ctx)
 	params.Body = &models.SslSslUpdatePayload{
@@ -61,30 +62,32 @@ func resourceSSLSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Ssl.SSLUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update SSL settings: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to update SSL settings: %w", decorateSDKError(err, errBody)))
 	}
 
 	d.SetId("portainer-ssl")
 	return nil
 }
 
-func resourceSSLSettingsRead(d *schema.ResourceData, meta interface{}) error {
+func resourceSSLSettingsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := ssl.NewSSLInspectParams()
 	params.SetContext(ctx)
 	resp, err := client.Client.Ssl.SSLInspect(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to read SSL settings: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to read SSL settings: %w", decorateSDKError(err, errBody)))
 	}
 
-	d.Set("http_enabled", resp.Payload.HTTPEnabled)
+	if err := d.Set("http_enabled", resp.Payload.HTTPEnabled); err != nil {
+		return diag.FromErr(err)
+	}
 	d.SetId("portainer-ssl")
 	return nil
 }
 
-func resourceSSLSettingsDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceSSLSettingsDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }

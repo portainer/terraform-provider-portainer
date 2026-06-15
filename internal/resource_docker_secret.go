@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,17 +9,18 @@ import (
 
 	"github.com/hashicorp/go-cty/cty"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceDockerSecret() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceDockerSecretCreate,
-		Read:   resourceDockerSecretRead,
-		Delete: resourceDockerSecretDelete,
-		Update: resourceDockerSecretUpdate,
+		CreateContext: resourceDockerSecretCreate,
+		ReadContext:   resourceDockerSecretRead,
+		DeleteContext: resourceDockerSecretDelete,
+		UpdateContext: resourceDockerSecretUpdate,
 		Importer: &schema.ResourceImporter{
-			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+			StateContext: func(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 				importID := d.Id()
 				var endpointID int
 				var secretID string
@@ -95,7 +97,7 @@ func findExistingDockerSecretByName(client *APIClient, endpointID int, name stri
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("failed to list secrets: %s", string(body))
 	}
@@ -172,16 +174,16 @@ type dockerSecretCreateResponse struct {
 	} `json:"Portainer"`
 }
 
-func resourceDockerSecretCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerSecretCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	name := d.Get("name").(string)
 
 	if existingID, err := findExistingDockerSecretByName(client, endpointID, name); err != nil {
-		return fmt.Errorf("failed to check for existing secret: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to check for existing secret: %w", err))
 	} else if existingID != "" {
 		d.SetId(existingID)
-		return resourceDockerSecretUpdate(d, meta)
+		return resourceDockerSecretUpdate(ctx, d, meta)
 	}
 
 	payload := buildSecretPayload(d)
@@ -191,17 +193,17 @@ func resourceDockerSecretCreate(d *schema.ResourceData, meta interface{}) error 
 	path := fmt.Sprintf("/endpoints/%d/docker/secrets/create", endpointID)
 	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
 	if err != nil {
-		return fmt.Errorf("failed to create docker secret: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to create docker secret: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create docker secret: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to create docker secret: %s", string(body)))
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	// ID secretu
@@ -215,7 +217,7 @@ func resourceDockerSecretCreate(d *schema.ResourceData, meta interface{}) error 
 	return nil
 }
 
-func resourceDockerSecretRead(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerSecretRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	id := d.Id()
@@ -223,16 +225,16 @@ func resourceDockerSecretRead(d *schema.ResourceData, meta interface{}) error {
 	path := fmt.Sprintf("/endpoints/%d/docker/secrets/%s", endpointID, id)
 	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to read docker secret: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to read docker secret: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
-	} else if resp.StatusCode != 200 {
+	} else if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read docker secret: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to read docker secret: %s", string(body)))
 	}
 
 	var result struct {
@@ -254,13 +256,47 @@ func resourceDockerSecretRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	d.Set("name", result.Spec.Name)
-	d.Set("labels", result.Spec.Labels)
-	d.Set("driver", result.Spec.Driver)
-	d.Set("templating", result.Spec.Templating)
+	if err := d.Set("name", result.Spec.Name); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("labels", result.Spec.Labels); err != nil {
+		return diag.FromErr(err)
+	}
+	// Create stores both driver and templating as {Name, Options: <full map>}.
+	// Flatten Options (which carries the original config map) back into the
+	// flat TypeMap[string]string schema so the value round-trips cleanly.
+	driverMap := make(map[string]interface{})
+	if dr := result.Spec.Driver; dr != nil {
+		if name, ok := dr["Name"]; ok {
+			driverMap["name"] = name
+		}
+		if opts, ok := dr["Options"].(map[string]interface{}); ok {
+			for k, v := range opts {
+				driverMap[k] = v
+			}
+		}
+	}
+	if err := d.Set("driver", driverMap); err != nil {
+		return diag.FromErr(err)
+	}
+
+	templ := make(map[string]interface{})
+	if t := result.Spec.Templating; t != nil {
+		if name, ok := t["Name"]; ok {
+			templ["name"] = name
+		}
+		if opts, ok := t["Options"].(map[string]interface{}); ok {
+			for k, v := range opts {
+				templ[k] = v
+			}
+		}
+	}
+	if err := d.Set("templating", templ); err != nil {
+		return diag.FromErr(err)
+	}
 
 	if result.Portainer.ResourceControl.Id != 0 {
 		_ = d.Set("resource_control_id", result.Portainer.ResourceControl.Id)
@@ -269,7 +305,7 @@ func resourceDockerSecretRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceDockerSecretUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerSecretUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	id := d.Id()
@@ -279,19 +315,19 @@ func resourceDockerSecretUpdate(d *schema.ResourceData, meta interface{}) error 
 	path := fmt.Sprintf("/endpoints/%d/docker/secrets/%s/update", endpointID, id)
 	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
 	if err != nil {
-		return fmt.Errorf("failed to update docker secret: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to update docker secret: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update docker secret: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to update docker secret: %s", string(body)))
 	}
 
-	return resourceDockerSecretRead(d, meta)
+	return resourceDockerSecretRead(ctx, d, meta)
 }
 
-func resourceDockerSecretDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerSecretDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	id := d.Id()
@@ -299,13 +335,13 @@ func resourceDockerSecretDelete(d *schema.ResourceData, meta interface{}) error 
 	path := fmt.Sprintf("/endpoints/%d/docker/secrets/%s", endpointID, id)
 	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to delete docker secret: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to delete docker secret: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 404 {
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete docker secret: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to delete docker secret: %s", string(body)))
 	}
 
 	d.SetId("")

@@ -47,7 +47,7 @@ func TestAlertingSettingsCreate_HappyPath(t *testing.T) {
 	_ = d.Set("url", "http://am.example:9093")
 	_ = d.Set("portainer_url", "http://portainer.example")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -97,7 +97,7 @@ func TestAlertingSettingsCreate_NoIDFallback(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("enabled", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -124,7 +124,7 @@ func TestAlertingSettingsRead_SingleObjectResponse(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("8")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if got := d.Get("name"); got != "single-shape" {
@@ -150,7 +150,7 @@ func TestAlertingSettingsDelete_SendsDisablePUT(t *testing.T) {
 	d.SetId("9")
 	_ = d.Set("enabled", true)
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -189,7 +189,7 @@ func TestAlertingSettingsCreate_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("enabled", true)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {

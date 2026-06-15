@@ -31,7 +31,7 @@ func TestContainerExecCreate_Standalone_HappyPath(t *testing.T) {
 	_ = d.Set("command", "echo hello")
 	_ = d.Set("mode", "standalone")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestContainerExecCreate_Standalone_ContainerNotFound(t *testing.T) {
 	_ = d.Set("command", "ls")
 	_ = d.Set("mode", "standalone")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when container list is empty")
 	}
@@ -116,7 +116,7 @@ func TestContainerExecCreate_Standalone_ListHTTPError(t *testing.T) {
 	_ = d.Set("command", "ls")
 	_ = d.Set("mode", "standalone")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on 500 from container list, got nil")
 	}
@@ -136,7 +136,7 @@ func TestContainerExecDelete_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("exec-xyz")
 
-	if err := r.Delete(d, nil); err != nil {
+	if err := rcDelete(r, d, nil); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {

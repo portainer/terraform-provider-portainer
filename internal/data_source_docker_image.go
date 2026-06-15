@@ -1,18 +1,20 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceDockerImage() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceDockerImageRead,
+		ReadContext: dataSourceDockerImageRead,
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
@@ -29,7 +31,7 @@ func dataSourceDockerImage() *schema.Resource {
 	}
 }
 
-func dataSourceDockerImageRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceDockerImageRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	name := d.Get("name").(string)
@@ -43,13 +45,13 @@ func dataSourceDockerImageRead(d *schema.ResourceData, meta interface{}) error {
 	path := fmt.Sprintf("/endpoints/%d/docker/images/json", endpointID)
 	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to list docker images: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to list docker images: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list docker images, status %d: %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to list docker images, status %d: %s", resp.StatusCode, string(data)))
 	}
 
 	var images []struct {
@@ -57,7 +59,7 @@ func dataSourceDockerImageRead(d *schema.ResourceData, meta interface{}) error {
 		RepoTags []string `json:"RepoTags"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&images); err != nil {
-		return fmt.Errorf("failed to decode docker image list: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode docker image list: %w", err))
 	}
 
 	for _, img := range images {
@@ -69,5 +71,5 @@ func dataSourceDockerImageRead(d *schema.ResourceData, meta interface{}) error {
 		}
 	}
 
-	return fmt.Errorf("docker image %s not found in endpoint %d", name, endpointID)
+	return diag.FromErr(fmt.Errorf("docker image %s not found in endpoint %d", name, endpointID))
 }

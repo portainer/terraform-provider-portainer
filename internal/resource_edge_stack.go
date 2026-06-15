@@ -15,22 +15,23 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceEdgeStack() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceEdgeStackCreate,
-		Read:   resourceEdgeStackRead,
-		Delete: resourceEdgeStackDelete,
-		Update: resourceEdgeStackUpdate,
+		CreateContext: resourceEdgeStackCreate,
+		ReadContext:   resourceEdgeStackRead,
+		DeleteContext: resourceEdgeStackDelete,
+		UpdateContext: resourceEdgeStackUpdate,
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(15 * time.Minute),
 			Update: schema.DefaultTimeout(15 * time.Minute),
 			Delete: schema.DefaultTimeout(10 * time.Minute),
 		},
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -210,8 +211,8 @@ func buildEnvVars(d *schema.ResourceData) []map[string]string {
 	return envVars
 }
 
-func findExistingEdgeStackByName(client *APIClient, name string) (int, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_stacks", client.Endpoint), nil)
+func findExistingEdgeStackByName(ctx context.Context, client *APIClient, name string) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_stacks", client.Endpoint), nil)
 	if err != nil {
 		return 0, err
 	}
@@ -228,7 +229,7 @@ func findExistingEdgeStackByName(client *APIClient, name string) (int, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return 0, fmt.Errorf("failed to list edge stacks: %s", string(data))
 	}
@@ -248,9 +249,9 @@ func findExistingEdgeStackByName(client *APIClient, name string) (int, error) {
 	return 0, nil
 }
 
-func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceEdgeStackCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	timeout := d.Timeout(schema.TimeoutCreate)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	client := meta.(*APIClient)
@@ -260,11 +261,11 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 	deployType := d.Get("deployment_type").(int)
 	useManifest := d.Get("use_manifest_namespaces").(bool)
 
-	if existingID, err := findExistingEdgeStackByName(client, name); err != nil {
-		return fmt.Errorf("failed to check for existing edge stack: %w", err)
+	if existingID, err := findExistingEdgeStackByName(ctx, client, name); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to check for existing edge stack: %w", err))
 	} else if existingID != 0 {
 		d.SetId(strconv.Itoa(existingID))
-		return resourceEdgeStackUpdate(d, meta)
+		return resourceEdgeStackUpdate(ctx, d, meta)
 	}
 
 	// Method: stackFileContent (string)
@@ -287,7 +288,7 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 			}
 			payload["envVars"] = envVars
 		}
-		return createEdgeStackFromJSON(ctx, client, d, payload, "/edge_stacks/create/string")
+		return diag.FromErr(createEdgeStackFromJSON(ctx, client, d, payload, "/edge_stacks/create/string"))
 	}
 
 	// Method: stackFilePath (file)
@@ -295,7 +296,7 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 		filePath := filePathRaw.(string)
 		file, err := os.Open(filePath)
 		if err != nil {
-			return fmt.Errorf("failed to open stack file: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to open stack file: %w", err))
 		}
 		defer file.Close()
 
@@ -312,7 +313,7 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 
 		part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		_, _ = io.Copy(part, file)
 		writer.Close()
@@ -322,25 +323,25 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 		if d.Get("dryrun").(bool) {
 			endpoint += "?dryrun=true"
 		}
-		req, _ := http.NewRequestWithContext(ctx, "POST", endpoint, body)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
 		if client.APIKey != "" {
 			req.Header.Set("X-API-Key", client.APIKey)
 		} else if client.JWTToken != "" {
 			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 		} else {
-			return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+			return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 		}
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			data, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to create edge stack from file: %s", string(data))
+			return diag.FromErr(fmt.Errorf("failed to create edge stack from file: %s", string(data)))
 		}
 
 		var result struct {
@@ -350,7 +351,7 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 
 		if !d.Get("dryrun").(bool) {
 			d.SetId(strconv.Itoa(result.ID))
-			return resourceEdgeStackRead(d, meta)
+			return resourceEdgeStackRead(ctx, d, meta)
 		}
 
 		return nil
@@ -405,21 +406,25 @@ func resourceEdgeStackCreate(d *schema.ResourceData, meta interface{}) error {
 			}
 			payload["autoUpdate"] = autoUpdate
 			if webhookID != "" {
-				d.Set("webhook_id", webhookID)
+				if err := d.Set("webhook_id", webhookID); err != nil {
+					return diag.FromErr(err)
+				}
 				baseURL := strings.TrimSuffix(client.Endpoint, "/api")
 				webhookURL := fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, webhookID)
-				d.Set("webhook_url", webhookURL)
+				if err := d.Set("webhook_url", webhookURL); err != nil {
+					return diag.FromErr(err)
+				}
 			}
 		}
-		return createEdgeStackFromJSON(ctx, client, d, payload, "/edge_stacks/create/repository")
+		return diag.FromErr(createEdgeStackFromJSON(ctx, client, d, payload, "/edge_stacks/create/repository"))
 	}
 
-	return fmt.Errorf("one of 'stack_file_content', 'stack_file_path', or 'repository_url' must be provided")
+	return diag.FromErr(fmt.Errorf("one of 'stack_file_content', 'stack_file_path', or 'repository_url' must be provided"))
 }
 
-func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	timeout := d.Timeout(schema.TimeoutUpdate)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	client := meta.(*APIClient)
@@ -444,28 +449,28 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 
 		jsonBody, err := json.Marshal(payload)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 
-		req, err := http.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		setAuthHeaders(client, req)
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			data, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to update edge stack: %s", string(data))
+			return diag.FromErr(fmt.Errorf("failed to update edge stack: %s", string(data)))
 		}
 
-		return resourceEdgeStackRead(d, meta)
+		return resourceEdgeStackRead(ctx, d, meta)
 	}
 
 	// Repository-based update via /git
@@ -515,40 +520,44 @@ func resourceEdgeStackUpdate(d *schema.ResourceData, meta interface{}) error {
 			payload["autoUpdate"] = autoUpdate
 
 			if webhookID != "" {
-				d.Set("webhook_id", webhookID)
+				if err := d.Set("webhook_id", webhookID); err != nil {
+					return diag.FromErr(err)
+				}
 				baseURL := strings.TrimSuffix(client.Endpoint, "/api")
 				webhookURL := fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, webhookID)
-				d.Set("webhook_url", webhookURL)
+				if err := d.Set("webhook_url", webhookURL); err != nil {
+					return diag.FromErr(err)
+				}
 			}
 		}
 
 		jsonBody, err := json.Marshal(payload)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 
-		req, err := http.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("%s/edge_stacks/%s/git", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/edge_stacks/%s/git", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		setAuthHeaders(client, req)
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.HTTPClient.Do(req)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			data, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("failed to update repository-based edge stack: %s", string(data))
+			return diag.FromErr(fmt.Errorf("failed to update repository-based edge stack: %s", string(data)))
 		}
 
-		return resourceEdgeStackRead(d, meta)
+		return resourceEdgeStackRead(ctx, d, meta)
 	}
 
-	return fmt.Errorf("one of 'stack_file_content', 'stack_file_path', or 'repository_url' must be provided for update")
+	return diag.FromErr(fmt.Errorf("one of 'stack_file_content', 'stack_file_path', or 'repository_url' must be provided for update"))
 }
 
 func createEdgeStackFromJSON(ctx context.Context, client *APIClient, d *schema.ResourceData, payload map[string]interface{}, endpoint string) error {
@@ -557,7 +566,7 @@ func createEdgeStackFromJSON(ctx context.Context, client *APIClient, d *schema.R
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", client.Endpoint+endpoint, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, client.Endpoint+endpoint, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
@@ -586,7 +595,10 @@ func createEdgeStackFromJSON(ctx context.Context, client *APIClient, d *schema.R
 	}
 	_ = json.NewDecoder(resp.Body).Decode(&result)
 	d.SetId(strconv.Itoa(result.ID))
-	return resourceEdgeStackRead(d, client)
+	if diags := resourceEdgeStackRead(ctx, d, client); diags.HasError() {
+		return fmt.Errorf("%s", diags[0].Summary)
+	}
+	return nil
 }
 
 func toJSONString(input interface{}) string {
@@ -594,30 +606,30 @@ func toJSONString(input interface{}) string {
 	return string(data)
 }
 
-func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
+func resourceEdgeStackRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil)
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
-	} else if resp.StatusCode != 200 {
+	} else if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read edge stack: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to read edge stack: %s", string(data)))
 	}
 
 	var stack struct {
@@ -654,18 +666,36 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	d.Set("name", stack.Name)
-	d.Set("deployment_type", stack.DeploymentType)
-	d.Set("dryrun", false) // write-only creation flag, API never returns it
-	d.Set("edge_groups", stack.EdgeGroups)
-	d.Set("registries", stack.Registries)
-	d.Set("use_manifest_namespaces", stack.UseManifestNamespaces)
-	d.Set("pre_pull_image", stack.PrePullImage)
-	d.Set("retry_deploy", stack.RetryDeploy)
-	d.Set("always_clone", stack.AlwaysCloneGitRepoForRelativePath)
+	if err := d.Set("name", stack.Name); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("deployment_type", stack.DeploymentType); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("dryrun", false); err != nil { // write-only creation flag, API never returns it
+		return diag.FromErr(err)
+	}
+	if err := d.Set("edge_groups", stack.EdgeGroups); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("registries", stack.Registries); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("use_manifest_namespaces", stack.UseManifestNamespaces); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("pre_pull_image", stack.PrePullImage); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("retry_deploy", stack.RetryDeploy); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("always_clone", stack.AlwaysCloneGitRepoForRelativePath); err != nil {
+		return diag.FromErr(err)
+	}
 
 	envMap := make(map[string]string, len(stack.EnvVars))
 	for _, env := range stack.EnvVars {
@@ -673,23 +703,41 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	if len(envMap) > 0 {
-		d.Set("environment", envMap)
+		if err := d.Set("environment", envMap); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	if stack.SupportRelativePath {
-		d.Set("relative_path", stack.FilesystemPath)
+		if err := d.Set("relative_path", stack.FilesystemPath); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	if stack.GitConfig != nil {
-		d.Set("repository_url", stack.GitConfig.URL)
-		d.Set("repository_reference_name", stack.GitConfig.ReferenceName)
-		d.Set("file_path_in_repository", stack.GitConfig.ConfigFilePath)
+		if err := d.Set("repository_url", stack.GitConfig.URL); err != nil {
+			return diag.FromErr(err)
+		}
+		if err := d.Set("repository_reference_name", stack.GitConfig.ReferenceName); err != nil {
+			return diag.FromErr(err)
+		}
+		if err := d.Set("file_path_in_repository", stack.GitConfig.ConfigFilePath); err != nil {
+			return diag.FromErr(err)
+		}
 		if stack.GitConfig.Authentication != nil {
-			d.Set("git_repository_authentication", true)
-			d.Set("repository_username", stack.GitConfig.Authentication.Username)
-			d.Set("repository_git_credential_id", stack.GitConfig.Authentication.GitCredentialID)
+			if err := d.Set("git_repository_authentication", true); err != nil {
+				return diag.FromErr(err)
+			}
+			if err := d.Set("repository_username", stack.GitConfig.Authentication.Username); err != nil {
+				return diag.FromErr(err)
+			}
+			if err := d.Set("repository_git_credential_id", stack.GitConfig.Authentication.GitCredentialID); err != nil {
+				return diag.FromErr(err)
+			}
 		} else {
-			d.Set("git_repository_authentication", false)
+			if err := d.Set("git_repository_authentication", false); err != nil {
+				return diag.FromErr(err)
+			}
 		}
 	}
 
@@ -699,63 +747,93 @@ func resourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 	// as the source of truth, and let AutoUpdate.ForcePullImage override when
 	// AutoUpdate exists since that's the value the user-configured GitOps block
 	// carries.
-	d.Set("pull_image", stack.RePullImage)
+	if err := d.Set("pull_image", stack.RePullImage); err != nil {
+		return diag.FromErr(err)
+	}
 
 	if stack.AutoUpdate != nil {
-		d.Set("update_interval", stack.AutoUpdate.Interval)
-		d.Set("pull_image", stack.AutoUpdate.ForcePullImage)
-		d.Set("force_update", stack.AutoUpdate.ForceUpdate)
+		if err := d.Set("update_interval", stack.AutoUpdate.Interval); err != nil {
+			return diag.FromErr(err)
+		}
+		if err := d.Set("pull_image", stack.AutoUpdate.ForcePullImage); err != nil {
+			return diag.FromErr(err)
+		}
+		if err := d.Set("force_update", stack.AutoUpdate.ForceUpdate); err != nil {
+			return diag.FromErr(err)
+		}
 		if stack.AutoUpdate.Webhook != "" {
-			d.Set("stack_webhook", true)
-			d.Set("webhook_id", stack.AutoUpdate.Webhook)
+			if err := d.Set("stack_webhook", true); err != nil {
+				return diag.FromErr(err)
+			}
+			if err := d.Set("webhook_id", stack.AutoUpdate.Webhook); err != nil {
+				return diag.FromErr(err)
+			}
 			baseURL := strings.TrimSuffix(client.Endpoint, "/api")
-			d.Set("webhook_url", fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, stack.AutoUpdate.Webhook))
+			if err := d.Set("webhook_url", fmt.Sprintf("%s/api/edge_stacks/webhooks/%s", baseURL, stack.AutoUpdate.Webhook)); err != nil {
+				return diag.FromErr(err)
+			}
 		} else {
 			// AutoUpdate exists but webhook was cleared — drop any stale
 			// computed outputs so state reflects reality.
-			d.Set("stack_webhook", false)
-			d.Set("webhook_id", "")
-			d.Set("webhook_url", "")
+			if err := d.Set("stack_webhook", false); err != nil {
+				return diag.FromErr(err)
+			}
+			if err := d.Set("webhook_id", ""); err != nil {
+				return diag.FromErr(err)
+			}
+			if err := d.Set("webhook_url", ""); err != nil {
+				return diag.FromErr(err)
+			}
 		}
 	} else {
 		// No GitOps configured — clear all AutoUpdate-derived fields,
 		// including webhook outputs that may have been set previously.
-		d.Set("force_update", false)
-		d.Set("stack_webhook", false)
-		d.Set("update_interval", "")
-		d.Set("webhook_id", "")
-		d.Set("webhook_url", "")
+		if err := d.Set("force_update", false); err != nil {
+			return diag.FromErr(err)
+		}
+		if err := d.Set("stack_webhook", false); err != nil {
+			return diag.FromErr(err)
+		}
+		if err := d.Set("update_interval", ""); err != nil {
+			return diag.FromErr(err)
+		}
+		if err := d.Set("webhook_id", ""); err != nil {
+			return diag.FromErr(err)
+		}
+		if err := d.Set("webhook_url", ""); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil
 }
 
-func resourceEdgeStackDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceEdgeStackDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	timeout := d.Timeout(schema.TimeoutDelete)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	client := meta.(*APIClient)
 
-	req, _ := http.NewRequestWithContext(ctx, "DELETE", fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil)
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 204 || resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound {
 		return nil
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	return fmt.Errorf("failed to delete edge stack: %s", string(data))
+	return diag.FromErr(fmt.Errorf("failed to delete edge stack: %s", string(data)))
 }

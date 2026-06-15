@@ -39,7 +39,7 @@ func TestCloudProvisionCreate_HappyPath_Civo(t *testing.T) {
 		"kubernetesVersion": "1.29",
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -83,7 +83,7 @@ func TestCloudProvisionCreate_RoutesByProvider(t *testing.T) {
 				"name": "x",
 			})
 
-			if err := r.Create(d, mock.Client()); err != nil {
+			if err := rcCreate(r, d, mock.Client()); err != nil {
 				t.Fatalf("Create failed: %v", err)
 			}
 			if mock.FindRequest("POST", "/cloud/"+prov+"/provision") == nil {
@@ -110,7 +110,7 @@ func TestCloudProvisionCreate_HTTPError(t *testing.T) {
 		"name": "broken",
 	})
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {
@@ -133,7 +133,7 @@ func TestCloudProvisionCreate_NoAuth(t *testing.T) {
 		"name": "x",
 	})
 
-	err := r.Create(d, client)
+	err := rcCreate(r, d, client)
 	if err == nil {
 		t.Fatal("expected an authentication error, got nil")
 	}

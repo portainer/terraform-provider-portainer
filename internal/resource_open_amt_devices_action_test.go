@@ -19,7 +19,7 @@ func TestOpenAMTDeviceActionCreate_HappyPath(t *testing.T) {
 	_ = d.Set("device_id", 42)
 	_ = d.Set("action", "poweron")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "openamt-device-42-action-poweron" {
@@ -54,7 +54,7 @@ func TestOpenAMTDeviceActionCreate_HTTPError(t *testing.T) {
 	_ = d.Set("device_id", 42)
 	_ = d.Set("action", "reset")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 502, got nil")
 	}
 	if d.Id() != "" {

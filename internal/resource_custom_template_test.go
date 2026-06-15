@@ -34,7 +34,7 @@ func TestCustomTemplateCreate_FromString_HappyPath(t *testing.T) {
 	_ = d.Set("type", 1)
 	_ = d.Set("file_content", "version: '3'\nservices: {}\n")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -67,7 +67,7 @@ func TestCustomTemplateRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("42")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if got := d.Get("title"); got != "loaded" {
@@ -94,7 +94,7 @@ func TestCustomTemplateDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("15")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/custom_templates/15") == nil {
@@ -129,7 +129,7 @@ func TestCustomTemplateCreate_ExistingTitleTriggersUpdate(t *testing.T) {
 	_ = d.Set("type", 1)
 	_ = d.Set("file_content", "x")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "99" {

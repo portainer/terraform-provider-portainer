@@ -36,7 +36,7 @@ func TestRegistryAccessCreate_TeamHappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("team_id", 7)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -71,7 +71,7 @@ func TestRegistryAccessCreate_NoTeamOrUser(t *testing.T) {
 	_ = d.Set("registry_id", 1)
 	_ = d.Set("endpoint_id", 2)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when neither team_id nor user_id is set")
 	}
@@ -102,7 +102,7 @@ func TestRegistryAccessRead_FoundInPolicies(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("user_id", 99)
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() == "" {
@@ -131,7 +131,7 @@ func TestRegistryAccessRead_NotFoundClearsID(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("team_id", 7)
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -165,7 +165,7 @@ func TestRegistryAccessDelete_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("team_id", 7)
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -191,7 +191,7 @@ func TestRegistryAccessRead_RegistryNotFoundClearsID(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("team_id", 7)
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404, got error: %v", err)
 	}
 	if d.Id() != "" {

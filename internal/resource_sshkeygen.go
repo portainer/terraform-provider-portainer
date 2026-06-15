@@ -1,20 +1,22 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourcePortainerSSHKeygen() *schema.Resource {
 	return &schema.Resource{
-		Create: resourcePortainerSSHKeygenCreate,
-		Read:   schema.Noop,
-		Delete: schema.RemoveFromState,
+		CreateContext: resourcePortainerSSHKeygenCreate,
+		ReadContext:   schema.NoopContext,
+		DeleteContext: removeFromStateContext,
 		Schema: map[string]*schema.Schema{
 			"public": {
 				Type:        schema.TypeString,
@@ -31,30 +33,30 @@ func resourcePortainerSSHKeygen() *schema.Resource {
 	}
 }
 
-func resourcePortainerSSHKeygenCreate(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerSSHKeygenCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/sshkeygen", client.Endpoint), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/sshkeygen", client.Endpoint), nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to generate SSH key: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to generate SSH key: %s", string(body)))
 	}
 
 	var keypair struct {
@@ -63,11 +65,15 @@ func resourcePortainerSSHKeygenCreate(d *schema.ResourceData, meta interface{}) 
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&keypair); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode response: %w", err))
 	}
 
-	d.Set("public", keypair.Public)
-	d.Set("private", keypair.Private)
+	if err := d.Set("public", keypair.Public); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("private", keypair.Private); err != nil {
+		return diag.FromErr(err)
+	}
 	d.SetId(strconv.Itoa(len(keypair.Public)))
 
 	return nil

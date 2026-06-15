@@ -17,7 +17,7 @@ func TestExperimentalSettingsCreate_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("openai_integration", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -53,7 +53,7 @@ func TestExperimentalSettingsRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer-experimental-settings")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -77,7 +77,7 @@ func TestExperimentalSettingsUpdate_HappyPath(t *testing.T) {
 	d.SetId("portainer-experimental-settings")
 	_ = d.Set("openai_integration", false)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -101,7 +101,7 @@ func TestExperimentalSettingsDelete_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer-experimental-settings")
 
-	if err := r.Delete(d, nil); err != nil {
+	if err := rcDelete(r, d, nil); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -122,7 +122,7 @@ func TestExperimentalSettingsCreate_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("openai_integration", true)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on 500, got nil")
 	}

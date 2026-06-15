@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -16,10 +18,10 @@ var ErrEndpointGroupNotFound = errors.New("endpoint group not found")
 
 func resourceEndpointGroupAccess() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceEndpointGroupAccessCreate,
-		Read:   resourceEndpointGroupAccessRead,
-		Update: resourceEndpointGroupAccessUpdate,
-		Delete: resourceEndpointGroupAccessDelete,
+		CreateContext: resourceEndpointGroupAccessCreate,
+		ReadContext:   resourceEndpointGroupAccessRead,
+		UpdateContext: resourceEndpointGroupAccessUpdate,
+		DeleteContext: resourceEndpointGroupAccessDelete,
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_group_id": {
@@ -55,8 +57,8 @@ type EndpointGroupAccessPolicies struct {
 	TeamAccessPolicies map[string]map[string]int `json:"TeamAccessPolicies"`
 }
 
-func getEndpointGroupPolicies(client *APIClient, endpointGroupID int) (*EndpointGroupAccessPolicies, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), nil)
+func getEndpointGroupPolicies(ctx context.Context, client *APIClient, endpointGroupID int) (*EndpointGroupAccessPolicies, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -72,11 +74,11 @@ func getEndpointGroupPolicies(client *APIClient, endpointGroupID int) (*Endpoint
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		return nil, ErrEndpointGroupNotFound
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("failed to fetch endpoint group: %s", string(data))
 	}
@@ -96,7 +98,7 @@ func getEndpointGroupPolicies(client *APIClient, endpointGroupID int) (*Endpoint
 	return &policies, nil
 }
 
-func resourceEndpointGroupAccessCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointGroupAccessCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointGroupID := d.Get("endpoint_group_id").(int)
 	teamID, hasTeam := d.GetOk("team_id")
@@ -104,12 +106,12 @@ func resourceEndpointGroupAccessCreate(d *schema.ResourceData, meta interface{})
 	roleID := d.Get("role_id").(int)
 
 	if !hasTeam && !hasUser {
-		return fmt.Errorf("either team_id or user_id must be provided")
+		return diag.FromErr(fmt.Errorf("either team_id or user_id must be provided"))
 	}
 
-	policies, err := getEndpointGroupPolicies(client, endpointGroupID)
+	policies, err := getEndpointGroupPolicies(ctx, client, endpointGroupID)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	if hasTeam {
@@ -133,9 +135,9 @@ func resourceEndpointGroupAccessCreate(d *schema.ResourceData, meta interface{})
 	// Let's modify `getEndpointGroupPolicies` or the Create function to read 'Current State' as a generic map or struct to preserve other fields.
 
 	// Better approach: Read the full JSON into a map[string]interface{}, modify the policies, and write it back.
-	fullObject, err := getEndpointGroupMap(client, endpointGroupID)
+	fullObject, err := getEndpointGroupMap(ctx, client, endpointGroupID)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	// Modify policies in the map
@@ -160,11 +162,11 @@ func resourceEndpointGroupAccessCreate(d *schema.ResourceData, meta interface{})
 	fullObject["UserAccessPolicies"] = userPolicies
 	fullObject["TeamAccessPolicies"] = teamPolicies
 
-	return updateEndpointGroup(client, endpointGroupID, fullObject, d, hasTeam, teamID, hasUser, userID)
+	return diag.FromErr(updateEndpointGroup(ctx, client, endpointGroupID, fullObject, d, hasTeam, teamID, hasUser, userID))
 }
 
-func getEndpointGroupMap(client *APIClient, endpointGroupID int) (map[string]interface{}, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), nil)
+func getEndpointGroupMap(ctx context.Context, client *APIClient, endpointGroupID int) (map[string]interface{}, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -180,10 +182,10 @@ func getEndpointGroupMap(client *APIClient, endpointGroupID int) (map[string]int
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		return nil, ErrEndpointGroupNotFound
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("failed to fetch endpoint group: %s", string(data))
 	}
@@ -195,13 +197,13 @@ func getEndpointGroupMap(client *APIClient, endpointGroupID int) (map[string]int
 	return result, nil
 }
 
-func updateEndpointGroup(client *APIClient, endpointGroupID int, payload map[string]interface{}, d *schema.ResourceData, hasTeam bool, teamID interface{}, hasUser bool, userID interface{}) error {
+func updateEndpointGroup(ctx context.Context, client *APIClient, endpointGroupID int, payload map[string]interface{}, d *schema.ResourceData, hasTeam bool, teamID interface{}, hasUser bool, userID interface{}) error {
 	jsonBody, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
@@ -231,35 +233,42 @@ func updateEndpointGroup(client *APIClient, endpointGroupID int, payload map[str
 	}
 	d.SetId(id)
 
-	return resourceEndpointGroupAccessRead(d, client)
+	if diags := resourceEndpointGroupAccessRead(ctx, d, client); diags.HasError() {
+		return fmt.Errorf("%s", diags[0].Summary)
+	}
+	return nil
 }
 
-func resourceEndpointGroupAccessRead(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointGroupAccessRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointGroupID := d.Get("endpoint_group_id").(int)
 	teamID, hasTeam := d.GetOk("team_id")
 	userID, hasUser := d.GetOk("user_id")
 
-	policies, err := getEndpointGroupPolicies(client, endpointGroupID)
+	policies, err := getEndpointGroupPolicies(ctx, client, endpointGroupID)
 	if err != nil {
 		if errors.Is(err, ErrEndpointGroupNotFound) {
 			d.SetId("")
 			return nil
 		}
-		return err
+		return diag.FromErr(err)
 	}
 
 	found := false
 	if hasTeam {
 		tidStr := strconv.Itoa(teamID.(int))
 		if p, ok := policies.TeamAccessPolicies[tidStr]; ok {
-			d.Set("role_id", p["RoleId"])
+			if err := d.Set("role_id", p["RoleId"]); err != nil {
+				return diag.FromErr(err)
+			}
 			found = true
 		}
 	} else if hasUser {
 		uidStr := strconv.Itoa(userID.(int))
 		if p, ok := policies.UserAccessPolicies[uidStr]; ok {
-			d.Set("role_id", p["RoleId"])
+			if err := d.Set("role_id", p["RoleId"]); err != nil {
+				return diag.FromErr(err)
+			}
 			found = true
 		}
 	}
@@ -271,22 +280,22 @@ func resourceEndpointGroupAccessRead(d *schema.ResourceData, meta interface{}) e
 	return nil
 }
 
-func resourceEndpointGroupAccessUpdate(d *schema.ResourceData, meta interface{}) error {
-	return resourceEndpointGroupAccessCreate(d, meta)
+func resourceEndpointGroupAccessUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	return resourceEndpointGroupAccessCreate(ctx, d, meta)
 }
 
-func resourceEndpointGroupAccessDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointGroupAccessDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointGroupID := d.Get("endpoint_group_id").(int)
 	teamID, hasTeam := d.GetOk("team_id")
 	userID, hasUser := d.GetOk("user_id")
 
-	fullObject, err := getEndpointGroupMap(client, endpointGroupID)
+	fullObject, err := getEndpointGroupMap(ctx, client, endpointGroupID)
 	if err != nil {
 		if errors.Is(err, ErrEndpointGroupNotFound) {
 			return nil
 		}
-		return err
+		return diag.FromErr(err)
 	}
 
 	// Modify policies in the map
@@ -311,12 +320,12 @@ func resourceEndpointGroupAccessDelete(d *schema.ResourceData, meta interface{})
 
 	jsonBody, err := json.Marshal(fullObject)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
@@ -327,16 +336,16 @@ func resourceEndpointGroupAccessDelete(d *schema.ResourceData, meta interface{})
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		return nil
 	}
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete endpoint group access: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to delete endpoint group access: %s", string(data)))
 	}
 
 	return nil

@@ -27,7 +27,7 @@ func TestDataSourceKubernetesCRDRead_ByName(t *testing.T) {
 	_ = d.Set("environment_id", 5)
 	_ = d.Set("name", "widgets.example.com")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -79,7 +79,7 @@ func TestDataSourceKubernetesCRDRead_List(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("environment_id", 5)
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -109,7 +109,7 @@ func TestDataSourceKubernetesCRDRead_ByNameHTTPError(t *testing.T) {
 	_ = d.Set("environment_id", 5)
 	_ = d.Set("name", "missing")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 404, got nil")
 	}
 }
@@ -125,7 +125,7 @@ func TestDataSourceKubernetesCRDRead_ListHTTPError(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("environment_id", 5)
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }

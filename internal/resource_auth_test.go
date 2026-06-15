@@ -20,7 +20,7 @@ func TestAuthCreate_HappyPath(t *testing.T) {
 	_ = d.Set("username", "admin")
 	_ = d.Set("password", "secret")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -63,7 +63,7 @@ func TestAuthCreate_HTTPError(t *testing.T) {
 	_ = d.Set("username", "admin")
 	_ = d.Set("password", "wrong")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on 401, got nil")
 	}

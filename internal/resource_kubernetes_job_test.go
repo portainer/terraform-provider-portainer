@@ -27,7 +27,7 @@ func TestKubernetesJobCreate_HappyPath(t *testing.T) {
 	_ = d.Set("namespace", "prod")
 	_ = d.Set("manifest", jobManifestJSON)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "2:prod:backup" {
@@ -58,7 +58,7 @@ func TestKubernetesJobCreate_MissingMetadataName(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("manifest", `{"kind":"Job","metadata":{}}`)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error when metadata.name missing, got nil")
 	}
 	if d.Id() != "" {
@@ -81,7 +81,7 @@ func TestKubernetesJobCreate_HTTPError(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("manifest", jobManifestJSON)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }
@@ -98,7 +98,7 @@ func TestKubernetesJobDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("2:prod:backup")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/endpoints/2/kubernetes/apis/batch/v1/namespaces/prod/jobs/backup") == nil {

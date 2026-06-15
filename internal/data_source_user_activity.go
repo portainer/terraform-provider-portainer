@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,12 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceUserActivity() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceUserActivityRead,
+		ReadContext: dataSourceUserActivityRead,
 
 		Schema: map[string]*schema.Schema{
 			"log_type": {
@@ -156,7 +158,7 @@ func dataSourceUserActivity() *schema.Resource {
 	}
 }
 
-func dataSourceUserActivityRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceUserActivityRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	logType := d.Get("log_type").(string)
@@ -168,7 +170,7 @@ func dataSourceUserActivityRead(d *schema.ResourceData, meta interface{}) error 
 	case "auth":
 		path = "/useractivity/authlogs"
 	default:
-		return fmt.Errorf("invalid log_type %q: must be 'activity' or 'auth'", logType)
+		return diag.FromErr(fmt.Errorf("invalid log_type %q: must be 'activity' or 'auth'", logType))
 	}
 
 	// Build query parameters
@@ -222,12 +224,12 @@ func dataSourceUserActivityRead(d *schema.ResourceData, meta interface{}) error 
 
 	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to list user activity logs: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to list user activity logs: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to list user activity logs: HTTP %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to list user activity logs: HTTP %d", resp.StatusCode))
 	}
 
 	if logType == "activity" {
@@ -242,7 +244,7 @@ func dataSourceUserActivityRead(d *schema.ResourceData, meta interface{}) error 
 			TotalCount int `json:"totalCount"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return fmt.Errorf("failed to decode activity logs response: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to decode activity logs response: %w", err))
 		}
 
 		logs := make([]map[string]interface{}, len(result.Logs))
@@ -267,7 +269,7 @@ func dataSourceUserActivityRead(d *schema.ResourceData, meta interface{}) error 
 			Context   int    `json:"context"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return fmt.Errorf("failed to decode auth logs response: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to decode auth logs response: %w", err))
 		}
 
 		logs := make([]map[string]interface{}, len(result))

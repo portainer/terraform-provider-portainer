@@ -26,7 +26,7 @@ func TestTeamMembershipCreate_HappyPath(t *testing.T) {
 	_ = d.Set("team_id", 5)
 	_ = d.Set("user_id", 7)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -76,7 +76,7 @@ func TestTeamMembershipRead_NotInList(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("999")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -106,7 +106,7 @@ func TestTeamMembershipUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("team_id", 8)
 	_ = d.Set("user_id", 9)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 	put := mock.FindRequest("PUT", "/team_memberships/3")
@@ -132,7 +132,7 @@ func TestTeamMembershipDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("22")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/team_memberships/22") == nil {
@@ -154,7 +154,7 @@ func TestTeamMembershipDelete_404_Idempotent(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("99")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete should treat 404 as success, got: %v", err)
 	}
 }

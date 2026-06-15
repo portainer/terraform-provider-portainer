@@ -12,12 +12,20 @@ linters:
     - bodyclose
     - nilerr
     - errorlint
+    - misspell
+    - unconvert
+    - nakedret
+    - wastedassign
+    - usestdlibvars
+    - prealloc
+    - gofumpt
+    - nolintlint
+    - gocritic
 
 linters-settings:
   errcheck:
     exclude-functions:
       - fmt.Sscanf # used in ID parse functions, safe to ignore
-      - (*github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema.ResourceData).Set # Terraform SDK d.Set rarely fails
   gosec:
     excludes:
       - G107 # URL provided by user config, not hardcoded
@@ -26,7 +34,9 @@ linters-settings:
   staticcheck:
     checks:
       - "all"
-      - "-SA1019" # ignore deprecated ImportStatePassthrough - migration to context-aware version is out of scope
+  gocritic:
+    disabled-checks:
+      - ifElseChain # auth-selection if/else is clearer than a switch here; stylistic only
 
 issues:
   exclude-dirs:

@@ -17,7 +17,7 @@ func TestOpenAMTActivateCreate_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("environment_id", 5)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "openamt-5" {
@@ -44,7 +44,7 @@ func TestOpenAMTActivateCreate_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("environment_id", 5)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 503, got nil")
 	}
 	if d.Id() != "" {

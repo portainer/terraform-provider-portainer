@@ -1,21 +1,23 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceLDAPSettings() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceLDAPSettingsApply,
-		Read:   resourceLDAPSettingsRead,
-		Update: resourceLDAPSettingsApply,
-		Delete: resourceLDAPSettingsDelete,
+		CreateContext: resourceLDAPSettingsApply,
+		ReadContext:   resourceLDAPSettingsRead,
+		UpdateContext: resourceLDAPSettingsApply,
+		DeleteContext: resourceLDAPSettingsDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -212,24 +214,24 @@ func resourceLDAPSettings() *schema.Resource {
 	}
 }
 
-func resourceLDAPSettingsApply(d *schema.ResourceData, meta interface{}) error {
+func resourceLDAPSettingsApply(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	// First read current settings to get the full payload
 	resp, err := client.DoRequest("GET", "/settings", nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to read current settings: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to read current settings: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read current settings (status %d): %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to read current settings (status %d): %s", resp.StatusCode, string(data)))
 	}
 
 	var currentSettings map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&currentSettings); err != nil {
-		return fmt.Errorf("failed to decode current settings: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode current settings: %w", err))
 	}
 
 	// Build LDAP settings
@@ -335,36 +337,36 @@ func resourceLDAPSettingsApply(d *schema.ResourceData, meta interface{}) error {
 
 	resp2, err := client.DoRequest("PUT", "/settings", nil, payload)
 	if err != nil {
-		return fmt.Errorf("failed to update LDAP settings: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to update LDAP settings: %w", err))
 	}
 	defer resp2.Body.Close()
 
 	if resp2.StatusCode < 200 || resp2.StatusCode >= 300 {
 		data, _ := io.ReadAll(resp2.Body)
-		return fmt.Errorf("failed to update LDAP settings (status %d): %s", resp2.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to update LDAP settings (status %d): %s", resp2.StatusCode, string(data)))
 	}
 
 	d.SetId("portainer-ldap-settings")
-	return resourceLDAPSettingsRead(d, meta)
+	return resourceLDAPSettingsRead(ctx, d, meta)
 }
 
-func resourceLDAPSettingsRead(d *schema.ResourceData, meta interface{}) error {
+func resourceLDAPSettingsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	resp, err := client.DoRequest("GET", "/settings", nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to read settings: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to read settings: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read settings (status %d): %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to read settings (status %d): %s", resp.StatusCode, string(data)))
 	}
 
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode settings: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode settings: %w", err))
 	}
 
 	ldapRaw, ok := result["LDAPSettings"]
@@ -375,48 +377,68 @@ func resourceLDAPSettingsRead(d *schema.ResourceData, meta interface{}) error {
 
 	ldapJSON, err := json.Marshal(ldapRaw)
 	if err != nil {
-		return fmt.Errorf("failed to marshal LDAP settings: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to marshal LDAP settings: %w", err))
 	}
 
 	var ldap map[string]interface{}
 	if err := json.Unmarshal(ldapJSON, &ldap); err != nil {
-		return fmt.Errorf("failed to unmarshal LDAP settings: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to unmarshal LDAP settings: %w", err))
 	}
 
 	d.SetId("portainer-ldap-settings")
 
 	if v, ok := ldap["AnonymousMode"]; ok {
-		d.Set("anonymous_mode", v)
+		if err := d.Set("anonymous_mode", v); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if v, ok := ldap["AutoCreateUsers"]; ok {
-		d.Set("auto_create_users", v)
+		if err := d.Set("auto_create_users", v); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if v, ok := ldap["ReaderDN"]; ok {
-		d.Set("reader_dn", v)
+		if err := d.Set("reader_dn", v); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if v, ok := ldap["StartTLS"]; ok {
-		d.Set("start_tls", v)
+		if err := d.Set("start_tls", v); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if v, ok := ldap["URL"]; ok {
-		d.Set("url", v)
+		if err := d.Set("url", v); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if v, ok := ldap["URLs"]; ok {
-		d.Set("urls", v)
+		if err := d.Set("urls", v); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if v, ok := ldap["ServerType"]; ok {
-		d.Set("server_type", int(v.(float64)))
+		if err := d.Set("server_type", int(v.(float64))); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if v, ok := ldap["AdminAutoPopulate"]; ok {
-		d.Set("admin_auto_populate", v)
+		if err := d.Set("admin_auto_populate", v); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if v, ok := ldap["AdminGroups"]; ok {
-		d.Set("admin_groups", v)
+		if err := d.Set("admin_groups", v); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	// Preserve sensitive password from state
 	if currentPW, ok := d.GetOk("password"); ok {
 		if pwStr, ok := currentPW.(string); ok && pwStr != "" {
-			d.Set("password", pwStr)
+			if err := d.Set("password", pwStr); err != nil {
+				return diag.FromErr(err)
+			}
 		}
 	}
 
@@ -432,7 +454,9 @@ func resourceLDAPSettingsRead(d *schema.ResourceData, meta interface{}) error {
 					"user_name_attribute": s["UserNameAttribute"],
 				})
 			}
-			d.Set("search_settings", settings)
+			if err := d.Set("search_settings", settings); err != nil {
+				return diag.FromErr(err)
+			}
 		}
 	}
 
@@ -448,7 +472,9 @@ func resourceLDAPSettingsRead(d *schema.ResourceData, meta interface{}) error {
 					"group_filter":    s["GroupFilter"],
 				})
 			}
-			d.Set("group_search_settings", settings)
+			if err := d.Set("group_search_settings", settings); err != nil {
+				return diag.FromErr(err)
+			}
 		}
 	}
 
@@ -464,7 +490,9 @@ func resourceLDAPSettingsRead(d *schema.ResourceData, meta interface{}) error {
 					"group_filter":    s["GroupFilter"],
 				})
 			}
-			d.Set("admin_group_search_settings", settings)
+			if err := d.Set("admin_group_search_settings", settings); err != nil {
+				return diag.FromErr(err)
+			}
 		}
 	}
 
@@ -489,13 +517,15 @@ func resourceLDAPSettingsRead(d *schema.ResourceData, meta interface{}) error {
 				}
 			}
 		}
-		d.Set("tls_config", []interface{}{tlsConfig})
+		if err := d.Set("tls_config", []interface{}{tlsConfig}); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil
 }
 
-func resourceLDAPSettingsDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceLDAPSettingsDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }

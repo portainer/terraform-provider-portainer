@@ -26,7 +26,7 @@ func TestEndpointServiceUpdateCreate_HappyPath(t *testing.T) {
 	_ = d.Set("service_name", "web")
 	_ = d.Set("pull_image", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "2-svc-abc" {
@@ -63,7 +63,7 @@ func TestEndpointServiceUpdateCreate_ServiceNotFound(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("service_name", "missing")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error when service name is not in the list, got nil")
 	}
 	if mock.FindRequest("PUT", "/endpoints/2/forceupdateservice") != nil {
@@ -86,7 +86,7 @@ func TestEndpointServiceUpdateCreate_ListHTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("service_name", "web")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on list 500, got nil")
 	}
 }
@@ -109,7 +109,7 @@ func TestEndpointServiceUpdateCreate_PutHTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("service_name", "web")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on PUT 400, got nil")
 	}
 }
@@ -123,10 +123,10 @@ func TestEndpointServiceUpdate_ReadAndDelete_AreNoop(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("2-svc-abc")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read (noop) failed: %v", err)
 	}
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete (noop) failed: %v", err)
 	}
 	if len(mock.Requests()) != 0 {

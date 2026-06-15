@@ -10,15 +10,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceKubernetesApplication() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceKubernetesApplicationCreate,
-		Read:   resourceKubernetesApplicationRead,
-		Update: resourceKubernetesApplicationUpdate,
-		Delete: resourceKubernetesApplicationDelete,
+		CreateContext: resourceKubernetesApplicationCreate,
+		ReadContext:   resourceKubernetesApplicationRead,
+		UpdateContext: resourceKubernetesApplicationUpdate,
+		DeleteContext: resourceKubernetesApplicationDelete,
 
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(10 * time.Minute),
@@ -47,11 +48,11 @@ func resourceKubernetesApplication() *schema.Resource {
 	}
 }
 
-func resourceKubernetesApplicationCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesApplicationCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	timeout := d.Timeout(schema.TimeoutCreate)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	endpointID := d.Get("endpoint_id").(int)
@@ -60,28 +61,28 @@ func resourceKubernetesApplicationCreate(d *schema.ResourceData, meta interface{
 
 	parsed, err := parseManifest(manifest)
 	if err != nil {
-		return fmt.Errorf("manifest must be valid JSON or YAML: %w", err)
+		return diag.FromErr(fmt.Errorf("manifest must be valid JSON or YAML: %w", err))
 	}
 
 	metadata, ok := parsed["metadata"].(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("missing metadata in manifest")
+		return diag.FromErr(fmt.Errorf("missing metadata in manifest"))
 	}
 	name, ok := metadata["name"].(string)
 	if !ok || name == "" {
-		return fmt.Errorf("missing metadata.name in manifest")
+		return diag.FromErr(fmt.Errorf("missing metadata.name in manifest"))
 	}
 
 	jsonBody, err := json.Marshal(parsed)
 	if err != nil {
-		return fmt.Errorf("failed to encode manifest body: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to encode manifest body: %w", err))
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/apps/v1/namespaces/%s/deployments", client.Endpoint, endpointID, namespace)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if client.APIKey != "" {
@@ -89,70 +90,70 @@ func resourceKubernetesApplicationCreate(d *schema.ResourceData, meta interface{
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to create Kubernetes Job: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to create Kubernetes Job: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create Job (%d): %s", resp.StatusCode, string(body))
+		return diag.FromErr(fmt.Errorf("failed to create Job (%d): %s", resp.StatusCode, string(body)))
 	}
 
 	d.SetId(fmt.Sprintf("%d:%s:%s", endpointID, namespace, name))
 	return nil
 }
 
-func resourceKubernetesApplicationDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesApplicationDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	timeout := d.Timeout(schema.TimeoutDelete)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	endpointID, namespace, name := parseApllicationsID(d.Id())
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/apps/v1/namespaces/%s/deployments/%s", client.Endpoint, endpointID, namespace, name)
 
-	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to delete Job: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to delete Job: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 && resp.StatusCode != 204 && resp.StatusCode != 404 {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete Job: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to delete Job: %s", string(body)))
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func resourceKubernetesApplicationUpdate(d *schema.ResourceData, meta interface{}) error {
-	if err := resourceKubernetesApplicationDelete(d, meta); err != nil {
-		return fmt.Errorf("delete during update failed: %w", err)
+func resourceKubernetesApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	if diags := resourceKubernetesApplicationDelete(ctx, d, meta); diags.HasError() {
+		return diags
 	}
-	return resourceKubernetesApplicationCreate(d, meta)
+	return resourceKubernetesApplicationCreate(ctx, d, meta)
 }
 
-func resourceKubernetesApplicationRead(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesApplicationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil
 }
 

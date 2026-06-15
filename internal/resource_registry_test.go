@@ -41,7 +41,7 @@ func TestRegistryCreate_HappyPath(t *testing.T) {
 	_ = d.Set("type", 3)
 	_ = d.Set("authentication", false)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -97,7 +97,7 @@ func TestRegistryRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("42")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestRegistryRead_404ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("99")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404 and clear ID, got error: %v", err)
 	}
 	if d.Id() != "" {
@@ -165,7 +165,7 @@ func TestRegistryUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("type", 3)
 	_ = d.Set("authentication", false)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -187,7 +187,7 @@ func TestRegistryDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("7")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -216,7 +216,7 @@ func TestRegistryCreate_HTTPError(t *testing.T) {
 	_ = d.Set("type", 3)
 	_ = d.Set("authentication", false)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}

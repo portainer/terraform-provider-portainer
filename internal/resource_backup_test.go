@@ -28,7 +28,7 @@ func TestBackupCreate_HappyPath(t *testing.T) {
 	_ = d.Set("password", "topsecret")
 	_ = d.Set("output_path", outPath)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -76,7 +76,7 @@ func TestBackupCreate_HTTPError(t *testing.T) {
 	_ = d.Set("password", "x")
 	_ = d.Set("output_path", outPath)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on 500, got nil")
 	}

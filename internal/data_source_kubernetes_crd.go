@@ -1,18 +1,20 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceKubernetesCRD() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceKubernetesCRDRead,
+		ReadContext: dataSourceKubernetesCRDRead,
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
@@ -74,7 +76,7 @@ func dataSourceKubernetesCRD() *schema.Resource {
 	}
 }
 
-func dataSourceKubernetesCRDRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceKubernetesCRDRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	envID := d.Get("environment_id").(int)
@@ -85,12 +87,12 @@ func dataSourceKubernetesCRDRead(d *schema.ResourceData, meta interface{}) error
 		path := fmt.Sprintf("/kubernetes/%d/customresourcedefinitions/%s", envID, crdName.(string))
 		resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
 		if err != nil {
-			return fmt.Errorf("failed to get CRD: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to get CRD: %w", err))
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode >= 400 {
-			return fmt.Errorf("failed to get CRD: HTTP %d", resp.StatusCode)
+			return diag.FromErr(fmt.Errorf("failed to get CRD: HTTP %d", resp.StatusCode))
 		}
 
 		var crd struct {
@@ -103,7 +105,7 @@ func dataSourceKubernetesCRDRead(d *schema.ResourceData, meta interface{}) error
 			ReleaseVersion   string `json:"releaseVersion"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&crd); err != nil {
-			return fmt.Errorf("failed to decode CRD response: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to decode CRD response: %w", err))
 		}
 
 		crds := []map[string]interface{}{
@@ -124,12 +126,12 @@ func dataSourceKubernetesCRDRead(d *schema.ResourceData, meta interface{}) error
 		path := fmt.Sprintf("/kubernetes/%d/customresourcedefinitions", envID)
 		resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
 		if err != nil {
-			return fmt.Errorf("failed to list CRDs: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to list CRDs: %w", err))
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode >= 400 {
-			return fmt.Errorf("failed to list CRDs: HTTP %d", resp.StatusCode)
+			return diag.FromErr(fmt.Errorf("failed to list CRDs: HTTP %d", resp.StatusCode))
 		}
 
 		var result []struct {
@@ -142,7 +144,7 @@ func dataSourceKubernetesCRDRead(d *schema.ResourceData, meta interface{}) error
 			ReleaseVersion   string `json:"releaseVersion"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return fmt.Errorf("failed to decode CRDs response: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to decode CRDs response: %w", err))
 		}
 
 		crds := make([]map[string]interface{}, len(result))

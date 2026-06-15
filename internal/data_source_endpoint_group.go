@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/portainer/client-api-go/v2/pkg/client/endpoint_groups"
 )
 
 func dataSourceEndpointGroup() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceEndpointGroupRead,
+		ReadContext: dataSourceEndpointGroupRead,
 
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -28,25 +29,27 @@ func dataSourceEndpointGroup() *schema.Resource {
 	}
 }
 
-func dataSourceEndpointGroupRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceEndpointGroupRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := endpoint_groups.NewEndpointGroupListParams()
 	params.SetContext(ctx)
 	resp, err := client.Client.EndpointGroups.EndpointGroupList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list endpoint groups: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to list endpoint groups: %w", decorateSDKError(err, errBody)))
 	}
 
 	for _, g := range resp.Payload {
 		if g.Name == name {
 			d.SetId(strconv.FormatInt(g.ID, 10))
-			d.Set("description", g.Description)
+			if err := d.Set("description", g.Description); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 	}
 
-	return fmt.Errorf("endpoint group %s not found", name)
+	return diag.FromErr(fmt.Errorf("endpoint group %s not found", name))
 }

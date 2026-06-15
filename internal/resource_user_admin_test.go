@@ -21,7 +21,7 @@ func TestUserAdminCreate_HappyPath(t *testing.T) {
 	_ = d.Set("username", "admin")
 	_ = d.Set("password", "S3cret!password")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "1" {
@@ -63,7 +63,7 @@ func TestUserAdminCreate_Conflict_TreatedAsIdempotent(t *testing.T) {
 	_ = d.Set("username", "admin")
 	_ = d.Set("password", "anything")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("409 should be treated as idempotent success, got: %v", err)
 	}
 	if d.Id() != "portainer-admin" {
@@ -90,7 +90,7 @@ func TestUserAdminCreate_ZeroID_FallsBack(t *testing.T) {
 	_ = d.Set("username", "admin")
 	_ = d.Set("password", "pw")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "portainer-admin" {
@@ -113,7 +113,7 @@ func TestUserAdminCreate_HTTPError(t *testing.T) {
 	_ = d.Set("username", "admin")
 	_ = d.Set("password", "pw")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }
@@ -126,7 +126,7 @@ func TestUserAdminRead_AlwaysClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("1")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "" {

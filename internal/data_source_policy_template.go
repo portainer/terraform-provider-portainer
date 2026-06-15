@@ -1,16 +1,19 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourcePortainerPolicyTemplate() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourcePortainerPolicyTemplateRead,
+		ReadContext: dataSourcePortainerPolicyTemplateRead,
 
 		Schema: map[string]*schema.Schema{
 			"template_id": {
@@ -49,13 +52,13 @@ func dataSourcePortainerPolicyTemplate() *schema.Resource {
 	}
 }
 
-func dataSourcePortainerPolicyTemplateRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourcePortainerPolicyTemplateRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	// If template_id is provided, look up directly
 	if v, ok := d.GetOk("template_id"); ok {
 		templateID := v.(string)
-		return readPolicyTemplateByID(d, client, templateID)
+		return diag.FromErr(readPolicyTemplateByID(d, client, templateID))
 	}
 
 	// Otherwise, look up by name from the list
@@ -63,31 +66,31 @@ func dataSourcePortainerPolicyTemplateRead(d *schema.ResourceData, meta interfac
 
 	resp, err := client.DoRequest("GET", "/policies/templates", nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to list policy templates: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to list policy templates: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list policy templates, status %d: %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to list policy templates, status %d: %s", resp.StatusCode, string(data)))
 	}
 
 	var listResp struct {
 		Templates []map[string]interface{} `json:"templates"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
-		return fmt.Errorf("failed to decode policy template list: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode policy template list: %w", err))
 	}
 
 	for _, t := range listResp.Templates {
 		if tName, ok := t["name"].(string); ok && tName == name {
 			if id, ok := t["id"].(string); ok {
-				return readPolicyTemplateByID(d, client, id)
+				return diag.FromErr(readPolicyTemplateByID(d, client, id))
 			}
 		}
 	}
 
-	return fmt.Errorf("policy template with name %q not found", name)
+	return diag.FromErr(fmt.Errorf("policy template with name %q not found", name))
 }
 
 func readPolicyTemplateByID(d *schema.ResourceData, client *APIClient, templateID string) error {
@@ -97,7 +100,7 @@ func readPolicyTemplateByID(d *schema.ResourceData, client *APIClient, templateI
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to read policy template %s, status %d: %s", templateID, resp.StatusCode, string(data))
 	}

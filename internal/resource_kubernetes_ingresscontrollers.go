@@ -2,12 +2,14 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -22,10 +24,10 @@ type IngressController struct {
 
 func resourceKubernetesIngressControllers() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceKubernetesIngressControllersCreate,
-		Read:   resourceKubernetesIngressControllersRead,
-		Update: resourceKubernetesIngressControllersCreate,
-		Delete: resourceKubernetesIngressControllersDelete,
+		CreateContext: resourceKubernetesIngressControllersCreate,
+		ReadContext:   resourceKubernetesIngressControllersRead,
+		UpdateContext: resourceKubernetesIngressControllersCreate,
+		DeleteContext: resourceKubernetesIngressControllersDelete,
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
@@ -52,11 +54,11 @@ func resourceKubernetesIngressControllers() *schema.Resource {
 	}
 }
 
-func resourceKubernetesIngressControllersCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesIngressControllersCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Get("environment_id").(int)
 
-	var controllers []IngressController
+	controllers := make([]IngressController, 0, len(d.Get("controllers").([]interface{})))
 	for _, raw := range d.Get("controllers").([]interface{}) {
 		data := raw.(map[string]interface{})
 		controllers = append(controllers, IngressController{
@@ -71,69 +73,69 @@ func resourceKubernetesIngressControllersCreate(d *schema.ResourceData, meta int
 
 	jsonBody, _ := json.Marshal(controllers)
 	url := fmt.Sprintf("%s/kubernetes/%d/ingresscontrollers", client.Endpoint, id)
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update ingress controllers: %s", body)
+		return diag.FromErr(fmt.Errorf("failed to update ingress controllers: %s", body))
 	}
 
 	d.SetId(strconv.Itoa(id))
-	return resourceKubernetesIngressControllersRead(d, meta)
+	return resourceKubernetesIngressControllersRead(ctx, d, meta)
 }
 
-func resourceKubernetesIngressControllersRead(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesIngressControllersRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Get("environment_id").(int)
 
 	url := fmt.Sprintf("%s/kubernetes/%d/ingresscontrollers", client.Endpoint, id)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
 	}
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read ingress controllers: %s", body)
+		return diag.FromErr(fmt.Errorf("failed to read ingress controllers: %s", body))
 	}
 
-	var controllers []IngressController
+	controllers := make([]IngressController, 0, len(d.Get("controllers").([]interface{})))
 	if err := json.NewDecoder(resp.Body).Decode(&controllers); err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	controllersList := make([]map[string]interface{}, len(controllers))
@@ -147,17 +149,19 @@ func resourceKubernetesIngressControllersRead(d *schema.ResourceData, meta inter
 			"used":         c.Used,
 		}
 	}
-	d.Set("controllers", controllersList)
+	if err := d.Set("controllers", controllersList); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
 
-func resourceKubernetesIngressControllersDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesIngressControllersDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Get("environment_id").(int)
 
 	// No DELETE endpoint exists; disable all controllers via PUT to clean up.
-	var controllers []IngressController
+	controllers := make([]IngressController, 0, len(d.Get("controllers").([]interface{})))
 	for _, raw := range d.Get("controllers").([]interface{}) {
 		data := raw.(map[string]interface{})
 		controllers = append(controllers, IngressController{
@@ -172,28 +176,28 @@ func resourceKubernetesIngressControllersDelete(d *schema.ResourceData, meta int
 
 	jsonBody, _ := json.Marshal(controllers)
 	url := fmt.Sprintf("%s/kubernetes/%d/ingresscontrollers", client.Endpoint, id)
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to disable ingress controllers: %s", body)
+		return diag.FromErr(fmt.Errorf("failed to disable ingress controllers: %s", body))
 	}
 
 	return nil

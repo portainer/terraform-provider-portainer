@@ -28,7 +28,7 @@ func TestSSLCreate_HappyPath(t *testing.T) {
 	_ = d.Set("client_cert", "----CLIENT-CERT----")
 	_ = d.Set("http_enabled", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -75,7 +75,7 @@ func TestSSLRead_HappyPath(t *testing.T) {
 	_ = d.Set("key", "y")
 	d.SetId("portainer-ssl")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -101,7 +101,7 @@ func TestSSLUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("key", "----NEW-KEY----")
 	_ = d.Set("http_enabled", true)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestSSLDelete_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer-ssl")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -157,7 +157,7 @@ func TestSSLCreate_HTTPError(t *testing.T) {
 	_ = d.Set("key", "bad")
 	_ = d.Set("http_enabled", true)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {

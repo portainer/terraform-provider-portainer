@@ -1,12 +1,14 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -63,12 +65,12 @@ type dockerVolumeCreateResponse struct {
 
 func resourceDockerVolume() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceDockerVolumeCreate,
-		Read:   resourceDockerVolumeRead,
-		Delete: resourceDockerVolumeDelete,
-		Update: nil,
+		CreateContext: resourceDockerVolumeCreate,
+		ReadContext:   resourceDockerVolumeRead,
+		DeleteContext: resourceDockerVolumeDelete,
+		UpdateContext: nil,
 		Importer: &schema.ResourceImporter{
-			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+			StateContext: func(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 				// ID in format: <endpoint_id>-<volume_name>
 				id := d.Id()
 				var endpointID int
@@ -210,7 +212,7 @@ func resourceDockerVolume() *schema.Resource {
 	}
 }
 
-func resourceDockerVolumeCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerVolumeCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	volume := DockerVolumeSpec{
@@ -234,17 +236,17 @@ func resourceDockerVolumeCreate(d *schema.ResourceData, meta interface{}) error 
 
 	resp, err := client.DoRequest(http.MethodPost, path, nil, volume)
 	if err != nil {
-		return fmt.Errorf("failed to create volume: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to create volume: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create volume, status code: %d, body: %s", resp.StatusCode, string(body))
+		return diag.FromErr(fmt.Errorf("failed to create volume, status code: %d, body: %s", resp.StatusCode, string(body)))
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return fmt.Errorf("failed to decode create volume response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode create volume response: %w", err))
 	}
 
 	name := response.Name
@@ -261,7 +263,7 @@ func resourceDockerVolumeCreate(d *schema.ResourceData, meta interface{}) error 
 	return nil
 }
 
-func resourceDockerVolumeRead(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerVolumeRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	name := d.Get("name").(string)
@@ -269,16 +271,16 @@ func resourceDockerVolumeRead(d *schema.ResourceData, meta interface{}) error {
 	path := fmt.Sprintf("/endpoints/%d/docker/volumes/%s", endpointID, url.PathEscape(name))
 	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to read docker volume: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to read docker volume: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
-	} else if resp.StatusCode != 200 {
+	} else if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read volume: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to read volume: %s", string(body)))
 	}
 
 	var result struct {
@@ -295,7 +297,7 @@ func resourceDockerVolumeRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode volume: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode volume: %w", err))
 	}
 
 	_ = d.Set("name", result.Name)
@@ -312,7 +314,7 @@ func resourceDockerVolumeRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceDockerVolumeDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerVolumeDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	name := d.Get("name").(string)
@@ -320,13 +322,13 @@ func resourceDockerVolumeDelete(d *schema.ResourceData, meta interface{}) error 
 	path := fmt.Sprintf("/endpoints/%d/docker/volumes/%s", endpointID, url.PathEscape(name))
 	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to delete volume: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to delete volume: %w", err))
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 && resp.StatusCode != 404 {
-		return fmt.Errorf("failed to delete volume, status code: %d, body: %s", resp.StatusCode, string(body))
+	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
+		return diag.FromErr(fmt.Errorf("failed to delete volume, status code: %d, body: %s", resp.StatusCode, string(body)))
 	}
 
 	d.SetId("")

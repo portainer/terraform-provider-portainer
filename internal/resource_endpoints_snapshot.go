@@ -1,18 +1,20 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceEndpointsSnapshot() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceEndpointsSnapshotCreate,
-		Read:   resourceEndpointsSnapshotRead,
-		Delete: resourceEndpointsSnapshotDelete,
+		CreateContext: resourceEndpointsSnapshotCreate,
+		ReadContext:   resourceEndpointsSnapshotRead,
+		DeleteContext: resourceEndpointsSnapshotDelete,
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -24,7 +26,7 @@ func resourceEndpointsSnapshot() *schema.Resource {
 	}
 }
 
-func resourceEndpointsSnapshotCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointsSnapshotCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	var req *http.Request
@@ -32,15 +34,15 @@ func resourceEndpointsSnapshotCreate(d *schema.ResourceData, meta interface{}) e
 
 	if v, ok := d.GetOk("endpoint_id"); ok {
 		id := v.(int)
-		req, err = http.NewRequest("POST", fmt.Sprintf("%s/endpoints/%d/snapshot", client.Endpoint, id), nil)
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/endpoints/%d/snapshot", client.Endpoint, id), nil)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		d.SetId(strconv.Itoa(id))
 	} else {
-		req, err = http.NewRequest("POST", fmt.Sprintf("%s/endpoints/snapshot", client.Endpoint), nil)
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/endpoints/snapshot", client.Endpoint), nil)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		d.SetId("all")
 	}
@@ -50,28 +52,28 @@ func resourceEndpointsSnapshotCreate(d *schema.ResourceData, meta interface{}) e
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 204 {
-		return fmt.Errorf("failed to snapshot endpoint(s): HTTP %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusNoContent {
+		return diag.FromErr(fmt.Errorf("failed to snapshot endpoint(s): HTTP %d", resp.StatusCode))
 	}
 
 	return nil
 }
 
-func resourceEndpointsSnapshotRead(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointsSnapshotRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// No meaningful read state; this is a one-time action resource
 	return nil
 }
 
-func resourceEndpointsSnapshotDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointsSnapshotDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// Nothing to delete in Portainer; just remove from state
 	d.SetId("")
 	return nil

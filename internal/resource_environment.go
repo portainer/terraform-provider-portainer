@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/go-openapi/runtime"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/portainer/client-api-go/v2/pkg/client/endpoints"
 	"github.com/portainer/client-api-go/v2/pkg/models"
@@ -15,12 +16,12 @@ import (
 
 func resourceEnvironment() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceEnvironmentCreate,
-		Read:   resourceEnvironmentRead,
-		Delete: resourceEnvironmentDelete,
-		Update: resourceEnvironmentUpdate,
+		CreateContext: resourceEnvironmentCreate,
+		ReadContext:   resourceEnvironmentRead,
+		DeleteContext: resourceEnvironmentDelete,
+		UpdateContext: resourceEnvironmentUpdate,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -136,15 +137,15 @@ func resourceEnvironment() *schema.Resource {
 	}
 }
 
-func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceEnvironmentCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
 	if existingID, err := findExistingEnvironmentByName(client, name); err != nil {
-		return fmt.Errorf("failed to check for existing environment: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to check for existing environment: %w", err))
 	} else if existingID != 0 {
 		d.SetId(strconv.Itoa(existingID))
-		return resourceEnvironmentUpdate(d, meta)
+		return resourceEnvironmentUpdate(ctx, d, meta)
 	}
 
 	envType := d.Get("type").(int)
@@ -198,11 +199,11 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 		}
 	}
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params.SetContext(ctx)
 	resp, err := client.Client.Endpoints.EndpointCreate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create environment: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to create environment: %w", decorateSDKError(err, errBody)))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
@@ -217,24 +218,24 @@ func resourceEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
 	// For edge agents, tags must be applied via Update after creation
 	if isEdgeAgent {
 		if _, ok := d.GetOk("tag_ids"); ok {
-			if err := resourceEnvironmentUpdate(d, meta); err != nil {
-				return fmt.Errorf("failed to apply tag_ids after edge agent creation: %w", err)
+			if diags := resourceEnvironmentUpdate(ctx, d, meta); diags.HasError() {
+				return diags
 			}
 		}
 	}
 
 	if _, ok := d.GetOk("user_access_policies"); ok {
-		if err := resourceEnvironmentUpdate(d, meta); err != nil {
-			return fmt.Errorf("failed to apply user access policies after creation: %w", err)
+		if diags := resourceEnvironmentUpdate(ctx, d, meta); diags.HasError() {
+			return diags
 		}
 	}
 	if _, ok := d.GetOk("team_access_policies"); ok {
-		if err := resourceEnvironmentUpdate(d, meta); err != nil {
-			return fmt.Errorf("failed to apply team access policies after creation: %w", err)
+		if diags := resourceEnvironmentUpdate(ctx, d, meta); diags.HasError() {
+			return diags
 		}
 	}
 
-	return resourceEnvironmentRead(d, meta)
+	return resourceEnvironmentRead(ctx, d, meta)
 }
 
 func findExistingEnvironmentByName(client *APIClient, name string) (int, error) {
@@ -254,11 +255,11 @@ func findExistingEnvironmentByName(client *APIClient, name string) (int, error) 
 	return 0, nil
 }
 
-func resourceEnvironmentRead(d *schema.ResourceData, meta interface{}) error {
+func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := endpoints.NewEndpointInspectParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -270,36 +271,54 @@ func resourceEnvironmentRead(d *schema.ResourceData, meta interface{}) error {
 			d.SetId("")
 			return nil
 		}
-		return fmt.Errorf("failed to read environment: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to read environment: %w", decorateSDKError(err, errBody)))
 	}
 
-	d.Set("name", resp.Payload.Name)
-	d.Set("type", int(resp.Payload.Type))
-	d.Set("group_id", int(resp.Payload.GroupID))
-	d.Set("edge_id", resp.Payload.EdgeID)
-	d.Set("edge_key", resp.Payload.EdgeKey)
-	d.Set("environment_address", resp.Payload.URL)
+	if err := d.Set("name", resp.Payload.Name); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("type", int(resp.Payload.Type)); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("group_id", int(resp.Payload.GroupID)); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("edge_id", resp.Payload.EdgeID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("edge_key", resp.Payload.EdgeKey); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("environment_address", resp.Payload.URL); err != nil {
+		return diag.FromErr(err)
+	}
 
 	if resp.Payload.PublicURL != "" {
-		d.Set("public_ip", resp.Payload.PublicURL)
+		if err := d.Set("public_ip", resp.Payload.PublicURL); err != nil {
+			return diag.FromErr(err)
+		}
 	} else {
-		d.Set("public_ip", "")
+		if err := d.Set("public_ip", ""); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	tagIDs := []int{}
 	for _, tid := range resp.Payload.TagIds {
 		tagIDs = append(tagIDs, int(tid))
 	}
-	d.Set("tag_ids", tagIDs)
+	if err := d.Set("tag_ids", tagIDs); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
 
-func resourceEnvironmentUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceEnvironmentUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := endpoints.NewEndpointUpdateParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -351,17 +370,17 @@ func resourceEnvironmentUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Endpoints.EndpointUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update environment: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to update environment: %w", decorateSDKError(err, errBody)))
 	}
 
-	return resourceEnvironmentRead(d, meta)
+	return resourceEnvironmentRead(ctx, d, meta)
 }
 
-func resourceEnvironmentDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceEnvironmentDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := endpoints.NewEndpointDeleteParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -372,7 +391,7 @@ func resourceEnvironmentDelete(d *schema.ResourceData, meta interface{}) error {
 		if errors.As(err, &notFound) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete environment: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to delete environment: %w", decorateSDKError(err, errBody)))
 	}
 
 	return nil

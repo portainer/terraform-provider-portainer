@@ -20,7 +20,7 @@ func TestDataSourceUserRead_HappyPath(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("username", "alice")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -48,7 +48,7 @@ func TestDataSourceUserRead_NotFound(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("username", "ghost")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error when user not found, got nil")
 	}
 }
@@ -67,7 +67,7 @@ func TestDataSourceUserRead_HTTPError(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("username", "alice")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }

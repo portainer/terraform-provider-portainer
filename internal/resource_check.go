@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -8,15 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceCheck() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceCheckCreate,
-		Read:   resourceCheckRead,
-		Delete: resourceCheckDelete,
-		Update: nil,
+		CreateContext: resourceCheckCreate,
+		ReadContext:   resourceCheckRead,
+		DeleteContext: resourceCheckDelete,
+		UpdateContext: nil,
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -80,7 +82,7 @@ func resourceCheck() *schema.Resource {
 	}
 }
 
-func resourceCheckCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceCheckCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	endpointID := d.Get("endpoint_id").(int)
@@ -110,19 +112,19 @@ func resourceCheckCreate(d *schema.ResourceData, meta interface{}) error {
 	swURL := fmt.Sprintf("%s/endpoints/%d/docker/swarm", client.Endpoint, endpointID)
 	swBody, swCode, err := apiGETWithCode(swURL, client.APIKey, client)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	isSwarm := swCode == 200 && strings.Contains(string(swBody), `"ID"`)
 
 	if isSwarm {
 		out.WriteString("Docker Swarm detected — using swarm check logic.\n")
 		if err := checkSwarmServices(client, endpointID, revision, desiredState, fullServices, maxRetries, waitBetween, &out); err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 	} else {
 		out.WriteString("Docker Standalone detected — using container check logic.\n")
 		if err := checkStandaloneContainers(client, endpointID, revision, desiredState, fullServices, maxRetries, waitBetween, &out); err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 	}
 
@@ -250,11 +252,11 @@ func checkStandaloneContainers(client *APIClient, endpointID int, revision, desi
 	return nil
 }
 
-func resourceCheckRead(d *schema.ResourceData, meta interface{}) error {
+func resourceCheckRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil // Stateless
 }
 
-func resourceCheckDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceCheckDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }

@@ -1,18 +1,21 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceBackupS3() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceBackupS3Create,
-		Read:   resourceBackupS3Read,
-		Delete: resourceBackupS3Delete,
+		CreateContext: resourceBackupS3Create,
+		ReadContext:   resourceBackupS3Read,
+		DeleteContext: resourceBackupS3Delete,
 		Schema: map[string]*schema.Schema{
 			"access_key_id": {
 				Type:        schema.TypeString,
@@ -63,7 +66,7 @@ func resourceBackupS3() *schema.Resource {
 	}
 }
 
-func resourceBackupS3Create(d *schema.ResourceData, meta interface{}) error {
+func resourceBackupS3Create(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	body := map[string]interface{}{
@@ -81,31 +84,31 @@ func resourceBackupS3Create(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.DoRequest("POST", "/backup/s3/execute", nil, body)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != http.StatusNoContent {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to execute S3 backup: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to execute S3 backup: %s", string(data)))
 	}
 
 	d.SetId("portainer_backup_s3")
 	return nil
 }
 
-func resourceBackupS3Read(d *schema.ResourceData, meta interface{}) error {
+func resourceBackupS3Read(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	resp, err := client.DoRequest("GET", "/backup/s3/settings", nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to fetch S3 backup settings: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to fetch S3 backup settings: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read S3 backup settings: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to read S3 backup settings: %s", string(data)))
 	}
 
 	var result struct {
@@ -119,22 +122,36 @@ func resourceBackupS3Read(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode S3 settings: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode S3 settings: %w", err))
 	}
 
-	d.Set("access_key_id", result.AccessKeyID)
-	d.Set("secret_access_key", result.SecretAccessKey)
-	d.Set("bucket_name", result.BucketName)
-	d.Set("region", result.Region)
-	d.Set("s3_compatible_host", result.S3CompatibleHost)
-	d.Set("password", result.Password)
-	d.Set("cron_rule", result.CronRule)
+	if err := d.Set("access_key_id", result.AccessKeyID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("secret_access_key", result.SecretAccessKey); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("bucket_name", result.BucketName); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("region", result.Region); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("s3_compatible_host", result.S3CompatibleHost); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("password", result.Password); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("cron_rule", result.CronRule); err != nil {
+		return diag.FromErr(err)
+	}
 
 	d.SetId("portainer_backup_s3")
 	return nil
 }
 
-func resourceBackupS3Delete(d *schema.ResourceData, meta interface{}) error {
+func resourceBackupS3Delete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// This operation cannot be undone via API; just remove from state.
 	d.SetId("")
 	return nil

@@ -11,15 +11,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceContainerExec() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceContainerExecCreate,
-		Read:   resourceContainerExecRead,
-		Delete: resourceContainerExecDelete,
-		Update: nil,
+		CreateContext: resourceContainerExecCreate,
+		ReadContext:   resourceContainerExecRead,
+		DeleteContext: resourceContainerExecDelete,
+		UpdateContext: nil,
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(5 * time.Minute),
 		},
@@ -35,12 +36,12 @@ func resourceContainerExec() *schema.Resource {
 	}
 }
 
-func resourceContainerExecCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceContainerExecCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	mode := d.Get("mode").(string)
 	if mode == "swarm" {
-		return execInSwarm(d, meta)
+		return diag.FromErr(execInSwarm(d, meta))
 	}
-	return execInStandalone(d, meta)
+	return diag.FromErr(execInStandalone(d, meta))
 }
 
 func execInStandalone(d *schema.ResourceData, meta interface{}) error {
@@ -84,7 +85,7 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 
 	execReqBody, _ := json.Marshal(execBody)
 	execURL := fmt.Sprintf("%s/endpoints/%d/docker/containers/%s/exec", client.Endpoint, endpointID, containerID)
-	execReq, _ := http.NewRequestWithContext(ctx, "POST", execURL, bytes.NewBuffer(execReqBody))
+	execReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, execURL, bytes.NewBuffer(execReqBody))
 	if client.APIKey != "" {
 		execReq.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -112,7 +113,7 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 		"Tty":    false,
 	}
 	startReqBody, _ := json.Marshal(startBody)
-	startReq, _ := http.NewRequestWithContext(ctx, "POST", startURL, bytes.NewBuffer(startReqBody))
+	startReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, startURL, bytes.NewBuffer(startReqBody))
 	if client.APIKey != "" {
 		startReq.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -185,7 +186,7 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 
 	execReqBody, _ := json.Marshal(execBody)
 	execURL := fmt.Sprintf("%s/endpoints/%d/docker/containers/%s/exec", client.Endpoint, endpointID, containerID)
-	execReq, _ := http.NewRequestWithContext(ctx, "POST", execURL, bytes.NewBuffer(execReqBody))
+	execReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, execURL, bytes.NewBuffer(execReqBody))
 	if client.APIKey != "" {
 		execReq.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -214,7 +215,7 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 		"Tty":    false,
 	}
 	startReqBody, _ := json.Marshal(startBody)
-	startReq, _ := http.NewRequestWithContext(ctx, "POST", startURL, bytes.NewBuffer(startReqBody))
+	startReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, startURL, bytes.NewBuffer(startReqBody))
 	if client.APIKey != "" {
 		startReq.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -235,11 +236,11 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceContainerExecRead(d *schema.ResourceData, meta interface{}) error {
+func resourceContainerExecRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil // Stateless
 }
 
-func resourceContainerExecDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceContainerExecDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }

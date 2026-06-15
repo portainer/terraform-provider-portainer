@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/portainer/client-api-go/v2/pkg/client/webhooks"
 	"github.com/portainer/client-api-go/v2/pkg/models"
@@ -12,10 +13,10 @@ import (
 
 func resourceWebhook() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceWebhookCreate,
-		Read:   resourceWebhookRead,
-		Delete: resourceWebhookDelete,
-		Update: resourceWebhookUpdate,
+		CreateContext: resourceWebhookCreate,
+		ReadContext:   resourceWebhookRead,
+		DeleteContext: resourceWebhookDelete,
+		UpdateContext: resourceWebhookUpdate,
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -51,10 +52,10 @@ func resourceWebhook() *schema.Resource {
 	}
 }
 
-func resourceWebhookCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceWebhookCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := webhooks.NewPostWebhooksParams()
 	params.SetContext(ctx)
 	params.Body = &models.WebhooksWebhookCreatePayload{
@@ -66,24 +67,26 @@ func resourceWebhookCreate(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.Client.Webhooks.PostWebhooks(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create webhook: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to create webhook: %w", decorateSDKError(err, errBody)))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
-	d.Set("token", resp.Payload.Token)
+	if err := d.Set("token", resp.Payload.Token); err != nil {
+		return diag.FromErr(err)
+	}
 	return nil
 }
 
-func resourceWebhookRead(d *schema.ResourceData, meta interface{}) error {
+func resourceWebhookRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil
 }
 
-func resourceWebhookUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceWebhookUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
 	if d.HasChange("registry_id") {
-		ctx, errBody := withErrorCapture(context.Background())
+		ctx, errBody := withErrorCapture(ctx)
 		params := webhooks.NewPutWebhooksIDParams()
 		params.SetContext(ctx)
 		params.ID = id
@@ -93,25 +96,25 @@ func resourceWebhookUpdate(d *schema.ResourceData, meta interface{}) error {
 
 		_, err := client.Client.Webhooks.PutWebhooksID(params, client.AuthInfo)
 		if err != nil {
-			return fmt.Errorf("failed to update webhook: %w", decorateSDKError(err, errBody))
+			return diag.FromErr(fmt.Errorf("failed to update webhook: %w", decorateSDKError(err, errBody)))
 		}
 	}
 
-	return resourceWebhookRead(d, meta)
+	return resourceWebhookRead(ctx, d, meta)
 }
 
-func resourceWebhookDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceWebhookDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := webhooks.NewDeleteWebhooksIDParams()
 	params.SetContext(ctx)
 	params.ID = id
 
 	_, err := client.Client.Webhooks.DeleteWebhooksID(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to delete webhook: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to delete webhook: %w", decorateSDKError(err, errBody)))
 	}
 
 	d.SetId("")

@@ -1,11 +1,14 @@
 package internal
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -19,11 +22,11 @@ type LicenseResponse struct {
 
 func resourceLicenses() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceLicensesCreate,
-		Read:   resourceLicensesRead,
-		Delete: resourceLicensesDelete,
+		CreateContext: resourceLicensesCreate,
+		ReadContext:   resourceLicensesRead,
+		DeleteContext: resourceLicensesDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"key": {
@@ -51,7 +54,7 @@ func resourceLicenses() *schema.Resource {
 	}
 }
 
-func resourceLicensesCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceLicensesCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	licenseKey := d.Get("key").(string)
@@ -69,46 +72,46 @@ func resourceLicensesCreate(d *schema.ResourceData, meta interface{}) error {
 	var result LicenseResponse
 	resp, err := client.DoRequest("POST", url, nil, payload)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to attach license: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to attach license: %s", string(body)))
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to parse license response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to parse license response: %w", err))
 	}
 
 	if err := d.Set("conflicting_keys", result.ConflictingKeys); err != nil {
-		return fmt.Errorf("failed to set conflicting_keys: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to set conflicting_keys: %w", err))
 	}
 
 	d.SetId(fmt.Sprintf("%x", sha256.Sum256([]byte(licenseKey))))
 	return nil
 }
 
-func resourceLicensesRead(d *schema.ResourceData, meta interface{}) error {
+func resourceLicensesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	resp, err := client.DoRequest("GET", "/licenses", nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to get licenses: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to get licenses: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read licenses, status %d: %s", resp.StatusCode, string(body))
+		return diag.FromErr(fmt.Errorf("failed to read licenses, status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	var licenses []struct {
 		LicenseKey string `json:"licenseKey"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&licenses); err != nil {
-		return fmt.Errorf("failed to decode licenses list: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode licenses list: %w", err))
 	}
 
 	currentKey := d.Get("key").(string)
@@ -126,7 +129,7 @@ func resourceLicensesRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceLicensesDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceLicensesDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	payload := map[string]interface{}{
@@ -135,13 +138,13 @@ func resourceLicensesDelete(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.DoRequest("POST", "/licenses/remove", nil, payload)
 	if err != nil {
-		return fmt.Errorf("failed to send license removal request: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to send license removal request: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete license: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to delete license: %s", string(body)))
 	}
 
 	d.SetId("")

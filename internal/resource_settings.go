@@ -2,11 +2,13 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -122,12 +124,12 @@ type TLSConfig struct {
 
 func resourceSettings() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceSettingsApply,
-		Read:   resourceSettingsRead,
-		Update: resourceSettingsApply,
-		Delete: resourceSettingsDelete,
+		CreateContext: resourceSettingsApply,
+		ReadContext:   resourceSettingsRead,
+		UpdateContext: resourceSettingsApply,
+		DeleteContext: resourceSettingsDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"edge_portainer_url":           {Type: schema.TypeString, Optional: true, Computed: true, Description: "Public URL of the Portainer instance that edge agents use to reach back for polling and tunneling."},
@@ -393,7 +395,7 @@ func resourceSettings() *schema.Resource {
 	}
 }
 
-func resourceSettingsApply(d *schema.ResourceData, meta interface{}) error {
+func resourceSettingsApply(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	// Internal auth parsing
@@ -580,64 +582,64 @@ func resourceSettingsApply(d *schema.ResourceData, meta interface{}) error {
 
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/settings", client.Endpoint), bytes.NewBuffer(jsonPayload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/settings", client.Endpoint), bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to update settings: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to update settings: %s", string(body)))
 	}
 	d.SetId("portainer-settings")
 	return nil
 }
 
-func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
+func resourceSettingsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/settings", client.Endpoint), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/settings", client.Endpoint), nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to read settings, status: %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to read settings, status: %d", resp.StatusCode))
 	}
 
 	var result SettingsPayload
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	d.SetId("portainer-settings")
@@ -674,16 +676,20 @@ func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
 
 	// internal_auth_settings
 	if result.InternalAuthSettings != nil {
-		d.Set("internal_auth_settings", []interface{}{map[string]interface{}{
+		if err := d.Set("internal_auth_settings", []interface{}{map[string]interface{}{
 			"required_password_length": result.InternalAuthSettings.RequiredPasswordLength,
-		}})
+		}}); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	// global_deployment_options
 	if result.GlobalDeploymentOptions != nil {
-		d.Set("global_deployment_options", []interface{}{map[string]interface{}{
+		if err := d.Set("global_deployment_options", []interface{}{map[string]interface{}{
 			"hide_stacks_functionality": result.GlobalDeploymentOptions.HideStacksFunctionality,
-		}})
+		}}); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	// oauth_settings
@@ -809,7 +815,7 @@ func resourceSettingsRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceSettingsDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceSettingsDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }

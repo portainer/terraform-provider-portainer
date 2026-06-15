@@ -25,7 +25,7 @@ func TestKubernetesNamespaceCreate_HappyPath_Unlicensed(t *testing.T) {
 		"memory": "512Mi",
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "1:my-ns" {
@@ -82,7 +82,7 @@ func TestKubernetesNamespaceCreate_HappyPath_Licensed(t *testing.T) {
 		"memory_limit":   "1Gi",
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "2:team-a" {
@@ -129,7 +129,7 @@ func TestKubernetesNamespaceCreate_HTTPError(t *testing.T) {
 	_ = d.Set("environment_id", 1)
 	_ = d.Set("name", "dup")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 409, got nil")
 	}
 }
@@ -149,7 +149,7 @@ func TestKubernetesNamespaceUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("name", "my-ns")
 	_ = d.Set("owner", "ops")
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -177,7 +177,7 @@ func TestKubernetesNamespaceDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("1:my-ns")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 

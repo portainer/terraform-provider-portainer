@@ -2,20 +2,22 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceEndpointServiceUpdate() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceEndpointServiceUpdateExecute,
-		Read:   schema.Noop,
-		Delete: schema.Noop,
+		CreateContext: resourceEndpointServiceUpdateExecute,
+		ReadContext:   schema.NoopContext,
+		DeleteContext: schema.NoopContext,
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
@@ -41,15 +43,15 @@ func resourceEndpointServiceUpdate() *schema.Resource {
 	}
 }
 
-func resourceEndpointServiceUpdateExecute(d *schema.ResourceData, meta interface{}) error {
+func resourceEndpointServiceUpdateExecute(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	serviceName := d.Get("service_name").(string)
 	pullImage := d.Get("pull_image").(bool)
 
-	serviceID, err := resolveServiceID(client, endpointID, serviceName)
+	serviceID, err := resolveServiceID(ctx, client, endpointID, serviceName)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	payload := map[string]interface{}{
@@ -59,25 +61,25 @@ func resourceEndpointServiceUpdateExecute(d *schema.ResourceData, meta interface
 	jsonBody, _ := json.Marshal(payload)
 
 	url := fmt.Sprintf("%s/endpoints/%d/forceupdateservice", client.Endpoint, endpointID)
-	req, _ := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update service: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to update service: %s", string(body)))
 	}
 
 	warnings := struct {
@@ -92,9 +94,9 @@ func resourceEndpointServiceUpdateExecute(d *schema.ResourceData, meta interface
 	return nil
 }
 
-func resolveServiceID(client *APIClient, endpointID int, name string) (string, error) {
+func resolveServiceID(ctx context.Context, client *APIClient, endpointID int, name string) (string, error) {
 	url := fmt.Sprintf("%s/endpoints/%d/docker/services", client.Endpoint, endpointID)
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -109,7 +111,7 @@ func resolveServiceID(client *APIClient, endpointID int, name string) (string, e
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("failed to fetch services: %s", string(body))
 	}

@@ -19,7 +19,7 @@ func TestResourceControlCreate_DirectID(t *testing.T) {
 	_ = d.Set("administrators_only", true)
 	_ = d.Set("public", false)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestResourceControlCreate_LookupByStack(t *testing.T) {
 	_ = d.Set("type", 6)
 	_ = d.Set("public", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "200" {
@@ -85,7 +85,7 @@ func TestResourceControlRead_DirectID(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("resource_control_id", 55)
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "55" {
@@ -107,7 +107,7 @@ func TestResourceControlDelete_HappyPath(t *testing.T) {
 	_ = d.Set("resource_control_id", 77)
 	d.SetId("77")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -129,7 +129,7 @@ func TestResourceControlDelete_404(t *testing.T) {
 	_ = d.Set("resource_control_id", 88)
 	d.SetId("88")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete should not error on 404, got: %v", err)
 	}
 	if d.Id() != "" {
@@ -153,7 +153,7 @@ func TestResourceControlUpdate_HTTPError(t *testing.T) {
 	d.SetId("9")
 	_ = d.Set("public", true)
 
-	if err := r.Update(d, mock.Client()); err == nil {
+	if err := rcUpdate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on 500, got nil")
 	}
 }

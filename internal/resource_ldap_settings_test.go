@@ -54,7 +54,7 @@ func TestLDAPSettingsCreate_HappyPath(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -161,7 +161,7 @@ func TestLDAPSettingsRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer-ldap-settings")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -232,7 +232,7 @@ func TestLDAPSettingsRead_NoLDAPSection(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer-ldap-settings")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -261,7 +261,7 @@ func TestLDAPSettingsUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("start_tls", true)
 	_ = d.Set("server_type", 0)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -291,7 +291,7 @@ func TestLDAPSettingsDelete(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer-ldap-settings")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -317,7 +317,7 @@ func TestLDAPSettingsCreate_GETError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("url", "ldap.example.com:389")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when GET /settings fails, got nil")
 	}
@@ -344,7 +344,7 @@ func TestLDAPSettingsCreate_PUTError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("url", "ldap.example.com:389")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when PUT /settings fails, got nil")
 	}

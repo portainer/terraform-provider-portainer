@@ -1,17 +1,20 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceCloudCredentials() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceCloudCredentialsRead,
+		ReadContext: dataSourceCloudCredentialsRead,
 
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -28,19 +31,19 @@ func dataSourceCloudCredentials() *schema.Resource {
 	}
 }
 
-func dataSourceCloudCredentialsRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceCloudCredentialsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
 	resp, err := client.DoRequest("GET", "/cloud/credentials", nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to list cloud credentials: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to list cloud credentials: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list cloud credentials, status %d: %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to list cloud credentials, status %d: %s", resp.StatusCode, string(data)))
 	}
 
 	var credentials []struct {
@@ -49,7 +52,7 @@ func dataSourceCloudCredentialsRead(d *schema.ResourceData, meta interface{}) er
 		Provider string `json:"provider"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&credentials); err != nil {
-		return fmt.Errorf("failed to decode cloud credentials list: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode cloud credentials list: %w", err))
 	}
 
 	for _, c := range credentials {
@@ -60,5 +63,5 @@ func dataSourceCloudCredentialsRead(d *schema.ResourceData, meta interface{}) er
 		}
 	}
 
-	return fmt.Errorf("cloud credentials %s not found", name)
+	return diag.FromErr(fmt.Errorf("cloud credentials %s not found", name))
 }

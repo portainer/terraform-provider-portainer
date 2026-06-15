@@ -1,17 +1,19 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceDockerVolume() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceDockerVolumeRead,
+		ReadContext: dataSourceDockerVolumeRead,
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
@@ -38,7 +40,7 @@ func dataSourceDockerVolume() *schema.Resource {
 	}
 }
 
-func dataSourceDockerVolumeRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceDockerVolumeRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	name := d.Get("name").(string)
@@ -46,13 +48,13 @@ func dataSourceDockerVolumeRead(d *schema.ResourceData, meta interface{}) error 
 	path := fmt.Sprintf("/endpoints/%d/docker/volumes", endpointID)
 	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to list docker volumes: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to list docker volumes: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list docker volumes, status %d: %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to list docker volumes, status %d: %s", resp.StatusCode, string(data)))
 	}
 
 	var result struct {
@@ -63,17 +65,21 @@ func dataSourceDockerVolumeRead(d *schema.ResourceData, meta interface{}) error 
 		} `json:"Volumes"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode docker volume list: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode docker volume list: %w", err))
 	}
 
 	for _, v := range result.Volumes {
 		if v.Name == name {
 			d.SetId(v.Name) // For volumes, the name is the ID in the API
-			d.Set("driver", v.Driver)
-			d.Set("mount_point", v.Mountpoint)
+			if err := d.Set("driver", v.Driver); err != nil {
+				return diag.FromErr(err)
+			}
+			if err := d.Set("mount_point", v.Mountpoint); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 	}
 
-	return fmt.Errorf("docker volume %s not found in endpoint %d", name, endpointID)
+	return diag.FromErr(fmt.Errorf("docker volume %s not found in endpoint %d", name, endpointID))
 }

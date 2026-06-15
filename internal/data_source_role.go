@@ -1,18 +1,20 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceRole() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceRoleRead,
+		ReadContext: dataSourceRoleRead,
 
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -53,17 +55,17 @@ func dataSourceRole() *schema.Resource {
 	}
 }
 
-func dataSourceRoleRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceRoleRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	resp, err := client.DoRequest(http.MethodGet, "/roles", nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to list roles: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to list roles: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to list roles: HTTP %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to list roles: HTTP %d", resp.StatusCode))
 	}
 
 	var result []struct {
@@ -73,7 +75,7 @@ func dataSourceRoleRead(d *schema.ResourceData, meta interface{}) error {
 		Priority    int    `json:"Priority"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode roles response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode roles response: %w", err))
 	}
 
 	nameFilter, nameFilterSet := d.GetOk("name")
@@ -92,7 +94,7 @@ func dataSourceRoleRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	if nameFilterSet && len(roles) == 0 {
-		return fmt.Errorf("role with name %q not found", nameFilter.(string))
+		return diag.FromErr(fmt.Errorf("role with name %q not found", nameFilter.(string)))
 	}
 
 	_ = d.Set("roles", roles)

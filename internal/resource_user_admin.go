@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/portainer/client-api-go/v2/pkg/client/users"
 	"github.com/portainer/client-api-go/v2/pkg/models"
@@ -13,12 +14,12 @@ import (
 
 func resourceUserAdmin() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceUserAdminCreate,
-		Read:   resourceUserAdminRead,
-		Update: resourceUserAdminUpdate,
-		Delete: resourceUserAdminDelete,
+		CreateContext: resourceUserAdminCreate,
+		ReadContext:   resourceUserAdminRead,
+		UpdateContext: resourceUserAdminUpdate,
+		DeleteContext: resourceUserAdminDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"username": {
@@ -42,13 +43,13 @@ func resourceUserAdmin() *schema.Resource {
 	}
 }
 
-func resourceUserAdminCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceUserAdminCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	username := d.Get("username").(string)
 	password := d.Get("password").(string)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := users.NewUserAdminInitParams()
 	params.SetContext(ctx)
 	params.Body = &models.UsersAdminInitPayload{
@@ -67,7 +68,7 @@ func resourceUserAdminCreate(d *schema.ResourceData, meta interface{}) error {
 			_ = d.Set("initialized", true)
 			return nil
 		}
-		return fmt.Errorf("failed to initialize admin user: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to initialize admin user: %w", decorateSDKError(err, errBody)))
 	}
 
 	if resp.Payload.ID != 0 {
@@ -81,17 +82,17 @@ func resourceUserAdminCreate(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceUserAdminRead(d *schema.ResourceData, meta interface{}) error {
+func resourceUserAdminRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }
 
-func resourceUserAdminUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceUserAdminUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }
 
-func resourceUserAdminDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceUserAdminDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }

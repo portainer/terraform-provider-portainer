@@ -23,7 +23,7 @@ func TestOpenAMTDevicesFeaturesCreate_HappyPath(t *testing.T) {
 	_ = d.Set("redirection", true)
 	_ = d.Set("user_consent", "kvmOnly")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "amt-device-features-42" {
@@ -71,7 +71,7 @@ func TestOpenAMTDevicesFeaturesCreate_HTTPError(t *testing.T) {
 	_ = d.Set("device_id", 42)
 	_ = d.Set("user_consent", "none")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 403, got nil")
 	}
 	if d.Id() != "" {

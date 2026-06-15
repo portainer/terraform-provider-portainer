@@ -20,7 +20,7 @@ func TestDataSourceGitopsRepoRefsRead_HappyPath(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("repository_url", "https://github.com/owner/repo.git")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -54,7 +54,7 @@ func TestDataSourceGitopsRepoRefsRead_PayloadShape(t *testing.T) {
 	_ = d.Set("password", "secret")
 	_ = d.Set("git_credential_id", 42)
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -95,7 +95,7 @@ func TestDataSourceGitopsRepoRefsRead_HTTPError(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("repository_url", "not-a-url")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 }

@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/portainer/client-api-go/v2/pkg/client/custom_templates"
 )
 
 func dataSourceCustomTemplate() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceCustomTemplateRead,
+		ReadContext: dataSourceCustomTemplateRead,
 
 		Schema: map[string]*schema.Schema{
 			"title": {
@@ -33,16 +34,16 @@ func dataSourceCustomTemplate() *schema.Resource {
 	}
 }
 
-func dataSourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceCustomTemplateRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	title := d.Get("title").(string)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := custom_templates.NewCustomTemplateListParams()
 	params.SetContext(ctx)
 	resp, err := client.Client.CustomTemplates.CustomTemplateList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list custom templates: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to list custom templates: %w", decorateSDKError(err, errBody)))
 	}
 
 	for _, t := range resp.Payload {
@@ -54,5 +55,5 @@ func dataSourceCustomTemplateRead(d *schema.ResourceData, meta interface{}) erro
 		}
 	}
 
-	return fmt.Errorf("custom template %s not found", title)
+	return diag.FromErr(fmt.Errorf("custom template %s not found", title))
 }

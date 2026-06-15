@@ -28,7 +28,7 @@ func TestKubernetesConfigMapsCreate_HappyPath(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("manifest", configMapManifestJSON)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -67,7 +67,7 @@ func TestKubernetesConfigMapsCreate_InvalidManifest(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("manifest", "this: is: not: valid: yaml: [")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error for invalid manifest, got nil")
 	}
@@ -91,7 +91,7 @@ func TestKubernetesConfigMapsCreate_HTTPError(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("manifest", configMapManifestJSON)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 409, got nil")
 	}
@@ -112,7 +112,7 @@ func TestKubernetesConfigMapsDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("1:default:myconfig")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/endpoints/1/kubernetes/api/v1/namespaces/default/configmaps/myconfig") == nil {

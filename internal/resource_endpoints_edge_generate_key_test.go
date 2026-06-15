@@ -18,7 +18,7 @@ func TestEdgeGenerateKeyCreate_HappyPath(t *testing.T) {
 	r := resourcePortainerEdgeGenerateKey()
 	d := r.TestResourceData()
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "portainer-generated-edge-key" {
@@ -55,7 +55,7 @@ func TestEdgeGenerateKeyCreate_HTTPError(t *testing.T) {
 	r := resourcePortainerEdgeGenerateKey()
 	d := r.TestResourceData()
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if got := d.Get("edge_key"); got != "" {
@@ -71,7 +71,7 @@ func TestEdgeGenerateKeyRead_NoOp(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer-generated-edge-key")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if len(mock.Requests()) != 0 {
@@ -88,7 +88,7 @@ func TestEdgeGenerateKeyDelete_RemoveFromState(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer-generated-edge-key")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {

@@ -1,16 +1,18 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceHelmReleaseHistory() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceHelmReleaseHistoryRead,
+		ReadContext: dataSourceHelmReleaseHistoryRead,
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
@@ -82,7 +84,7 @@ func dataSourceHelmReleaseHistory() *schema.Resource {
 	}
 }
 
-func dataSourceHelmReleaseHistoryRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceHelmReleaseHistoryRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	releaseName := d.Get("release_name").(string)
@@ -95,18 +97,18 @@ func dataSourceHelmReleaseHistoryRead(d *schema.ResourceData, meta interface{}) 
 
 	resp, err := client.DoRequest("GET", path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to get Helm release history: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to get Helm release history: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to get Helm release history (status %d): %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to get Helm release history (status %d): %s", resp.StatusCode, string(data)))
 	}
 
 	var releases []map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
-		return fmt.Errorf("failed to decode Helm release history: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode Helm release history: %w", err))
 	}
 
 	revisions := make([]map[string]interface{}, 0, len(releases))
@@ -168,7 +170,9 @@ func dataSourceHelmReleaseHistoryRead(d *schema.ResourceData, meta interface{}) 
 	}
 
 	d.SetId(fmt.Sprintf("helm-history-%d-%s", endpointID, releaseName))
-	d.Set("revisions", revisions)
+	if err := d.Set("revisions", revisions); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }

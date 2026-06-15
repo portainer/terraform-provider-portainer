@@ -24,7 +24,7 @@ func TestKubernetesServiceAccountCreate_HappyPath(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("manifest", serviceAccountManifestJSON)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "1:default:deployer" {
@@ -54,7 +54,7 @@ func TestKubernetesServiceAccountCreate_MissingMetadata(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("manifest", `{"apiVersion":"v1","kind":"ServiceAccount"}`)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error when metadata missing, got nil")
 	}
 }
@@ -72,7 +72,7 @@ func TestKubernetesServiceAccountCreate_HTTPError(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("manifest", serviceAccountManifestJSON)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 }
@@ -88,7 +88,7 @@ func TestKubernetesServiceAccountDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("1:default:deployer")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/endpoints/1/kubernetes/api/v1/namespaces/default/serviceaccounts/deployer") == nil {

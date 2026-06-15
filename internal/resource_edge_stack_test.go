@@ -108,7 +108,7 @@ func TestEdgeStackCreateMultipart_HappyPath(t *testing.T) {
 	_ = d.Set("retry_deploy", true)
 	_ = d.Set("stack_file_path", stackPath)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -182,7 +182,7 @@ func TestEdgeStackCreateString_HappyPath(t *testing.T) {
 	_ = d.Set("stack_file_content", "version: \"3\"\nservices: {}\n")
 	_ = d.Set("environment", map[string]interface{}{"FOO": "bar"})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -256,7 +256,7 @@ func TestEdgeStackCreateRepository_HappyPath(t *testing.T) {
 	_ = d.Set("repository_reference_name", "refs/heads/main")
 	_ = d.Set("file_path_in_repository", "docker-compose.yml")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -317,7 +317,7 @@ func TestEdgeStackCreate_ExistingName_DelegatesToUpdate(t *testing.T) {
 	_ = d.Set("edge_groups", []interface{}{1})
 	_ = d.Set("stack_file_content", "version: \"3\"\n")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create (existing-name path) failed: %v", err)
 	}
 
@@ -356,7 +356,7 @@ func TestEdgeStackRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("8")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -395,7 +395,7 @@ func TestEdgeStackRead_404_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("77")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404 and clear ID, got error: %v", err)
 	}
 	if d.Id() != "" {
@@ -427,7 +427,7 @@ func TestEdgeStackUpdate_FileContent_HappyPath(t *testing.T) {
 	_ = d.Set("registries", []interface{}{})
 	_ = d.Set("stack_file_content", "version: \"3\"\nservices:\n  app: {}\n")
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -483,7 +483,7 @@ func TestEdgeStackUpdate_Repository_HappyPath(t *testing.T) {
 	_ = d.Set("repository_url", "https://github.com/example/repo.git")
 	_ = d.Set("repository_reference_name", "refs/heads/main")
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update (repository) failed: %v", err)
 	}
 
@@ -526,7 +526,7 @@ func TestEdgeStackDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("5")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/edge_stacks/5") == nil {
@@ -548,7 +548,7 @@ func TestEdgeStackDelete_404_NoError(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("99")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete should swallow 404, got error: %v", err)
 	}
 }
@@ -577,7 +577,7 @@ func TestEdgeStackCreate_HTTPError(t *testing.T) {
 	_ = d.Set("edge_groups", []interface{}{1})
 	_ = d.Set("stack_file_path", stackPath)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {

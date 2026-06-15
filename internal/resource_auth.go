@@ -1,19 +1,21 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceAuth() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceAuthCreate,
-		Read:   schema.Noop,
-		Delete: schema.Noop,
+		CreateContext: resourceAuthCreate,
+		ReadContext:   schema.NoopContext,
+		DeleteContext: schema.NoopContext,
 
 		Schema: map[string]*schema.Schema{
 			"username": {
@@ -40,7 +42,7 @@ func resourceAuth() *schema.Resource {
 	}
 }
 
-func resourceAuthCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceAuthCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	creds := map[string]string{
@@ -50,24 +52,26 @@ func resourceAuthCreate(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.DoRequest("POST", "/auth", nil, creds)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to authenticate: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to authenticate: %s", string(data)))
 	}
 
 	var response struct {
 		JWT string `json:"jwt"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	d.SetId("auth-result")
-	d.Set("jwt", response.JWT)
+	if err := d.Set("jwt", response.JWT); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }

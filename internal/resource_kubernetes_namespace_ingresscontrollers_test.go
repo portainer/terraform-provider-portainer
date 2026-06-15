@@ -41,7 +41,7 @@ func TestKubernetesNamespaceIngressControllersCreate_HappyPath(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "2:prod" {
@@ -86,7 +86,7 @@ func TestKubernetesNamespaceIngressControllersCreate_HTTPError(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 }
@@ -113,7 +113,7 @@ func TestKubernetesNamespaceIngressControllersRead_HappyPath(t *testing.T) {
 	_ = d.Set("environment_id", 1)
 	_ = d.Set("namespace", "default")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	got := d.Get("controllers").([]interface{})
@@ -150,7 +150,7 @@ func TestKubernetesNamespaceIngressControllersDelete_DisablesViaPUT(t *testing.T
 		},
 	})
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 

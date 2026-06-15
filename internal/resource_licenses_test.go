@@ -33,7 +33,7 @@ func TestLicensesCreate_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("key", testLicenseKey)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -73,7 +73,7 @@ func TestLicensesCreate_ForceFlag(t *testing.T) {
 	_ = d.Set("key", testLicenseKey)
 	_ = d.Set("force", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -106,7 +106,7 @@ func TestLicensesRead_KeyPresent(t *testing.T) {
 	_ = d.Set("key", testLicenseKey)
 	d.SetId(sha256Hex(testLicenseKey))
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() == "" {
@@ -128,7 +128,7 @@ func TestLicensesRead_KeyAbsent_ClearsID(t *testing.T) {
 	_ = d.Set("key", testLicenseKey)
 	d.SetId(sha256Hex(testLicenseKey))
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -147,7 +147,7 @@ func TestLicensesDelete_HappyPath(t *testing.T) {
 	_ = d.Set("key", testLicenseKey)
 	d.SetId(sha256Hex(testLicenseKey))
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -182,7 +182,7 @@ func TestLicensesCreate_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("key", "BAD")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {

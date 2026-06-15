@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/portainer/client-api-go/v2/pkg/client/webhooks"
 )
 
 func dataSourceWebhook() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceWebhookRead,
+		ReadContext: dataSourceWebhookRead,
 
 		Schema: map[string]*schema.Schema{
 			"resource_id": {
@@ -39,27 +40,31 @@ func dataSourceWebhook() *schema.Resource {
 	}
 }
 
-func dataSourceWebhookRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceWebhookRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	resourceID := d.Get("resource_id").(string)
 	endpointID := int64(d.Get("endpoint_id").(int))
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := webhooks.NewGetWebhooksParams()
 	params.SetContext(ctx)
 	resp, err := client.Client.Webhooks.GetWebhooks(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list webhooks: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to list webhooks: %w", decorateSDKError(err, errBody)))
 	}
 
 	for _, w := range resp.Payload {
 		if w.ResourceID == resourceID && w.EndpointID == endpointID {
 			d.SetId(strconv.FormatInt(w.ID, 10))
-			d.Set("webhook_type", int(w.Type))
-			d.Set("token", w.Token)
+			if err := d.Set("webhook_type", int(w.Type)); err != nil {
+				return diag.FromErr(err)
+			}
+			if err := d.Set("token", w.Token); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 	}
 
-	return fmt.Errorf("webhook for resource %s in endpoint %d not found", resourceID, endpointID)
+	return diag.FromErr(fmt.Errorf("webhook for resource %s in endpoint %d not found", resourceID, endpointID))
 }

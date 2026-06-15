@@ -19,7 +19,7 @@ func TestKubernetesNamespaceSystemCreate_HappyPath(t *testing.T) {
 	_ = d.Set("namespace", "kube-system")
 	_ = d.Set("system", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "1:kube-system" {
@@ -52,7 +52,7 @@ func TestKubernetesNamespaceSystemUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("namespace", "myns")
 	_ = d.Set("system", false)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -83,7 +83,7 @@ func TestKubernetesNamespaceSystemDelete_ForcesSystemFalse(t *testing.T) {
 	_ = d.Set("namespace", "kube-system")
 	_ = d.Set("system", true)
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -114,7 +114,7 @@ func TestKubernetesNamespaceSystemCreate_HTTPError(t *testing.T) {
 	_ = d.Set("namespace", "badns")
 	_ = d.Set("system", true)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {

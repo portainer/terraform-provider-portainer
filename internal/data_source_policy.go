@@ -1,17 +1,20 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourcePortainerPolicy() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourcePortainerPolicyRead,
+		ReadContext: dataSourcePortainerPolicyRead,
 
 		Schema: map[string]*schema.Schema{
 			"policy_id": {
@@ -61,13 +64,13 @@ func dataSourcePortainerPolicy() *schema.Resource {
 	}
 }
 
-func dataSourcePortainerPolicyRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourcePortainerPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	// If policy_id is provided, look up directly
 	if v, ok := d.GetOk("policy_id"); ok {
 		policyID := v.(int)
-		return readPolicyByID(d, client, policyID)
+		return diag.FromErr(readPolicyByID(d, client, policyID))
 	}
 
 	// Otherwise, look up by name from the list
@@ -75,31 +78,31 @@ func dataSourcePortainerPolicyRead(d *schema.ResourceData, meta interface{}) err
 
 	resp, err := client.DoRequest("GET", "/policies", nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to list policies: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to list policies: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list policies, status %d: %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to list policies, status %d: %s", resp.StatusCode, string(data)))
 	}
 
 	var listResp struct {
 		Policies []map[string]interface{} `json:"policies"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
-		return fmt.Errorf("failed to decode policy list: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode policy list: %w", err))
 	}
 
 	for _, p := range listResp.Policies {
 		if pName, ok := p["Name"].(string); ok && pName == name {
 			if id, ok := p["Id"].(float64); ok {
-				return readPolicyByID(d, client, int(id))
+				return diag.FromErr(readPolicyByID(d, client, int(id)))
 			}
 		}
 	}
 
-	return fmt.Errorf("policy with name %q not found", name)
+	return diag.FromErr(fmt.Errorf("policy with name %q not found", name))
 }
 
 func readPolicyByID(d *schema.ResourceData, client *APIClient, policyID int) error {
@@ -111,7 +114,7 @@ func readPolicyByID(d *schema.ResourceData, client *APIClient, policyID int) err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to read policy %d, status %d: %s", policyID, resp.StatusCode, string(data))
 	}

@@ -2,21 +2,23 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourceKubernetesDeleteObject() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceKubernetesDeleteObjectCreate,
-		Read:   resourceKubernetesDeleteObjectRead,
-		Delete: resourceKubernetesDeleteObjectDelete,
+		CreateContext: resourceKubernetesDeleteObjectCreate,
+		ReadContext:   resourceKubernetesDeleteObjectRead,
+		DeleteContext: resourceKubernetesDeleteObjectDelete,
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
@@ -53,7 +55,7 @@ func resourceKubernetesDeleteObject() *schema.Resource {
 	}
 }
 
-func resourceKubernetesDeleteObjectCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesDeleteObjectCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	envID := d.Get("environment_id").(int)
@@ -73,28 +75,28 @@ func resourceKubernetesDeleteObjectCreate(d *schema.ResourceData, meta interface
 	jsonBody, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/kubernetes/%d/%s/delete", client.Endpoint, envID, typePath)
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete %s: %s", typePath, string(data))
+		return diag.FromErr(fmt.Errorf("failed to delete %s: %s", typePath, string(data)))
 	}
 
 	id := fmt.Sprintf("%d:%s:%s", envID, typePath, strings.Join(names, ","))
@@ -102,11 +104,11 @@ func resourceKubernetesDeleteObjectCreate(d *schema.ResourceData, meta interface
 	return nil
 }
 
-func resourceKubernetesDeleteObjectRead(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesDeleteObjectRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil
 }
 
-func resourceKubernetesDeleteObjectDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesDeleteObjectDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }

@@ -24,7 +24,7 @@ func TestDataSourcePolicyRead_ByID(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("policy_id", 42)
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -74,7 +74,7 @@ func TestDataSourcePolicyRead_ByName(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "Allow registry")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -101,7 +101,7 @@ func TestDataSourcePolicyRead_NameNotFound(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "ghost")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error when policy name not found, got nil")
 	}
 }
@@ -119,7 +119,7 @@ func TestDataSourcePolicyRead_HTTPError(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("policy_id", 42)
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }

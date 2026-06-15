@@ -17,7 +17,7 @@ func TestEndpointsSnapshotCreate_SingleEndpoint(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("endpoint_id", 3)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "3" {
@@ -38,7 +38,7 @@ func TestEndpointsSnapshotCreate_AllEndpoints(t *testing.T) {
 	r := resourceEndpointsSnapshot()
 	d := r.TestResourceData()
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "all" {
@@ -63,7 +63,7 @@ func TestEndpointsSnapshotCreate_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("endpoint_id", 9)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }
@@ -77,7 +77,7 @@ func TestEndpointsSnapshotRead_NoOp(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("3")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if len(mock.Requests()) != 0 {
@@ -91,7 +91,7 @@ func TestEndpointsSnapshotDelete_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("3")
 
-	if err := r.Delete(d, nil); err != nil {
+	if err := rcDelete(r, d, nil); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {

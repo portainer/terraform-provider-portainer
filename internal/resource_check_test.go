@@ -39,7 +39,7 @@ func TestCheckCreate_Standalone(t *testing.T) {
 	_ = d.Set("wait_between_checks", 0)
 	_ = d.Set("max_retries", 1)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -84,7 +84,7 @@ func TestCheckCreate_StandaloneRetryFails(t *testing.T) {
 	_ = d.Set("wait_between_checks", 0)
 	_ = d.Set("max_retries", 1)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when no container matches revision/state")
 	}
@@ -119,7 +119,7 @@ func TestCheckCreate_Swarm(t *testing.T) {
 	_ = d.Set("wait_between_checks", 0)
 	_ = d.Set("max_retries", 1)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if got := d.Get("output").(string); !strings.Contains(got, "Docker Swarm detected") {
@@ -135,7 +135,7 @@ func TestCheckRead_NoOp(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("check-123")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if len(mock.Requests()) != 0 {
@@ -152,7 +152,7 @@ func TestCheckDelete_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("check-123")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {

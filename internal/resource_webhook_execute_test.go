@@ -16,7 +16,7 @@ func TestWebhookExecute_TokenHappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("token", "tok-abc")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "tok-abc" {
@@ -37,7 +37,7 @@ func TestWebhookExecute_StackHappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("stack_id", "stack-1")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "stack-1" {
@@ -58,7 +58,7 @@ func TestWebhookExecute_EdgeStackHappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("edge_stack_id", "edge-99")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "edge-99" {
@@ -78,7 +78,7 @@ func TestWebhookExecute_NoneSet_Errors(t *testing.T) {
 	d := r.TestResourceData()
 	// nothing set
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when none of token/stack_id/edge_stack_id is set, got nil")
 	}
@@ -98,7 +98,7 @@ func TestWebhookExecute_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("token", "bad-token")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 404, got nil")
 	}
 }
@@ -110,7 +110,7 @@ func TestWebhookExecute_Delete_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("some-token")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {
