@@ -10,14 +10,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceKubernetesHelm() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceKubernetesHelmCreate,
-		Read:   resourceKubernetesHelmRead,
-		Delete: resourceKubernetesHelmDelete,
+		CreateContext: resourceKubernetesHelmCreate,
+		ReadContext:   resourceKubernetesHelmRead,
+		DeleteContext: resourceKubernetesHelmDelete,
 
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(15 * time.Minute),
@@ -66,9 +67,9 @@ func resourceKubernetesHelm() *schema.Resource {
 	}
 }
 
-func resourceKubernetesHelmCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesHelmCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	timeout := d.Timeout(schema.TimeoutCreate)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	client := meta.(*APIClient)
@@ -84,48 +85,48 @@ func resourceKubernetesHelmCreate(d *schema.ResourceData, meta interface{}) erro
 
 	jsonBody, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/helm", client.Endpoint, id)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to install helm chart: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to install helm chart: %s", string(data)))
 	}
 
 	d.SetId(fmt.Sprintf("%d:%s:%s", id, d.Get("namespace").(string), d.Get("name").(string)))
-	return resourceKubernetesHelmRead(d, meta)
+	return resourceKubernetesHelmRead(ctx, d, meta)
 }
 
-func resourceKubernetesHelmRead(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesHelmRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// No-op for now
 	return nil
 }
 
-func resourceKubernetesHelmDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesHelmDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	timeout := d.Timeout(schema.TimeoutDelete)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	client := meta.(*APIClient)
 	idParts := strings.SplitN(d.Id(), ":", 3)
 	if len(idParts) != 3 {
-		return fmt.Errorf("invalid ID format, expected 'envID:namespace:release': %s", d.Id())
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'envID:namespace:release': %s", d.Id()))
 	}
 
 	envID := idParts[0]
@@ -134,27 +135,27 @@ func resourceKubernetesHelmDelete(d *schema.ResourceData, meta interface{}) erro
 
 	url := fmt.Sprintf("%s/endpoints/%s/kubernetes/helm/%s?namespace=%s", client.Endpoint, envID, release, namespace)
 
-	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != http.StatusNoContent {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete helm release: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to delete helm release: %s", string(data)))
 	}
 
 	d.SetId("")

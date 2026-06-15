@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"net/http"
 	"testing"
 )
@@ -26,7 +27,7 @@ func TestDockerNetworkCreate_HappyPath_Bridge(t *testing.T) {
 	_ = d.Set("scope", "local")
 	_ = d.Set("ipam_driver", "default")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -90,7 +91,7 @@ func TestDockerNetworkCreate_WithIPAM(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "ipamnet1" {
@@ -149,7 +150,7 @@ func TestDockerNetworkCreate_Overlay(t *testing.T) {
 	_ = d.Set("scope", "swarm")
 	_ = d.Set("attachable", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "overlay-xyz" {
@@ -192,7 +193,7 @@ func TestDockerNetworkCreate_HTTPError(t *testing.T) {
 	_ = d.Set("name", "mynet")
 	_ = d.Set("driver", "bridge")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
@@ -228,7 +229,7 @@ func TestDockerNetworkRead_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	d.SetId("abc123")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -271,7 +272,7 @@ func TestDockerNetworkRead_404_ClearsID(t *testing.T) {
 	_ = d.Set("scope", "local")
 	d.SetId("gone123")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404 (with empty fallback) and clear ID, got error: %v", err)
 	}
 	if d.Id() != "" {
@@ -310,7 +311,7 @@ func TestDockerNetworkRead_404_FallbackResolves(t *testing.T) {
 	_ = d.Set("scope", "local")
 	d.SetId("stale")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "real-id" {
@@ -333,7 +334,7 @@ func TestDockerNetworkDelete_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	d.SetId("abc123")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -354,7 +355,7 @@ func TestDockerNetworkImport_ParsesCompositeID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("1:abc123")
 
-	results, err := r.Importer.State(d, nil)
+	results, err := r.Importer.StateContext(context.Background(), d, nil)
 	if err != nil {
 		t.Fatalf("Import failed: %v", err)
 	}
@@ -376,7 +377,7 @@ func TestDockerNetworkImport_BadID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("not-composite")
 
-	if _, err := r.Importer.State(d, nil); err == nil {
+	if _, err := r.Importer.StateContext(context.Background(), d, nil); err == nil {
 		t.Fatal("expected error for non-composite import ID, got nil")
 	}
 }
@@ -386,7 +387,7 @@ func TestDockerNetworkImport_BadID(t *testing.T) {
 // no Update function.
 func TestDockerNetworkResource_NoUpdate(t *testing.T) {
 	r := resourceDockerNetwork()
-	if r.Update != nil {
+	if r.UpdateContext != nil {
 		t.Error("expected no Update function (network is ForceNew/immutable)")
 	}
 }

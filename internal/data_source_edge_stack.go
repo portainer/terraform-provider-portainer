@@ -1,17 +1,20 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceEdgeStack() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceEdgeStackRead,
+		ReadContext: dataSourceEdgeStackRead,
 
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -28,19 +31,19 @@ func dataSourceEdgeStack() *schema.Resource {
 	}
 }
 
-func dataSourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceEdgeStackRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
 	resp, err := client.DoRequest("GET", "/edge_stacks", nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to list edge stacks: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to list edge stacks: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list edge stacks, status %d: %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to list edge stacks, status %d: %s", resp.StatusCode, string(data)))
 	}
 
 	var stacks []struct {
@@ -49,16 +52,18 @@ func dataSourceEdgeStackRead(d *schema.ResourceData, meta interface{}) error {
 		DeploymentType int    `json:"DeploymentType"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&stacks); err != nil {
-		return fmt.Errorf("failed to decode edge stack list: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode edge stack list: %w", err))
 	}
 
 	for _, s := range stacks {
 		if s.Name == name {
 			d.SetId(strconv.Itoa(s.ID))
-			d.Set("deployment_type", s.DeploymentType)
+			if err := d.Set("deployment_type", s.DeploymentType); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 	}
 
-	return fmt.Errorf("edge stack %s not found", name)
+	return diag.FromErr(fmt.Errorf("edge stack %s not found", name))
 }

@@ -26,7 +26,7 @@ func TestTagCreate_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("name", "production")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -51,7 +51,7 @@ func TestTagRead_NotInList(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("99")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -69,7 +69,7 @@ func TestTagDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("5")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 

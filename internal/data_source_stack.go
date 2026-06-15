@@ -1,17 +1,20 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceStack() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceStackRead,
+		ReadContext: dataSourceStackRead,
 
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -38,20 +41,20 @@ func dataSourceStack() *schema.Resource {
 	}
 }
 
-func dataSourceStackRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceStackRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 	endpointID := d.Get("endpoint_id").(int)
 
 	resp, err := client.DoRequest("GET", "/stacks", nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to list stacks: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to list stacks: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list stacks, status %d: %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to list stacks, status %d: %s", resp.StatusCode, string(data)))
 	}
 
 	var stacks []struct {
@@ -62,17 +65,21 @@ func dataSourceStackRead(d *schema.ResourceData, meta interface{}) error {
 		SwarmID    string `json:"SwarmId"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&stacks); err != nil {
-		return fmt.Errorf("failed to decode stack list: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode stack list: %w", err))
 	}
 
 	for _, s := range stacks {
 		if s.Name == name && s.EndpointID == endpointID {
 			d.SetId(strconv.Itoa(s.ID))
-			d.Set("type", s.Type)
-			d.Set("swarm_id", s.SwarmID)
+			if err := d.Set("type", s.Type); err != nil {
+				return diag.FromErr(err)
+			}
+			if err := d.Set("swarm_id", s.SwarmID); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 	}
 
-	return fmt.Errorf("stack %s not found in endpoint %d", name, endpointID)
+	return diag.FromErr(fmt.Errorf("stack %s not found in endpoint %d", name, endpointID))
 }

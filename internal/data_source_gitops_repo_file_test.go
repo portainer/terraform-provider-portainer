@@ -23,7 +23,7 @@ func TestDataSourceGitopsRepoFileRead_HappyPath(t *testing.T) {
 	_ = d.Set("username", "user")
 	_ = d.Set("password", "secret")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -74,7 +74,7 @@ func TestDataSourceGitopsRepoFileRead_HTTPError(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("repository_url", "https://example.com/repo.git")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 401, got nil")
 	}
 }
@@ -92,7 +92,7 @@ func TestDataSourceGitopsRepoFileRead_BadJSON(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("repository_url", "https://example.com/repo.git")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected decode error on malformed JSON, got nil")
 	}
 }

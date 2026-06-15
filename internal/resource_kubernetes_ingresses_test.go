@@ -30,7 +30,7 @@ func TestKubernetesIngressCreate_HappyPath(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "1:default:my-ingress" {
@@ -69,7 +69,7 @@ func TestKubernetesIngressCreate_HTTPError(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("name", "my-ingress")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }
@@ -88,7 +88,7 @@ func TestKubernetesIngressUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("name", "my-ingress")
 	_ = d.Set("class_name", "nginx")
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 	if mock.FindRequest("PUT", "/kubernetes/1/namespaces/default/ingresses") == nil {
@@ -105,7 +105,7 @@ func TestKubernetesIngressDelete_NoOp(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("1:default:my-ingress")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if reqs := mock.Requests(); len(reqs) != 0 {

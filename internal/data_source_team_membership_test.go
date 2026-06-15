@@ -21,7 +21,7 @@ func TestDataSourceTeamMembershipRead_HappyPath(t *testing.T) {
 	_ = d.Set("team_id", 2)
 	_ = d.Set("user_id", 5)
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -47,7 +47,7 @@ func TestDataSourceTeamMembershipRead_NotFound(t *testing.T) {
 	_ = d.Set("team_id", 99)
 	_ = d.Set("user_id", 99)
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error when membership not found, got nil")
 	}
 }
@@ -67,7 +67,7 @@ func TestDataSourceTeamMembershipRead_HTTPError(t *testing.T) {
 	_ = d.Set("team_id", 1)
 	_ = d.Set("user_id", 1)
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }

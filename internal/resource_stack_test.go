@@ -205,7 +205,7 @@ func TestStackCreate_StandaloneString_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("stack_file_content", "version: '3'")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -288,7 +288,7 @@ func TestStackCreate_SwarmString_HappyPath(t *testing.T) {
 	_ = d.Set("swarm_id", "swarm-abc") // pre-set so fetchSwarmID is skipped
 	_ = d.Set("stack_file_content", "version: '3'")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -352,7 +352,7 @@ func TestStackCreate_StandaloneRepository_HappyPath(t *testing.T) {
 	_ = d.Set("repository_reference_name", "refs/heads/main")
 	_ = d.Set("file_path_in_repository", "docker-compose.yml")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -416,7 +416,7 @@ func TestStackCreate_RepositoryDefaultsComposeFile(t *testing.T) {
 	_ = d.Set("repository_url", "https://github.com/acme/app.git")
 	// file_path_in_repository intentionally left unset.
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -456,7 +456,7 @@ func TestStackCreate_KubernetesString_HappyPath(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("stack_file_content", "apiVersion: v1")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -498,7 +498,7 @@ func TestStackCreate_HTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("stack_file_content", "not-yaml")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {
@@ -535,7 +535,7 @@ func TestStackCreate_ExistingStackGuard(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("stack_file_content", "version: '3'")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create (existing-stack guard) failed: %v", err)
 	}
 
@@ -579,7 +579,7 @@ func TestStackRead_HappyPath(t *testing.T) {
 	_ = d.Set("method", "string")
 	d.SetId("7")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -624,7 +624,7 @@ func TestStackRead_InactiveStatus(t *testing.T) {
 	_ = d.Set("method", "string")
 	d.SetId("9")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if got := d.Get("active"); got != false {
@@ -647,7 +647,7 @@ func TestStackRead_404_ClearsID(t *testing.T) {
 	_ = d.Set("method", "string")
 	d.SetId("99")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404 and clear ID, got error: %v", err)
 	}
 	if d.Id() != "" {
@@ -680,7 +680,7 @@ func TestStackRead_Repository_PopulatesGitConfig(t *testing.T) {
 	_ = d.Set("method", "repository")
 	d.SetId("15")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -742,7 +742,7 @@ func TestStackUpdate_NoActiveChange_SkipsStartStop(t *testing.T) {
 	_ = d.Set("stack_file_content", "version: '3'")
 	_ = d.Set("active", false)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -781,7 +781,7 @@ func TestStackUpdate_NonRepositoryContent(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("stack_file_content", "version: '3.9'")
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -832,7 +832,7 @@ func TestStackUpdate_Repository_GitRedeploy(t *testing.T) {
 	_ = d.Set("repository_username", "robot")
 	_ = d.Set("repository_password", "secret")
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -882,7 +882,7 @@ func TestStackDelete_HappyPath(t *testing.T) {
 	d.SetId("5")
 	_ = d.Set("endpoint_id", 1)
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -910,7 +910,7 @@ func TestStackDelete_404_NoError(t *testing.T) {
 	d.SetId("77")
 	_ = d.Set("endpoint_id", 1)
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete should swallow 404, got error: %v", err)
 	}
 }

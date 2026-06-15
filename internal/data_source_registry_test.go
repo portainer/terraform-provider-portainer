@@ -19,7 +19,7 @@ func TestDataSourceRegistryRead_HappyPath(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "harbor")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -46,7 +46,7 @@ func TestDataSourceRegistryRead_NotFound(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "missing")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error for missing registry, got nil")
 	}
 }
@@ -64,7 +64,7 @@ func TestDataSourceRegistryRead_HTTPError(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "harbor")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }

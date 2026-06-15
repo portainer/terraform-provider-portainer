@@ -23,7 +23,7 @@ func TestDataSourcePolicyTemplateRead_ByID(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("template_id", "no-root-containers")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -66,7 +66,7 @@ func TestDataSourcePolicyTemplateRead_ByName(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "Block root")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -92,7 +92,7 @@ func TestDataSourcePolicyTemplateRead_NameNotFound(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "ghost")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error when template name not found, got nil")
 	}
 }
@@ -110,7 +110,7 @@ func TestDataSourcePolicyTemplateRead_HTTPError(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("template_id", "missing")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }

@@ -46,7 +46,7 @@ func TestSharedGitCredentialCreate_UnwrapsResponse(t *testing.T) {
 	_ = d.Set("password", "some_token")
 	_ = d.Set("authorization_type", 1)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -106,7 +106,7 @@ func TestSharedGitCredentialCreate_HTTPError(t *testing.T) {
 	_ = d.Set("password", "y")
 	_ = d.Set("authorization_type", 1)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
@@ -133,7 +133,7 @@ func TestSharedGitCredentialRead_FlatResponse(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("7")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -162,7 +162,7 @@ func TestSharedGitCredentialRead_404_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("99")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404 and clear ID, got error: %v", err)
 	}
 	if d.Id() != "" {

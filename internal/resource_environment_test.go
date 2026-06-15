@@ -54,7 +54,7 @@ func TestEnvironmentCreate_TypeDocker_HappyPath(t *testing.T) {
 	_ = d.Set("environment_address", "tcp://docker.example:2375")
 	_ = d.Set("type", 1)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -109,7 +109,7 @@ func TestEnvironmentCreate_TypeEdgeAgent_HappyPath(t *testing.T) {
 	_ = d.Set("environment_address", "")
 	_ = d.Set("type", 4)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -176,7 +176,7 @@ func TestEnvironmentRead_EdgeAgent_TypeConversion(t *testing.T) {
 	_ = d.Set("type", 4) // user wrote 4 in Terraform config
 	d.SetId("12")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -266,7 +266,7 @@ func TestEnvironmentDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("42")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/endpoints/42") == nil {
@@ -288,7 +288,7 @@ func TestEnvironmentDelete_404_NoError(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("99")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete should swallow 404, got error: %v", err)
 	}
 }
@@ -307,7 +307,7 @@ func TestEnvironmentRead_404_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("55")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404 and clear ID, got error: %v", err)
 	}
 	if d.Id() != "" {
@@ -336,7 +336,7 @@ func TestEnvironmentRead_PopulatesState(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("3")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -378,7 +378,7 @@ func TestEnvironmentCreate_HTTPError(t *testing.T) {
 	_ = d.Set("environment_address", "tcp://does-not-resolve:2375")
 	_ = d.Set("type", 1)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {
@@ -421,7 +421,7 @@ func TestEnvironmentCreate_ExistingName_DelegatesToUpdate(t *testing.T) {
 	_ = d.Set("environment_address", "tcp://docker.example:2375")
 	_ = d.Set("type", 1)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create (existing-name path) failed: %v", err)
 	}
 
@@ -469,7 +469,7 @@ func TestEnvironmentUpdate_NonEdgeSendsFullPayload(t *testing.T) {
 	_ = d.Set("tls_skip_verify", true)
 	_ = d.Set("tls_skip_client_verify", true)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -524,7 +524,7 @@ func TestEnvironmentUpdate_EdgeAgentSkipsConnectionFields(t *testing.T) {
 	_ = d.Set("type", 4)
 	_ = d.Set("tag_ids", []interface{}{11, 12})
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -589,7 +589,7 @@ func TestEnvironmentCreate_Type6_RemapsToAgent(t *testing.T) {
 	_ = d.Set("environment_address", "tcp://agent.example:9001")
 	_ = d.Set("type", 6)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 

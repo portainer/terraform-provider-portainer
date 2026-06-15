@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,17 +10,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceDockerNetwork() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceDockerNetworkCreate,
-		Read:   resourceDockerNetworkRead,
-		Delete: resourceDockerNetworkDelete,
-		Update: nil,
+		CreateContext: resourceDockerNetworkCreate,
+		ReadContext:   resourceDockerNetworkRead,
+		DeleteContext: resourceDockerNetworkDelete,
+		UpdateContext: nil,
 		Importer: &schema.ResourceImporter{
-			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+			StateContext: func(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 				// Expect ID in format "<endpoint_id>:<network_id>"
 				parts := strings.SplitN(d.Id(), ":", 2)
 				if len(parts) != 2 {
@@ -118,7 +120,7 @@ type dockerNetworkCreateResponse struct {
 	} `json:"Portainer"`
 }
 
-func resourceDockerNetworkCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerNetworkCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 
@@ -201,17 +203,17 @@ func resourceDockerNetworkCreate(d *schema.ResourceData, meta interface{}) error
 	path := fmt.Sprintf("/endpoints/%d/docker/networks/create", endpointID)
 	resp, err := client.DoRequest(http.MethodPost, path, headers, payload)
 	if err != nil {
-		return fmt.Errorf("failed to create docker network: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to create docker network: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create docker network: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to create docker network: %s", string(body)))
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return fmt.Errorf("failed to decode docker network create response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode docker network create response: %w", err))
 	}
 
 	d.SetId(response.ID)
@@ -261,7 +263,7 @@ func findDockerNetworkFallback(d *schema.ResourceData, client *APIClient, endpoi
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("failed to list docker networks for fallback lookup: %s", string(body))
 	}
@@ -278,7 +280,7 @@ func findDockerNetworkFallback(d *schema.ResourceData, client *APIClient, endpoi
 	return nil, nil
 }
 
-func resourceDockerNetworkRead(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerNetworkRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	networkID := d.Id()
@@ -291,26 +293,26 @@ func resourceDockerNetworkRead(d *schema.ResourceData, meta interface{}) error {
 	path := fmt.Sprintf("/endpoints/%d/docker/networks/%s", endpointID, networkID)
 	resp, err := client.DoRequest(http.MethodGet, path, headers, nil)
 	if err != nil {
-		return fmt.Errorf("failed to read docker network: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to read docker network: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		network, err := findDockerNetworkFallback(d, client, endpointID, headers)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		if network == nil {
 			d.SetId("")
 			return nil
 		}
 		d.SetId(network.ID)
-		return resourceDockerNetworkRead(d, meta)
+		return resourceDockerNetworkRead(ctx, d, meta)
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read docker network: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to read docker network: %s", string(body)))
 	}
 
 	var result struct {
@@ -338,7 +340,7 @@ func resourceDockerNetworkRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode docker network response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode docker network response: %w", err))
 	}
 
 	configOnly := result.ConfigOnly
@@ -426,7 +428,7 @@ func resourceDockerNetworkRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceDockerNetworkDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceDockerNetworkDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	id := d.Id()
@@ -439,13 +441,13 @@ func resourceDockerNetworkDelete(d *schema.ResourceData, meta interface{}) error
 	path := fmt.Sprintf("/endpoints/%d/docker/networks/%s", endpointID, id)
 	resp, err := client.DoRequest(http.MethodDelete, path, headers, nil)
 	if err != nil {
-		return fmt.Errorf("failed to delete docker network: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to delete docker network: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 404 {
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete docker network: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to delete docker network: %s", string(body)))
 	}
 
 	d.SetId("")

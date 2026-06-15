@@ -16,7 +16,7 @@ func TestEndpointAssociationCreate_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("endpoint_id", 12)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "12" {
@@ -41,7 +41,7 @@ func TestEndpointAssociationCreate_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("endpoint_id", 4)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }
@@ -60,7 +60,7 @@ func TestEndpointAssociationRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("15")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if got := d.Get("endpoint_id"); got != 15 {
@@ -84,7 +84,7 @@ func TestEndpointAssociationRead_404_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("77")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404, got error: %v", err)
 	}
 	if d.Id() != "" {
@@ -98,7 +98,7 @@ func TestEndpointAssociationDelete_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("33")
 
-	if err := r.Delete(d, nil); err != nil {
+	if err := rcDelete(r, d, nil); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {

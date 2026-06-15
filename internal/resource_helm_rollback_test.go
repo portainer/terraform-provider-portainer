@@ -25,7 +25,7 @@ func TestHelmRollbackCreate_HappyPath(t *testing.T) {
 	_ = d.Set("force", true)
 	_ = d.Set("timeout", 120)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -61,7 +61,7 @@ func TestHelmRollbackCreate_DefaultsOnly(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("release_name", "rel")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestHelmRollbackCreate_HTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("release_name", "rel")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on 400, got nil")
 	}

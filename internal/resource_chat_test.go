@@ -23,7 +23,7 @@ func TestChatCreate_HappyPath(t *testing.T) {
 	_ = d.Set("message", "Generate a pod manifest")
 	_ = d.Set("model", "gpt-4")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -78,7 +78,7 @@ func TestChatCreate_IDFromEnvironment(t *testing.T) {
 	_ = d.Set("message", "hello")
 	_ = d.Set("model", "gpt-3.5-turbo")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "chat-42" {
@@ -102,7 +102,7 @@ func TestChatCreate_HTTPError(t *testing.T) {
 	_ = d.Set("environment_id", 2)
 	_ = d.Set("message", "x")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on 502, got nil")
 	}

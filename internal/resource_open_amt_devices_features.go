@@ -2,11 +2,13 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -24,10 +26,10 @@ type EnableAMTFeaturesRequest struct {
 
 func resourcePortainerOpenAMTDevicesFeatures() *schema.Resource {
 	return &schema.Resource{
-		Create: resourcePortainerOpenAMTDevicesFeaturesCreate,
-		Read:   schema.Noop,
-		Update: schema.Noop,
-		Delete: schema.RemoveFromState,
+		CreateContext: resourcePortainerOpenAMTDevicesFeaturesCreate,
+		ReadContext:   schema.NoopContext,
+		UpdateContext: schema.NoopContext,
+		DeleteContext: removeFromStateContext,
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
 				Type:        schema.TypeInt,
@@ -73,7 +75,7 @@ func resourcePortainerOpenAMTDevicesFeatures() *schema.Resource {
 	}
 }
 
-func resourcePortainerOpenAMTDevicesFeaturesCreate(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerOpenAMTDevicesFeaturesCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	envID := d.Get("environment_id").(int)
@@ -90,13 +92,13 @@ func resourcePortainerOpenAMTDevicesFeaturesCreate(d *schema.ResourceData, meta 
 	reqBody := EnableAMTFeaturesRequest{Features: features}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	url := fmt.Sprintf("%s/open_amt/%d/devices_features/%d", client.Endpoint, envID, deviceID)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	if client.APIKey != "" {
@@ -104,19 +106,19 @@ func resourcePortainerOpenAMTDevicesFeaturesCreate(d *schema.ResourceData, meta 
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to enable AMT device features: %s", resp.Status)
+		return diag.FromErr(fmt.Errorf("failed to enable AMT device features: %s", resp.Status))
 	}
 
 	d.SetId("amt-device-features-" + strconv.Itoa(deviceID))

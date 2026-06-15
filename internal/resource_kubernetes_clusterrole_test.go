@@ -24,7 +24,7 @@ func TestKubernetesClusterRoleCreate_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("manifest", clusterRoleManifestJSON)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "1:cluster-reader" {
@@ -56,7 +56,7 @@ func TestKubernetesClusterRoleCreate_HTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("manifest", clusterRoleManifestJSON)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 403, got nil")
 	}
 }
@@ -72,7 +72,7 @@ func TestKubernetesClusterRoleDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("1:cluster-reader")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/endpoints/1/kubernetes/apis/rbac.authorization.k8s.io/v1/clusterroles/cluster-reader") == nil {

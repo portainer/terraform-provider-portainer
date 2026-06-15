@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,16 +10,17 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourceKubernetesNamespace() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceKubernetesNamespaceCreate,
-		Read:   resourceKubernetesNamespaceRead,
-		Update: resourceKubernetesNamespaceUpdate,
-		Delete: resourceKubernetesNamespaceDelete,
+		CreateContext: resourceKubernetesNamespaceCreate,
+		ReadContext:   resourceKubernetesNamespaceRead,
+		UpdateContext: resourceKubernetesNamespaceUpdate,
+		DeleteContext: resourceKubernetesNamespaceDelete,
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
@@ -54,13 +56,13 @@ func resourceKubernetesNamespace() *schema.Resource {
 	}
 }
 
-func resourceKubernetesNamespaceCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesNamespaceCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Get("environment_id").(int)
 
-	licensed, err := hasLicense(client)
+	licensed, err := hasLicense(ctx, client)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	annotations := map[string]string{}
@@ -103,51 +105,51 @@ func resourceKubernetesNamespaceCreate(d *schema.ResourceData, meta interface{})
 
 	jsonBody, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces", client.Endpoint, id)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create namespace: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to create namespace: %s", string(data)))
 	}
 
 	envID := strconv.Itoa(id)
 	d.SetId(fmt.Sprintf("%s:%s", envID, d.Get("name").(string)))
-	return resourceKubernetesNamespaceRead(d, meta)
+	return resourceKubernetesNamespaceRead(ctx, d, meta)
 }
 
-func resourceKubernetesNamespaceRead(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesNamespaceRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// No-op for now
 	return nil
 }
 
-func resourceKubernetesNamespaceUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesNamespaceUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	licensed, err := hasLicense(client)
+	licensed, err := hasLicense(ctx, client)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	idParts := strings.SplitN(d.Id(), ":", 2)
 	if len(idParts) != 2 {
-		return fmt.Errorf("invalid ID format, expected 'envID:name': %s", d.Id())
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'envID:name': %s", d.Id()))
 	}
 	envID, _ := strconv.Atoi(idParts[0])
 	oldName := idParts[1]
@@ -193,28 +195,28 @@ func resourceKubernetesNamespaceUpdate(d *schema.ResourceData, meta interface{})
 
 	jsonBody, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s", client.Endpoint, envID, oldName)
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update namespace: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to update namespace: %s", string(data)))
 	}
 
 	// If name changed, update ID
@@ -222,14 +224,14 @@ func resourceKubernetesNamespaceUpdate(d *schema.ResourceData, meta interface{})
 		d.SetId(fmt.Sprintf("%d:%s", envID, newName))
 	}
 
-	return resourceKubernetesNamespaceRead(d, meta)
+	return resourceKubernetesNamespaceRead(ctx, d, meta)
 }
 
-func resourceKubernetesNamespaceDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesNamespaceDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	idParts := strings.SplitN(d.Id(), ":", 2)
 	if len(idParts) != 2 {
-		return fmt.Errorf("invalid ID format, expected 'envID:name': %s", d.Id())
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'envID:name': %s", d.Id()))
 	}
 	envID, _ := strconv.Atoi(idParts[0])
 	name := idParts[1]
@@ -240,37 +242,37 @@ func resourceKubernetesNamespaceDelete(d *schema.ResourceData, meta interface{})
 	jsonBody, _ := json.Marshal(body)
 
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces", client.Endpoint, envID)
-	req, err := http.NewRequest("DELETE", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete namespace: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to delete namespace: %s", string(data)))
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func hasLicense(client *APIClient) (bool, error) {
+func hasLicense(ctx context.Context, client *APIClient) (bool, error) {
 	url := fmt.Sprintf("%s/licenses", client.Endpoint)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return false, err
 	}
@@ -289,7 +291,7 @@ func hasLicense(client *APIClient) (bool, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return false, nil
 	}
 

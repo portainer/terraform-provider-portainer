@@ -32,9 +32,16 @@ make validate           # Validate all Terraform configs
 ### Resource Implementation Pattern
 Each resource follows this structure:
 1. Schema definition with `schema.Resource` struct
-2. CRUD functions: `resourcePortainer<Name>Create/Read/Update/Delete`
+2. Context-aware CRUD wired via `CreateContext/ReadContext/UpdateContext/DeleteContext` fields, with handlers
+   `resourcePortainer<Name>Create/Read/Update/Delete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics`.
+   Return errors with `diag.FromErr(...)`; `return nil` on success. Use `removeFromStateContext` (helpers.go) as the
+   context-aware equivalent of `schema.RemoveFromState`, and `schema.NoopContext` instead of `schema.Noop`.
 3. API calls use either the generated SDK client (`client.Client.Endpoints.*`) or direct HTTP requests (`http.NewRequest`)
 4. Authentication via `X-API-Key` header or `Authorization: Bearer` JWT token
+
+### Testing CRUD
+Unit tests drive handlers through the `rcCreate/rcRead/rcUpdate/rcDelete(r, d, mock.Client())` adapters
+(crud_adapters_test.go), which call the `*Context` handlers and collapse `diag.Diagnostics` back to an `error`.
 
 ### API Client
 Two patterns are used for API interaction:

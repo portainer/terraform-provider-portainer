@@ -32,7 +32,7 @@ func TestDataSourceWebhookRead_HappyPath(t *testing.T) {
 	_ = d.Set("resource_id", "container-xyz")
 	_ = d.Set("endpoint_id", 7)
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -60,7 +60,7 @@ func TestDataSourceWebhookRead_NotFound(t *testing.T) {
 	_ = d.Set("resource_id", "missing")
 	_ = d.Set("endpoint_id", 99)
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error when webhook not found, got nil")
 	}
 }
@@ -79,7 +79,7 @@ func TestDataSourceWebhookRead_HTTPError(t *testing.T) {
 	_ = d.Set("resource_id", "container-abc")
 	_ = d.Set("endpoint_id", 5)
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }

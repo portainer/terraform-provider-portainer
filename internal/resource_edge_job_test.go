@@ -26,7 +26,7 @@ func TestEdgeJobCreate_FromFileContent(t *testing.T) {
 	_ = d.Set("recurring", true)
 	_ = d.Set("file_content", "#!/bin/bash\necho hello")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -75,7 +75,7 @@ func TestEdgeJobCreate_ExistingNameTriggersUpdate(t *testing.T) {
 	_ = d.Set("endpoints", []interface{}{10})
 	_ = d.Set("file_content", "#!/bin/bash\necho updated")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -107,7 +107,7 @@ func TestEdgeJobRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("7")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestEdgeJobRead_404_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("99")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404, got error: %v", err)
 	}
 	if d.Id() != "" {
@@ -150,7 +150,7 @@ func TestEdgeJobDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("7")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -178,7 +178,7 @@ func TestEdgeJobCreate_HTTPError(t *testing.T) {
 	_ = d.Set("endpoints", []interface{}{1})
 	_ = d.Set("file_content", "echo hi")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}

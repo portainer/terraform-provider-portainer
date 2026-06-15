@@ -29,7 +29,7 @@ func TestDataSourceHelmGitDryRunRead_HappyPath(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("release_name", "my-release")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -84,7 +84,7 @@ func TestDataSourceHelmGitDryRunRead_HTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("repository_url", "https://example.com/chart.git")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }

@@ -1,17 +1,19 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceWebhookExecute() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceWebhookExecuteCreate,
-		Read:   resourceWebhookExecuteRead,
-		Delete: resourceWebhookExecuteDelete,
+		CreateContext: resourceWebhookExecuteCreate,
+		ReadContext:   resourceWebhookExecuteRead,
+		DeleteContext: resourceWebhookExecuteDelete,
 		Schema: map[string]*schema.Schema{
 			"token": {
 				Type:          schema.TypeString,
@@ -39,7 +41,7 @@ func resourceWebhookExecute() *schema.Resource {
 	}
 }
 
-func resourceWebhookExecuteCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceWebhookExecuteCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	var url string
@@ -60,32 +62,32 @@ func resourceWebhookExecuteCreate(d *schema.ResourceData, meta interface{}) erro
 		d.SetId(edgeStackID)
 
 	default:
-		return fmt.Errorf("one of 'token', 'stack_id' or 'edge_stack_id' must be set")
+		return diag.FromErr(fmt.Errorf("one of 'token', 'stack_id' or 'edge_stack_id' must be set"))
 	}
 
-	req, err := http.NewRequest("POST", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to execute webhook: HTTP %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to execute webhook: HTTP %d", resp.StatusCode))
 	}
 
 	return nil
 }
 
-func resourceWebhookExecuteRead(d *schema.ResourceData, meta interface{}) error {
+func resourceWebhookExecuteRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil
 }
 
-func resourceWebhookExecuteDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceWebhookExecuteDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }

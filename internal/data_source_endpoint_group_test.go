@@ -19,7 +19,7 @@ func TestDataSourceEndpointGroupRead_HappyPath(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "infra")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -43,7 +43,7 @@ func TestDataSourceEndpointGroupRead_NotFound(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "ghost")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error for missing endpoint group, got nil")
 	}
 }
@@ -61,7 +61,7 @@ func TestDataSourceEndpointGroupRead_HTTPError(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "infra")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 403, got nil")
 	}
 }

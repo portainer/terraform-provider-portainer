@@ -24,7 +24,7 @@ func TestStackMigrateCreate_HappyPath(t *testing.T) {
 	_ = d.Set("stack_name", "new-name")
 	_ = d.Set("swarm_id", "swarm-xyz")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestStackMigrateCreate_WithSourceEndpoint(t *testing.T) {
 	_ = d.Set("target_endpoint_id", 2)
 	_ = d.Set("endpoint_id", 1)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -90,7 +90,7 @@ func TestStackMigrateCreate_MinimalPayload(t *testing.T) {
 	_ = d.Set("stack_id", 4)
 	_ = d.Set("target_endpoint_id", 9)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -124,7 +124,7 @@ func TestStackMigrateCreate_HTTPError(t *testing.T) {
 	_ = d.Set("stack_id", 5)
 	_ = d.Set("target_endpoint_id", 6)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}

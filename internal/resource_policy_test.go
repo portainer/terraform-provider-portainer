@@ -33,7 +33,7 @@ func TestPolicyCreate_HappyPath(t *testing.T) {
 	_ = d.Set("data", `{"foo":"bar"}`)
 	_ = d.Set("allow_override", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -86,7 +86,7 @@ func TestPolicyRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("7")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if got := d.Get("name"); got != "p1" {
@@ -107,7 +107,7 @@ func TestPolicyRead_404_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("99")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404, got: %v", err)
 	}
 	if d.Id() != "" {
@@ -133,7 +133,7 @@ func TestPolicyUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("environment_type", "kubernetes")
 	_ = d.Set("policy_type", "rbac-k8s")
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 	if mock.FindRequest("PUT", "/policies/11") == nil {
@@ -151,7 +151,7 @@ func TestPolicyDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("5")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/policies/5") == nil {
@@ -174,7 +174,7 @@ func TestPolicyCreate_HTTPError(t *testing.T) {
 	_ = d.Set("environment_type", "kubernetes")
 	_ = d.Set("policy_type", "rbac-k8s")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on 400, got nil")
 	}

@@ -2,19 +2,21 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceKubernetesNamespaceIngressControllers() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceKubernetesNamespaceIngressControllersCreate,
-		Read:   resourceKubernetesNamespaceIngressControllersRead,
-		Delete: resourceKubernetesNamespaceIngressControllersDelete,
+		CreateContext: resourceKubernetesNamespaceIngressControllersCreate,
+		ReadContext:   resourceKubernetesNamespaceIngressControllersRead,
+		DeleteContext: resourceKubernetesNamespaceIngressControllersDelete,
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
@@ -73,7 +75,7 @@ func resourceKubernetesNamespaceIngressControllers() *schema.Resource {
 	}
 }
 
-func resourceKubernetesNamespaceIngressControllersCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesNamespaceIngressControllersCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("environment_id").(int)
 	namespace := d.Get("namespace").(string)
@@ -95,70 +97,70 @@ func resourceKubernetesNamespaceIngressControllersCreate(d *schema.ResourceData,
 	jsonBody, _ := json.Marshal(controllers)
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s/ingresscontrollers", client.Endpoint, endpointID, namespace)
 
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update namespace ingress controllers: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to update namespace ingress controllers: %s", string(data)))
 	}
 
 	d.SetId(fmt.Sprintf("%d:%s", endpointID, namespace))
-	return resourceKubernetesNamespaceIngressControllersRead(d, meta)
+	return resourceKubernetesNamespaceIngressControllersRead(ctx, d, meta)
 }
 
-func resourceKubernetesNamespaceIngressControllersRead(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesNamespaceIngressControllersRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("environment_id").(int)
 	namespace := d.Get("namespace").(string)
 
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s/ingresscontrollers", client.Endpoint, endpointID, namespace)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
 	}
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read namespace ingress controllers: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to read namespace ingress controllers: %s", string(data)))
 	}
 
 	var controllers []map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&controllers); err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	controllersList := make([]map[string]interface{}, len(controllers))
@@ -172,12 +174,14 @@ func resourceKubernetesNamespaceIngressControllersRead(d *schema.ResourceData, m
 			"new":          c["New"],
 		}
 	}
-	d.Set("controllers", controllersList)
+	if err := d.Set("controllers", controllersList); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
 
-func resourceKubernetesNamespaceIngressControllersDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceKubernetesNamespaceIngressControllersDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("environment_id").(int)
 	namespace := d.Get("namespace").(string)
@@ -200,28 +204,28 @@ func resourceKubernetesNamespaceIngressControllersDelete(d *schema.ResourceData,
 	jsonBody, _ := json.Marshal(controllers)
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s/ingresscontrollers", client.Endpoint, endpointID, namespace)
 
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to disable namespace ingress controllers: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to disable namespace ingress controllers: %s", string(data)))
 	}
 
 	return nil

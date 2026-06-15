@@ -57,7 +57,7 @@ func TestTLSUploadCreate_HappyPath(t *testing.T) {
 	_ = d.Set("folder", "endpoint-7")
 	_ = d.Set("file_path", filePath)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -135,7 +135,7 @@ func TestTLSUploadCreate_DifferentCertTypes(t *testing.T) {
 			_ = d.Set("folder", "endpoint-1")
 			_ = d.Set("file_path", filePath)
 
-			if err := r.Create(d, mock.Client()); err != nil {
+			if err := rcCreate(r, d, mock.Client()); err != nil {
 				t.Fatalf("Create failed: %v", err)
 			}
 			if mock.FindRequest("POST", "/upload/tls/"+certType) == nil {
@@ -167,7 +167,7 @@ func TestTLSUploadCreate_HTTPError(t *testing.T) {
 	_ = d.Set("folder", "endpoint-1")
 	_ = d.Set("file_path", filePath)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {
@@ -195,7 +195,7 @@ func TestTLSUploadCreate_NoAuth(t *testing.T) {
 	_ = d.Set("folder", "endpoint-1")
 	_ = d.Set("file_path", filePath)
 
-	err := r.Create(d, client)
+	err := rcCreate(r, d, client)
 	if err == nil {
 		t.Fatal("expected an authentication error, got nil")
 	}

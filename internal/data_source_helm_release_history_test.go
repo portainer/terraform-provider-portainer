@@ -54,7 +54,7 @@ func TestDataSourceHelmReleaseHistoryRead_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 4)
 	_ = d.Set("release_name", "myapp")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -110,7 +110,7 @@ func TestDataSourceHelmReleaseHistoryRead_NamespaceQueryParam(t *testing.T) {
 	_ = d.Set("release_name", "app")
 	_ = d.Set("namespace", "prod")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -138,7 +138,7 @@ func TestDataSourceHelmReleaseHistoryRead_HTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("release_name", "missing")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 404, got nil")
 	}
 }

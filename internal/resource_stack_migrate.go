@@ -1,19 +1,21 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceStackMigrate() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceStackMigrateCreate,
-		Read:   schema.Noop,
-		Delete: schema.Noop,
+		CreateContext: resourceStackMigrateCreate,
+		ReadContext:   schema.NoopContext,
+		DeleteContext: schema.NoopContext,
 
 		Schema: map[string]*schema.Schema{
 			"stack_id": {
@@ -50,7 +52,7 @@ func resourceStackMigrate() *schema.Resource {
 	}
 }
 
-func resourceStackMigrateCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceStackMigrateCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	stackID := d.Get("stack_id").(int)
@@ -75,12 +77,12 @@ func resourceStackMigrateCreate(d *schema.ResourceData, meta interface{}) error 
 
 	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
 	if err != nil {
-		return fmt.Errorf("failed to migrate stack: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to migrate stack: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to migrate stack: HTTP %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to migrate stack: HTTP %d", resp.StatusCode))
 	}
 
 	d.SetId(strconv.Itoa(stackID) + "-" + strconv.FormatInt(time.Now().Unix(), 10))

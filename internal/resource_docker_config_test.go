@@ -27,7 +27,7 @@ func TestDockerConfigCreate_HappyPath(t *testing.T) {
 	_ = d.Set("name", "my-config")
 	_ = d.Set("data", "c2VjcmV0")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -77,7 +77,7 @@ func TestDockerConfigRead_HappyPath(t *testing.T) {
 	d.SetId("abc")
 	_ = d.Set("endpoint_id", 1)
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -103,7 +103,7 @@ func TestDockerConfigRead_404ClearsID(t *testing.T) {
 	d.SetId("nope")
 	_ = d.Set("endpoint_id", 1)
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404, got error: %v", err)
 	}
 	if d.Id() != "" {
@@ -132,7 +132,7 @@ func TestDockerConfigUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("name", "renamed")
 	_ = d.Set("data", "newdata")
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -155,7 +155,7 @@ func TestDockerConfigDelete_HappyPath(t *testing.T) {
 	d.SetId("abc")
 	_ = d.Set("endpoint_id", 1)
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -184,7 +184,7 @@ func TestDockerConfigCreate_HTTPError(t *testing.T) {
 	_ = d.Set("name", "x")
 	_ = d.Set("data", "y")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}

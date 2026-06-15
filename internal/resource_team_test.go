@@ -30,7 +30,7 @@ func TestTeamCreate_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("name", "devops")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -78,7 +78,7 @@ func TestTeamCreate_AlreadyExists(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("name", "devops")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -104,7 +104,7 @@ func TestTeamRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("9")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if got := d.Get("name"); got != "platform" {
@@ -130,7 +130,7 @@ func TestTeamUpdate_HappyPath(t *testing.T) {
 	d.SetId("3")
 	_ = d.Set("name", "renamed")
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 	put := mock.FindRequest("PUT", "/teams/3")
@@ -156,7 +156,7 @@ func TestTeamDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("5")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/teams/5") == nil {
@@ -178,7 +178,7 @@ func TestTeamRead_404_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("404")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404 and clear ID, got: %v", err)
 	}
 	if d.Id() != "" {

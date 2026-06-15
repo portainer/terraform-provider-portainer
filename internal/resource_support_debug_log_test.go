@@ -19,7 +19,7 @@ func TestSupportDebugLogCreate_HappyPath_Enabled(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("enabled", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -54,7 +54,7 @@ func TestSupportDebugLogCreate_HappyPath_Disabled(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("enabled", false)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "false" {
@@ -88,7 +88,7 @@ func TestSupportDebugLogCreate_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("enabled", true)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on 403, got nil")
 	}
@@ -110,7 +110,7 @@ func TestSupportDebugLogRead_PopulatesState(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("false") // simulating a drift: state says false, API says true
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if got := d.Get("enabled"); got != true {
@@ -135,7 +135,7 @@ func TestSupportDebugLogDelete_DisablesViaPUT(t *testing.T) {
 	d.SetId("true")
 	_ = d.Set("enabled", true)
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 

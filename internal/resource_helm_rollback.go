@@ -1,18 +1,20 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceHelmRollback() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceHelmRollbackCreate,
-		Read:   schema.Noop,
-		Delete: schema.Noop,
+		CreateContext: resourceHelmRollbackCreate,
+		ReadContext:   schema.NoopContext,
+		DeleteContext: schema.NoopContext,
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
@@ -78,7 +80,7 @@ func resourceHelmRollback() *schema.Resource {
 	}
 }
 
-func resourceHelmRollbackCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceHelmRollbackCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	releaseName := d.Get("release_name").(string)
@@ -119,13 +121,13 @@ func resourceHelmRollbackCreate(d *schema.ResourceData, meta interface{}) error 
 
 	resp, err := client.DoRequest("POST", path+queryParams, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to rollback Helm release %s: %w", releaseName, err)
+		return diag.FromErr(fmt.Errorf("failed to rollback Helm release %s: %w", releaseName, err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to rollback Helm release %s (status %d): %s", releaseName, resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to rollback Helm release %s (status %d): %s", releaseName, resp.StatusCode, string(data)))
 	}
 
 	d.SetId(fmt.Sprintf("helm-rollback-%d-%s-%d", endpointID, releaseName, makeTimestamp()))

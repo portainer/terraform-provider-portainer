@@ -115,7 +115,7 @@ func TestDeployCreate_Standalone_HappyPath(t *testing.T) {
 	_ = d.Set("services_list", "web,worker")
 	_ = d.Set("update_revision", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -195,7 +195,7 @@ func TestDeployCreate_Standalone_AppendsMissingEnvVar(t *testing.T) {
 	_ = d.Set("services_list", "svc")
 	_ = d.Set("update_revision", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -229,7 +229,7 @@ func TestDeployCreate_EmptyServicesList(t *testing.T) {
 	_ = d.Set("revision", "2.0.0")
 	_ = d.Set("services_list", "   ")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error for empty services_list, got nil")
 	}
@@ -257,7 +257,7 @@ func TestDeployCreate_StackNotFound(t *testing.T) {
 	_ = d.Set("revision", "2.0.0")
 	_ = d.Set("services_list", "svc")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when stack not found, got nil")
 	}
@@ -284,7 +284,7 @@ func TestDeployCreate_StackListHTTPError(t *testing.T) {
 	_ = d.Set("revision", "2.0.0")
 	_ = d.Set("services_list", "svc")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when stack listing cannot be parsed, got nil")
 	}
@@ -310,7 +310,7 @@ func TestDeployCreate_Standalone_NoUpdateRevision(t *testing.T) {
 	_ = d.Set("services_list", "svc")
 	_ = d.Set("update_revision", false)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if mock.FindRequest("GET", "/stacks/5/file") != nil {
@@ -329,7 +329,7 @@ func TestDeployRead_Noop(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("deploy-123")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "deploy-123" {
@@ -349,7 +349,7 @@ func TestDeployDelete_ClearsState(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("deploy-123")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {

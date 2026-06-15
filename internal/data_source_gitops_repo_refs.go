@@ -1,16 +1,18 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceGitopsRepoRefs() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceGitopsRepoRefsRead,
+		ReadContext: dataSourceGitopsRepoRefsRead,
 
 		Schema: map[string]*schema.Schema{
 			"repository_url": {
@@ -51,7 +53,7 @@ func dataSourceGitopsRepoRefs() *schema.Resource {
 	}
 }
 
-func dataSourceGitopsRepoRefsRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceGitopsRepoRefsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	repoURL := d.Get("repository_url").(string)
@@ -75,22 +77,24 @@ func dataSourceGitopsRepoRefsRead(d *schema.ResourceData, meta interface{}) erro
 
 	resp, err := client.DoRequest("POST", "/gitops/repo/refs", nil, payload)
 	if err != nil {
-		return fmt.Errorf("failed to list Git repository refs: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to list Git repository refs: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to list Git repository refs (status %d): %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to list Git repository refs (status %d): %s", resp.StatusCode, string(data)))
 	}
 
 	var refs []string
 	if err := json.NewDecoder(resp.Body).Decode(&refs); err != nil {
-		return fmt.Errorf("failed to decode Git refs response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode Git refs response: %w", err))
 	}
 
 	d.SetId(fmt.Sprintf("gitops-repo-refs-%s", repoURL))
-	d.Set("refs", refs)
+	if err := d.Set("refs", refs); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }

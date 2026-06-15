@@ -30,7 +30,7 @@ func TestDataSourceDockerNodeRead_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 9)
 	_ = d.Set("hostname", "worker-1")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -63,7 +63,7 @@ func TestDataSourceDockerNodeRead_NotFound(t *testing.T) {
 	_ = d.Set("endpoint_id", 9)
 	_ = d.Set("hostname", "ghost")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error for missing docker node, got nil")
 	}
 }
@@ -82,7 +82,7 @@ func TestDataSourceDockerNodeRead_HTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 9)
 	_ = d.Set("hostname", "mgr-1")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 503, got nil")
 	}
 }

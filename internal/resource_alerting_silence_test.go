@@ -44,7 +44,7 @@ func TestAlertingSilenceCreate_HappyPath_SilenceIDKey(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -115,7 +115,7 @@ func TestAlertingSilenceCreate_HappyPath_IDKey(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "xyz-9" {
@@ -136,7 +136,7 @@ func TestAlertingSilenceDelete_HappyPath(t *testing.T) {
 	d.SetId("abc-123")
 	_ = d.Set("alert_manager_url", "http://am.example:9093")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -166,7 +166,7 @@ func TestAlertingSilenceDelete_404_NoError(t *testing.T) {
 	d.SetId("gone")
 	_ = d.Set("alert_manager_url", "http://am.example")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete should swallow 404, got error: %v", err)
 	}
 }
@@ -197,7 +197,7 @@ func TestAlertingSilenceCreate_HTTPError(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {

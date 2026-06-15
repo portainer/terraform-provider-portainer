@@ -36,7 +36,7 @@ func TestEndpointGroupCreate_HappyPath(t *testing.T) {
 	_ = d.Set("description", "prod group")
 	_ = d.Set("tag_ids", []interface{}{10, 20})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -94,7 +94,7 @@ func TestEndpointGroupCreate_ExistingNameTriggersUpdate(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("name", "Production")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -125,7 +125,7 @@ func TestEndpointGroupRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("42")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -156,7 +156,7 @@ func TestEndpointGroupRead_404_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("99")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404 and clear ID, got error: %v", err)
 	}
 	if d.Id() != "" {
@@ -185,7 +185,7 @@ func TestEndpointGroupUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("name", "renamed")
 	_ = d.Set("description", "new desc")
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -215,7 +215,7 @@ func TestEndpointGroupDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("8")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/endpoint_groups/8") == nil {
@@ -237,7 +237,7 @@ func TestEndpointGroupDelete_404Swallowed(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("123")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete should swallow 404, got error: %v", err)
 	}
 }

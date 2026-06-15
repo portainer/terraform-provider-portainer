@@ -1,16 +1,18 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceHelmGitDryRun() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceHelmGitDryRunRead,
+		ReadContext: dataSourceHelmGitDryRunRead,
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
@@ -92,7 +94,7 @@ func dataSourceHelmGitDryRun() *schema.Resource {
 	}
 }
 
-func dataSourceHelmGitDryRunRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceHelmGitDryRunRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 
@@ -137,13 +139,13 @@ func dataSourceHelmGitDryRunRead(d *schema.ResourceData, meta interface{}) error
 
 	resp, err := client.DoRequest("POST", fmt.Sprintf("/endpoints/%d/kubernetes/helm/git/dryrun", endpointID), nil, payload)
 	if err != nil {
-		return fmt.Errorf("failed to perform Helm Git dry run: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to perform Helm Git dry run: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("helm git dry run failed (status %d): %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("helm git dry run failed (status %d): %s", resp.StatusCode, string(data)))
 	}
 
 	var result struct {
@@ -153,12 +155,16 @@ func dataSourceHelmGitDryRunRead(d *schema.ResourceData, meta interface{}) error
 		Version   int    `json:"version"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode dry run response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode dry run response: %w", err))
 	}
 
 	d.SetId(fmt.Sprintf("helm-git-dryrun-%d-%s", endpointID, d.Get("repository_url").(string)))
-	d.Set("manifest", result.Manifest)
-	d.Set("release_version", result.Version)
+	if err := d.Set("manifest", result.Manifest); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("release_version", result.Version); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }

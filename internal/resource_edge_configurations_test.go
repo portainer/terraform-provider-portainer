@@ -421,7 +421,7 @@ func TestEdgeConfigurationsUpdate_FormFieldsRegression119(t *testing.T) {
 	_ = d.Set("edge_group_ids", []interface{}{1, 2})
 	_ = d.Set("file_path", filePath)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 

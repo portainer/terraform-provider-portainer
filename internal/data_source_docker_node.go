@@ -1,17 +1,19 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceDockerNode() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceDockerNodeRead,
+		ReadContext: dataSourceDockerNodeRead,
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
@@ -38,7 +40,7 @@ func dataSourceDockerNode() *schema.Resource {
 	}
 }
 
-func dataSourceDockerNodeRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceDockerNodeRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	hostname := d.Get("hostname").(string)
@@ -46,14 +48,14 @@ func dataSourceDockerNodeRead(d *schema.ResourceData, meta interface{}) error {
 	path := fmt.Sprintf("/endpoints/%d/docker/nodes", endpointID)
 	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to list docker nodes: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to list docker nodes: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		// Nodes endpoint might fail if not in a Swarm cluster
-		return fmt.Errorf("failed to list docker nodes (is this a Swarm cluster?), status %d: %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to list docker nodes (is this a Swarm cluster?), status %d: %s", resp.StatusCode, string(data)))
 	}
 
 	var nodes []struct {
@@ -69,17 +71,21 @@ func dataSourceDockerNodeRead(d *schema.ResourceData, meta interface{}) error {
 		} `json:"Status"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&nodes); err != nil {
-		return fmt.Errorf("failed to decode docker node list: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode docker node list: %w", err))
 	}
 
 	for _, n := range nodes {
 		if n.Description.Hostname == hostname {
 			d.SetId(n.ID)
-			d.Set("role", n.Spec.Role)
-			d.Set("status", n.Status.State)
+			if err := d.Set("role", n.Spec.Role); err != nil {
+				return diag.FromErr(err)
+			}
+			if err := d.Set("status", n.Status.State); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 	}
 
-	return fmt.Errorf("docker node with hostname %s not found in endpoint %d", hostname, endpointID)
+	return diag.FromErr(fmt.Errorf("docker node with hostname %s not found in endpoint %d", hostname, endpointID))
 }

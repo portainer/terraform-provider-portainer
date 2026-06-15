@@ -2,12 +2,14 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
@@ -38,12 +40,12 @@ type EdgeUpdateScheduleResponse struct {
 
 func resourcePortainerEdgeUpdateSchedules() *schema.Resource {
 	return &schema.Resource{
-		Create: resourcePortainerEdgeUpdateSchedulesCreate,
-		Read:   resourcePortainerEdgeUpdateSchedulesRead,
-		Update: resourcePortainerEdgeUpdateSchedulesUpdate,
-		Delete: resourcePortainerEdgeUpdateSchedulesDelete,
+		CreateContext: resourcePortainerEdgeUpdateSchedulesCreate,
+		ReadContext:   resourcePortainerEdgeUpdateSchedulesRead,
+		UpdateContext: resourcePortainerEdgeUpdateSchedulesUpdate,
+		DeleteContext: resourcePortainerEdgeUpdateSchedulesDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"name":           {Type: schema.TypeString, Required: true, ValidateFunc: validation.NoZeroValues, Description: "Name of the Portainer edge update schedule."},
@@ -57,7 +59,7 @@ func resourcePortainerEdgeUpdateSchedules() *schema.Resource {
 	}
 }
 
-func resourcePortainerEdgeUpdateSchedulesCreate(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerEdgeUpdateSchedulesCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	payload := EdgeUpdateSchedulePayload{
@@ -75,42 +77,42 @@ func resourcePortainerEdgeUpdateSchedulesCreate(d *schema.ResourceData, meta int
 
 	jsonBody, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/edge_update_schedules", client.Endpoint), bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/edge_update_schedules", client.Endpoint), bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		msg, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create edge update schedule: %s", string(msg))
+		return diag.FromErr(fmt.Errorf("failed to create edge update schedule: %s", string(msg)))
 	}
 
 	var response EdgeUpdateScheduleResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	d.SetId(strconv.Itoa(response.ID))
 	return nil
 }
 
-func resourcePortainerEdgeUpdateSchedulesUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerEdgeUpdateSchedulesUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Id()
 
@@ -129,111 +131,125 @@ func resourcePortainerEdgeUpdateSchedulesUpdate(d *schema.ResourceData, meta int
 
 	jsonBody, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		msg, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update edge update schedule: %s", string(msg))
+		return diag.FromErr(fmt.Errorf("failed to update edge update schedule: %s", string(msg)))
 	}
 
-	return resourcePortainerEdgeUpdateSchedulesRead(d, meta)
+	return resourcePortainerEdgeUpdateSchedulesRead(ctx, d, meta)
 }
 
-func resourcePortainerEdgeUpdateSchedulesDelete(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerEdgeUpdateSchedulesDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Id()
 
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 204 || resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound {
 		return nil
 	}
 
 	if resp.StatusCode >= 400 {
 		msg, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete edge update schedule: %s", string(msg))
+		return diag.FromErr(fmt.Errorf("failed to delete edge update schedule: %s", string(msg)))
 	}
 
 	return nil
 }
 
-func resourcePortainerEdgeUpdateSchedulesRead(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerEdgeUpdateSchedulesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Id()
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
 	}
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
 	}
 	if resp.StatusCode >= 400 {
 		msg, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read edge update schedule: %s", string(msg))
+		return diag.FromErr(fmt.Errorf("failed to read edge update schedule: %s", string(msg)))
 	}
 
 	var data EdgeUpdateScheduleResponse
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return err
+		return diag.FromErr(err)
 	}
-	d.Set("name", data.Name)
-	d.Set("agent_image", data.AgentImage)
-	d.Set("updater_image", data.UpdaterImage)
-	d.Set("registry_id", data.RegistryID)
-	d.Set("scheduled_time", data.ScheduledTime)
-	d.Set("group_ids", data.EdgeGroupIds)
-	d.Set("type", data.Type)
+	if err := d.Set("name", data.Name); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("agent_image", data.AgentImage); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("updater_image", data.UpdaterImage); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("registry_id", data.RegistryID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("scheduled_time", data.ScheduledTime); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("group_ids", data.EdgeGroupIds); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("type", data.Type); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }

@@ -2,11 +2,13 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
@@ -42,12 +44,12 @@ type AlertingUpdatePayload struct {
 
 func resourceAlertingSettings() *schema.Resource {
 	return &schema.Resource{
-		Create: resourcePortainerAlertingSettingsCreate,
-		Read:   resourcePortainerAlertingSettingsRead,
-		Update: resourcePortainerAlertingSettingsUpdate,
-		Delete: resourcePortainerAlertingSettingsDelete,
+		CreateContext: resourcePortainerAlertingSettingsCreate,
+		ReadContext:   resourcePortainerAlertingSettingsRead,
+		UpdateContext: resourcePortainerAlertingSettingsUpdate,
+		DeleteContext: resourcePortainerAlertingSettingsDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"enabled": {
@@ -145,32 +147,32 @@ func resourceAlertingSettings() *schema.Resource {
 	}
 }
 
-func resourcePortainerAlertingSettingsCreate(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerAlertingSettingsCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	payload := buildAlertingSettingsPayload(d)
 
 	jsonPayload, err := json.Marshal(AlertingUpdatePayload{AlertingSettings: payload})
 	if err != nil {
-		return fmt.Errorf("failed to marshal alerting settings payload: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to marshal alerting settings payload: %w", err))
 	}
 
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/observability/alerting/settings", client.Endpoint), bytes.NewBuffer(jsonPayload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/observability/alerting/settings", client.Endpoint), bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	setAlertingAuthHeaders(req, client)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to create/update alerting settings: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to create/update alerting settings: %s", string(body)))
 	}
 
 	// Parse the response to get the ID
@@ -178,44 +180,44 @@ func resourcePortainerAlertingSettingsCreate(d *schema.ResourceData, meta interf
 	if err := json.Unmarshal(body, &result); err == nil {
 		if id, ok := result["id"].(float64); ok {
 			d.SetId(fmt.Sprintf("%d", int(id)))
-			return resourcePortainerAlertingSettingsRead(d, meta)
+			return resourcePortainerAlertingSettingsRead(ctx, d, meta)
 		}
 	}
 
 	d.SetId("portainer-alerting-settings")
-	return resourcePortainerAlertingSettingsRead(d, meta)
+	return resourcePortainerAlertingSettingsRead(ctx, d, meta)
 }
 
-func resourcePortainerAlertingSettingsRead(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerAlertingSettingsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	// If we have a numeric ID, read the specific settings entry
 	settingsID := d.Id()
 	url := fmt.Sprintf("%s/observability/alerting/settings", client.Endpoint)
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	setAlertingAuthHeaders(req, client)
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 404 {
+	if resp.StatusCode == http.StatusNotFound {
 		d.SetId("")
 		return nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to read alerting settings, status: %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to read alerting settings, status: %d", resp.StatusCode))
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	// The GET /observability/alerting/settings returns an array.
@@ -225,7 +227,7 @@ func resourcePortainerAlertingSettingsRead(d *schema.ResourceData, meta interfac
 		// Try single object in case the response format differs
 		var single AlertingSettings
 		if err2 := json.Unmarshal(body, &single); err2 != nil {
-			return fmt.Errorf("failed to decode alerting settings response: %w", err)
+			return diag.FromErr(fmt.Errorf("failed to decode alerting settings response: %w", err))
 		}
 		settingsList = []AlertingSettings{single}
 	}
@@ -277,11 +279,11 @@ func resourcePortainerAlertingSettingsRead(d *schema.ResourceData, meta interfac
 	return nil
 }
 
-func resourcePortainerAlertingSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
-	return resourcePortainerAlertingSettingsCreate(d, meta)
+func resourcePortainerAlertingSettingsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	return resourcePortainerAlertingSettingsCreate(ctx, d, meta)
 }
 
-func resourcePortainerAlertingSettingsDelete(d *schema.ResourceData, meta interface{}) error {
+func resourcePortainerAlertingSettingsDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	// On delete, disable alerting by sending enabled=false
@@ -300,25 +302,25 @@ func resourcePortainerAlertingSettingsDelete(d *schema.ResourceData, meta interf
 
 	jsonPayload, err := json.Marshal(AlertingUpdatePayload{AlertingSettings: disabledSettings})
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/observability/alerting/settings", client.Endpoint), bytes.NewBuffer(jsonPayload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/observability/alerting/settings", client.Endpoint), bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	setAlertingAuthHeaders(req, client)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to disable alerting settings: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to disable alerting settings: %s", string(body)))
 	}
 
 	d.SetId("")

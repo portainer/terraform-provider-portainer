@@ -371,7 +371,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 			"Password": password,
 		}
 		payload, _ := json.Marshal(authBody)
-		req, err := http.NewRequest("POST", endpoint+"/auth", bytes.NewBuffer(payload))
+		req, err := http.NewRequest(http.MethodPost, endpoint+"/auth", bytes.NewBuffer(payload))
 		if err != nil {
 			return nil, diag.FromErr(fmt.Errorf("failed to create auth request: %w", err))
 		}

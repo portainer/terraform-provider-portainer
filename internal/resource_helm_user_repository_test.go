@@ -21,7 +21,7 @@ func TestHelmUserRepositoryCreate_HappyPath(t *testing.T) {
 	_ = d.Set("user_id", 7)
 	_ = d.Set("url", "https://charts.bitnami.com/bitnami")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "11" {
@@ -56,7 +56,7 @@ func TestHelmUserRepositoryCreate_HTTPError(t *testing.T) {
 	_ = d.Set("user_id", 7)
 	_ = d.Set("url", "https://example.com/charts")
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {
@@ -81,7 +81,7 @@ func TestHelmUserRepositoryRead_HappyPath(t *testing.T) {
 	_ = d.Set("user_id", 7)
 	d.SetId("11")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if got := d.Get("url"); got != "https://charts.bitnami.com/bitnami" {
@@ -106,7 +106,7 @@ func TestHelmUserRepositoryRead_NotFound_ClearsID(t *testing.T) {
 	_ = d.Set("user_id", 7)
 	d.SetId("99")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -126,7 +126,7 @@ func TestHelmUserRepositoryDelete_HappyPath(t *testing.T) {
 	_ = d.Set("user_id", 7)
 	d.SetId("11")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {

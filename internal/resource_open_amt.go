@@ -1,9 +1,12 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -20,10 +23,10 @@ type OpenAMTSettings struct {
 
 func resourceOpenAMT() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpenAMTCreate,
-		Read:   resourceOpenAMTRead,
-		Delete: resourceOpenAMTDelete,
-		Update: nil,
+		CreateContext: resourceOpenAMTCreate,
+		ReadContext:   resourceOpenAMTRead,
+		DeleteContext: resourceOpenAMTDelete,
+		UpdateContext: nil,
 		Schema: map[string]*schema.Schema{
 			"cert_file_content":  {Type: schema.TypeString, Required: true, ForceNew: true, Sensitive: true, Description: "Sensitive base64-encoded content of the OpenAMT provisioning certificate file."},
 			"cert_file_name":     {Type: schema.TypeString, Required: true, ForceNew: true, Description: "File name of the OpenAMT provisioning certificate."},
@@ -37,7 +40,7 @@ func resourceOpenAMT() *schema.Resource {
 	}
 }
 
-func resourceOpenAMTCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenAMTCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	settings := OpenAMTSettings{
@@ -53,24 +56,24 @@ func resourceOpenAMTCreate(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.DoRequest("POST", "/open_amt", nil, settings)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to enable OpenAMT: %s", string(body))
+		return diag.FromErr(fmt.Errorf("failed to enable OpenAMT: %s", string(body)))
 	}
 
 	d.SetId("openamt-enabled")
 	return nil
 }
 
-func resourceOpenAMTRead(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenAMTRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil
 }
 
-func resourceOpenAMTDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceOpenAMTDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	d.SetId("")
 	return nil
 }

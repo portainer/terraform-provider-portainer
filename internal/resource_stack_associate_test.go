@@ -24,7 +24,7 @@ func TestStackAssociateCreate_HappyPath(t *testing.T) {
 	_ = d.Set("swarm_id", "swarm-abc")
 	_ = d.Set("orphaned_running", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -62,7 +62,7 @@ func TestStackAssociateCreate_OrphanedRunningDefault(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("swarm_id", "swarm-x")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestStackAssociateCreate_HTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("swarm_id", "swarm-x")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
@@ -104,7 +104,7 @@ func TestStackAssociateRead_NoOp(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("5")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should be no-op, got error: %v", err)
 	}
 	if got := len(mock.Requests()); got != 0 {
@@ -121,7 +121,7 @@ func TestStackAssociateDelete_ClearsIDOnly(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("5")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {

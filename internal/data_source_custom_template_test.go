@@ -20,7 +20,7 @@ func TestDataSourceCustomTemplateRead_HappyPath(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("title", "wanted")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -48,7 +48,7 @@ func TestDataSourceCustomTemplateRead_NotFound(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("title", "missing")
 
-	err := ds.Read(d, mock.Client())
+	err := rcRead(ds, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when title not found, got nil")
 	}
@@ -66,7 +66,7 @@ func TestDataSourceCustomTemplateRead_HTTPError(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("title", "wanted")
 
-	err := ds.Read(d, mock.Client())
+	err := rcRead(ds, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}

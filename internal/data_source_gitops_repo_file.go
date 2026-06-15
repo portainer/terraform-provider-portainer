@@ -1,16 +1,18 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceGitopsRepoFile() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceGitopsRepoFileRead,
+		ReadContext: dataSourceGitopsRepoFileRead,
 
 		Schema: map[string]*schema.Schema{
 			"repository_url": {
@@ -60,7 +62,7 @@ func dataSourceGitopsRepoFile() *schema.Resource {
 	}
 }
 
-func dataSourceGitopsRepoFileRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceGitopsRepoFileRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	repoURL := d.Get("repository_url").(string)
@@ -90,24 +92,26 @@ func dataSourceGitopsRepoFileRead(d *schema.ResourceData, meta interface{}) erro
 
 	resp, err := client.DoRequest("POST", "/gitops/repo/file/preview", nil, payload)
 	if err != nil {
-		return fmt.Errorf("failed to preview Git repository file: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to preview Git repository file: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to preview Git repository file (status %d): %s", resp.StatusCode, string(data))
+		return diag.FromErr(fmt.Errorf("failed to preview Git repository file (status %d): %s", resp.StatusCode, string(data)))
 	}
 
 	var result struct {
 		FileContent string `json:"FileContent"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode file preview response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode file preview response: %w", err))
 	}
 
 	d.SetId(fmt.Sprintf("gitops-repo-file-%s-%s", repoURL, d.Get("target_file").(string)))
-	d.Set("file_content", result.FileContent)
+	if err := d.Set("file_content", result.FileContent); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }

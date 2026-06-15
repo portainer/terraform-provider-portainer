@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/portainer/client-api-go/v2/pkg/client/tags"
@@ -14,10 +15,9 @@ import (
 
 func resourceTag() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceTagCreate,
-		Read:   resourceTagRead,
-		Delete: resourceTagDelete,
-		Update: nil,
+		CreateContext: resourceTagCreate,
+		ReadContext:   resourceTagRead,
+		DeleteContext: resourceTagDelete,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
@@ -33,11 +33,11 @@ func resourceTag() *schema.Resource {
 	}
 }
 
-func resourceTagCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceTagCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := tags.NewTagCreateParams()
 	params.SetContext(ctx)
 	params.Body = &models.TagsTagCreatePayload{
@@ -46,30 +46,32 @@ func resourceTagCreate(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.Client.Tags.TagCreate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create tag: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to create tag: %w", decorateSDKError(err, errBody)))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
-	return resourceTagRead(d, meta)
+	return resourceTagRead(ctx, d, meta)
 }
 
-func resourceTagRead(d *schema.ResourceData, meta interface{}) error {
+func resourceTagRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	// SDK does not expose GetTagByID, so we list and filter.
 	// This matches the fallback logic of the previous implementation.
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := tags.NewTagListParams()
 	params.SetContext(ctx)
 	resp, err := client.Client.Tags.TagList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list tags: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to list tags: %w", decorateSDKError(err, errBody)))
 	}
 
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 	for _, tag := range resp.Payload {
 		if tag.ID == id {
-			d.Set("name", tag.Name)
+			if err := d.Set("name", tag.Name); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 	}
@@ -78,11 +80,11 @@ func resourceTagRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceTagDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceTagDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := tags.NewTagDeleteParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -93,7 +95,7 @@ func resourceTagDelete(d *schema.ResourceData, meta interface{}) error {
 		if errors.As(err, &notFound) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete tag: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to delete tag: %w", decorateSDKError(err, errBody)))
 	}
 
 	return nil

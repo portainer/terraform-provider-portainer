@@ -22,7 +22,7 @@ func TestDockerImageCreate_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("image", "nginx:1.25")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -58,7 +58,7 @@ func TestDockerImageCreate_WithRegistryAuth(t *testing.T) {
 	_ = d.Set("image", "ghcr.io/foo/bar:latest")
 	_ = d.Set("registry_auth", "user:pass")
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -83,7 +83,7 @@ func TestDockerImageCreate_InvalidAuthFormat(t *testing.T) {
 	_ = d.Set("image", "nginx:latest")
 	_ = d.Set("registry_auth", "no-colon-here")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error for invalid registry_auth format")
 	}
@@ -100,7 +100,7 @@ func TestDockerImageRead_NoOp(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("image", "nginx:1.25")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if len(mock.Requests()) != 0 {
@@ -121,7 +121,7 @@ func TestDockerImageDelete_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("image", "nginx:1.25")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -147,7 +147,7 @@ func TestDockerImageCreate_HTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("image", "nope:bad")
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 404, got nil")
 	}

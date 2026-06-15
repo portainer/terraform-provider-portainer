@@ -9,8 +9,19 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gopkg.in/yaml.v3"
 )
+
+// removeFromStateContext is the context-aware equivalent of schema.RemoveFromState
+// (which has no *Context variant in plugin-sdk v2). It clears the ID so the
+// resource is removed from state, used as DeleteContext for action-style
+// resources that have nothing to delete server-side.
+func removeFromStateContext(_ context.Context, d *schema.ResourceData, _ interface{}) diag.Diagnostics {
+	d.SetId("")
+	return nil
+}
 
 func parseManifest(manifest string) (map[string]interface{}, error) {
 	var parsed map[string]interface{}
@@ -37,7 +48,7 @@ func toIntSlice(raw []interface{}) []int {
 }
 
 func apiGET(url string, apiKey string, client *APIClient) ([]byte, error) {
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -86,7 +97,7 @@ func mustMap(v interface{}) map[string]interface{} {
 }
 
 func apiGETWithCode(url string, apiKey string, client *APIClient) ([]byte, int, error) {
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	if apiKey != "" {
 		req.Header.Set("X-API-Key", apiKey)
 	} else if client.JWTToken != "" {
@@ -106,7 +117,7 @@ func apiGETWithCode(url string, apiKey string, client *APIClient) ([]byte, int, 
 // Context-aware API helpers (used by resources that support timeouts).
 
 func apiGETCtx(ctx context.Context, url string, apiKey string, client *APIClient) ([]byte, error) {
-	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if client.APIKey != "" {
 		req.Header.Set("X-API-Key", client.APIKey)
 	} else if client.JWTToken != "" {
@@ -123,7 +134,7 @@ func apiGETCtx(ctx context.Context, url string, apiKey string, client *APIClient
 }
 
 func apiGETWithCodeCtx(ctx context.Context, url string, apiKey string, client *APIClient) ([]byte, int, error) {
-	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if apiKey != "" {
 		req.Header.Set("X-API-Key", apiKey)
 	} else if client.JWTToken != "" {
@@ -141,7 +152,7 @@ func apiGETWithCodeCtx(ctx context.Context, url string, apiKey string, client *A
 }
 
 func apiPOSTWithCodeCtx(ctx context.Context, url string, apiKey string, client *APIClient, payload []byte) ([]byte, int, error) {
-	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(payload))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(payload))
 	if apiKey != "" {
 		req.Header.Set("X-API-Key", apiKey)
 	} else if client.JWTToken != "" {
@@ -160,7 +171,7 @@ func apiPOSTWithCodeCtx(ctx context.Context, url string, apiKey string, client *
 }
 
 func apiPUTWithCodeCtx(ctx context.Context, url string, apiKey string, client *APIClient, payload []byte) ([]byte, int, error) {
-	req, _ := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(payload))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(payload))
 	if apiKey != "" {
 		req.Header.Set("X-API-Key", apiKey)
 	} else if client.JWTToken != "" {

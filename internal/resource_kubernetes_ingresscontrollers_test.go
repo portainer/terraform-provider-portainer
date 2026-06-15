@@ -39,7 +39,7 @@ func TestKubernetesIngressControllersCreate_HappyPath(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "1" {
@@ -80,7 +80,7 @@ func TestKubernetesIngressControllersCreate_HTTPError(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }
@@ -106,7 +106,7 @@ func TestKubernetesIngressControllersRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("environment_id", 1)
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	got := d.Get("controllers").([]interface{})
@@ -131,7 +131,7 @@ func TestKubernetesIngressControllersRead_NotFound(t *testing.T) {
 	d.SetId("1")
 	_ = d.Set("environment_id", 1)
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -162,7 +162,7 @@ func TestKubernetesIngressControllersDelete_DisablesViaPUT(t *testing.T) {
 		},
 	})
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 

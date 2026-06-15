@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/portainer/client-api-go/v2/pkg/client/team_memberships"
 )
 
 func dataSourceTeamMembership() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceTeamMembershipRead,
+		ReadContext: dataSourceTeamMembershipRead,
 
 		Schema: map[string]*schema.Schema{
 			"team_id": {
@@ -33,26 +34,28 @@ func dataSourceTeamMembership() *schema.Resource {
 	}
 }
 
-func dataSourceTeamMembershipRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceTeamMembershipRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	teamID := int64(d.Get("team_id").(int))
 	userID := int64(d.Get("user_id").(int))
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := team_memberships.NewTeamMembershipListParams()
 	params.SetContext(ctx)
 	resp, err := client.Client.TeamMemberships.TeamMembershipList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to fetch team memberships list: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to fetch team memberships list: %w", decorateSDKError(err, errBody)))
 	}
 
 	for _, m := range resp.Payload {
 		if m.TeamID == teamID && m.UserID == userID {
 			d.SetId(strconv.FormatInt(m.ID, 10))
-			d.Set("role", m.Role)
+			if err := d.Set("role", m.Role); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 	}
 
-	return fmt.Errorf("team membership not found for team_id %d and user_id %d", teamID, userID)
+	return diag.FromErr(fmt.Errorf("team membership not found for team_id %d and user_id %d", teamID, userID))
 }

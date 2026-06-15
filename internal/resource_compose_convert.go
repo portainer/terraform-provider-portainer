@@ -47,7 +47,7 @@ func resourceComposeConvertCreate(ctx context.Context, d *schema.ResourceData, m
 	defer os.RemoveAll(tmpDir)
 
 	composePath := filepath.Join(tmpDir, "docker-compose.yml")
-	if err := os.WriteFile(composePath, []byte(composeContent), 0644); err != nil {
+	if err := os.WriteFile(composePath, []byte(composeContent), 0o644); err != nil {
 		return diag.Errorf("failed to write docker-compose.yml: %s", err)
 	}
 

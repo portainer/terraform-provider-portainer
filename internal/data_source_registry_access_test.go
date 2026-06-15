@@ -31,7 +31,7 @@ func TestDataSourceRegistryAccessRead_TeamHappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("team_id", 9)
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -67,7 +67,7 @@ func TestDataSourceRegistryAccessRead_UserHappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("user_id", 7)
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -96,7 +96,7 @@ func TestDataSourceRegistryAccessRead_PolicyMissing(t *testing.T) {
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("team_id", 9)
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error when access policy is missing, got nil")
 	}
 }
@@ -111,7 +111,7 @@ func TestDataSourceRegistryAccessRead_RequiresTeamOrUser(t *testing.T) {
 	_ = d.Set("registry_id", 4)
 	_ = d.Set("endpoint_id", 2)
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error when neither team_id nor user_id is set, got nil")
 	}
 }

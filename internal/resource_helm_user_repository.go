@@ -1,22 +1,24 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourceHelmUserRepository() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceHelmUserRepositoryCreate,
-		Read:   resourceHelmUserRepositoryRead,
-		Delete: resourceHelmUserRepositoryDelete,
+		CreateContext: resourceHelmUserRepositoryCreate,
+		ReadContext:   resourceHelmUserRepositoryRead,
+		DeleteContext: resourceHelmUserRepositoryDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"user_id": {
@@ -36,7 +38,7 @@ func resourceHelmUserRepository() *schema.Resource {
 	}
 }
 
-func resourceHelmUserRepositoryCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceHelmUserRepositoryCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	userID := d.Get("user_id").(int)
@@ -49,12 +51,12 @@ func resourceHelmUserRepositoryCreate(d *schema.ResourceData, meta interface{}) 
 	path := fmt.Sprintf("/users/%d/helm/repositories", userID)
 	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
 	if err != nil {
-		return fmt.Errorf("failed to create helm user repository: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to create helm user repository: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to create helm user repository: HTTP %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to create helm user repository: HTTP %d", resp.StatusCode))
 	}
 
 	var result struct {
@@ -63,7 +65,7 @@ func resourceHelmUserRepositoryCreate(d *schema.ResourceData, meta interface{}) 
 		UserID int    `json:"UserId"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode response: %w", err))
 	}
 
 	d.SetId(strconv.Itoa(result.ID))
@@ -72,7 +74,7 @@ func resourceHelmUserRepositoryCreate(d *schema.ResourceData, meta interface{}) 
 	return nil
 }
 
-func resourceHelmUserRepositoryRead(d *schema.ResourceData, meta interface{}) error {
+func resourceHelmUserRepositoryRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	userID := d.Get("user_id").(int)
@@ -81,12 +83,12 @@ func resourceHelmUserRepositoryRead(d *schema.ResourceData, meta interface{}) er
 	path := fmt.Sprintf("/users/%d/helm/repositories", userID)
 	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to read helm user repositories: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to read helm user repositories: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to read helm user repositories: HTTP %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to read helm user repositories: HTTP %d", resp.StatusCode))
 	}
 
 	var result struct {
@@ -97,7 +99,7 @@ func resourceHelmUserRepositoryRead(d *schema.ResourceData, meta interface{}) er
 		} `json:"UserRepositories"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode response: %w", err))
 	}
 
 	for _, repo := range result.UserRepositories {
@@ -113,7 +115,7 @@ func resourceHelmUserRepositoryRead(d *schema.ResourceData, meta interface{}) er
 	return nil
 }
 
-func resourceHelmUserRepositoryDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceHelmUserRepositoryDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	userID := d.Get("user_id").(int)
@@ -122,12 +124,12 @@ func resourceHelmUserRepositoryDelete(d *schema.ResourceData, meta interface{}) 
 	path := fmt.Sprintf("/users/%d/helm/repositories/%s", userID, repoID)
 	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to delete helm user repository: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to delete helm user repository: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to delete helm user repository: HTTP %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to delete helm user repository: HTTP %d", resp.StatusCode))
 	}
 
 	d.SetId("")

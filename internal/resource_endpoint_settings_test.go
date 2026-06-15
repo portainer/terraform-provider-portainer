@@ -47,7 +47,7 @@ func TestEndpointSettingsCreate_HappyPath(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -107,7 +107,7 @@ func TestEndpointSettingsCreate_Minimal(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("endpoint_id", 1)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "1" {
@@ -139,7 +139,7 @@ func TestEndpointSettingsUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 3)
 	_ = d.Set("enable_gpu_management", true)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 	put := mock.FindRequest("PUT", "/endpoints/3/settings")
@@ -160,7 +160,7 @@ func TestEndpointSettingsRead_SetsID(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("endpoint_id", 42)
 
-	if err := r.Read(d, nil); err != nil {
+	if err := rcRead(r, d, nil); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "42" {
@@ -174,7 +174,7 @@ func TestEndpointSettingsDelete_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("42")
 
-	if err := r.Delete(d, nil); err != nil {
+	if err := rcDelete(r, d, nil); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {
@@ -196,7 +196,7 @@ func TestEndpointSettingsCreate_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("endpoint_id", 9)
 
-	if err := r.Create(d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
 	if d.Id() != "" {

@@ -28,7 +28,7 @@ func TestKubernetesSecretCreate_HappyPath(t *testing.T) {
 	_ = d.Set("namespace", "prod")
 	_ = d.Set("manifest", secretManifestJSON)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "2:prod:mysecret" {
@@ -62,7 +62,7 @@ func TestKubernetesSecretCreate_MissingMetadataName(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("manifest", `{"kind":"Secret","metadata":{}}`)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when metadata.name missing, got nil")
 	}
@@ -86,7 +86,7 @@ func TestKubernetesSecretCreate_HTTPError(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("manifest", secretManifestJSON)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
@@ -104,7 +104,7 @@ func TestKubernetesSecretDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("2:prod:mysecret")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if mock.FindRequest("DELETE", "/endpoints/2/kubernetes/api/v1/namespaces/prod/secrets/mysecret") == nil {

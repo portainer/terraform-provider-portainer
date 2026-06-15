@@ -32,7 +32,7 @@ func TestEdgeUpdateSchedulesCreate_HappyPath(t *testing.T) {
 	_ = d.Set("group_ids", []interface{}{1, 2})
 	_ = d.Set("type", 0)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -83,7 +83,7 @@ func TestEdgeUpdateSchedulesRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("21")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -108,7 +108,7 @@ func TestEdgeUpdateSchedulesRead_404_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("99")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should swallow 404, got error: %v", err)
 	}
 	if d.Id() != "" {
@@ -145,7 +145,7 @@ func TestEdgeUpdateSchedulesUpdate_HappyPath(t *testing.T) {
 	_ = d.Set("group_ids", []interface{}{1})
 	_ = d.Set("type", 0)
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -165,7 +165,7 @@ func TestEdgeUpdateSchedulesDelete_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("21")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -190,7 +190,7 @@ func TestEdgeUpdateSchedulesCreate_HTTPError(t *testing.T) {
 	_ = d.Set("group_ids", []interface{}{1})
 	_ = d.Set("type", 0)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}

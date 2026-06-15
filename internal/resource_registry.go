@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/portainer/client-api-go/v2/pkg/client/registries"
@@ -15,12 +16,12 @@ import (
 
 func resourceRegistry() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceRegistryCreate,
-		Read:   resourceRegistryRead,
-		Delete: resourceRegistryDelete,
-		Update: resourceRegistryUpdate,
+		CreateContext: resourceRegistryCreate,
+		ReadContext:   resourceRegistryRead,
+		DeleteContext: resourceRegistryDelete,
+		UpdateContext: resourceRegistryUpdate,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"name":                     {Type: schema.TypeString, Required: true, ValidateFunc: validation.NoZeroValues, Description: "Name of the registry as displayed in Portainer."},
@@ -40,17 +41,17 @@ func resourceRegistry() *schema.Resource {
 	}
 }
 
-func resourceRegistryCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceRegistryCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
 	existingID, err := findRegistryByName(client, name)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	if existingID != 0 {
 		d.SetId(strconv.Itoa(existingID))
-		return resourceRegistryUpdate(d, meta)
+		return resourceRegistryUpdate(ctx, d, meta)
 	}
 
 	registryType := int64(d.Get("type").(int))
@@ -58,7 +59,7 @@ func resourceRegistryCreate(d *schema.ResourceData, meta interface{}) error {
 	baseURL := d.Get("base_url").(string)
 	auth := d.Get("authentication").(bool)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := registries.NewRegistryCreateParams()
 	params.SetContext(ctx)
 	params.Body = &models.RegistriesRegistryCreatePayload{
@@ -97,11 +98,11 @@ func resourceRegistryCreate(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.Client.Registries.RegistryCreate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create registry: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to create registry: %w", decorateSDKError(err, errBody)))
 	}
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
-	return resourceRegistryRead(d, meta)
+	return resourceRegistryRead(ctx, d, meta)
 }
 
 func findRegistryByName(client *APIClient, name string) (int, error) {
@@ -122,11 +123,11 @@ func findRegistryByName(client *APIClient, name string) (int, error) {
 	return 0, nil
 }
 
-func resourceRegistryRead(d *schema.ResourceData, meta interface{}) error {
+func resourceRegistryRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := registries.NewRegistryInspectParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -138,35 +139,59 @@ func resourceRegistryRead(d *schema.ResourceData, meta interface{}) error {
 			d.SetId("")
 			return nil
 		}
-		return fmt.Errorf("failed to read registry: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to read registry: %w", decorateSDKError(err, errBody)))
 	}
 
-	d.Set("name", resp.Payload.Name)
-	d.Set("url", resp.Payload.URL)
-	d.Set("base_url", resp.Payload.BaseURL)
-	d.Set("type", int(resp.Payload.Type))
-	d.Set("authentication", resp.Payload.Authentication)
-	d.Set("username", resp.Payload.Username)
+	if err := d.Set("name", resp.Payload.Name); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("url", resp.Payload.URL); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("base_url", resp.Payload.BaseURL); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("type", int(resp.Payload.Type)); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("authentication", resp.Payload.Authentication); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("username", resp.Payload.Username); err != nil {
+		return diag.FromErr(err)
+	}
 
 	if resp.Payload.Github != nil {
-		d.Set("github_use_organisation", resp.Payload.Github.UseOrganisation)
-		d.Set("github_organisation_name", resp.Payload.Github.OrganisationName)
+		if err := d.Set("github_use_organisation", resp.Payload.Github.UseOrganisation); err != nil {
+			return diag.FromErr(err)
+		}
+		if err := d.Set("github_organisation_name", resp.Payload.Github.OrganisationName); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if resp.Payload.Quay != nil {
-		d.Set("quay_use_organisation", resp.Payload.Quay.UseOrganisation)
-		d.Set("quay_organisation_name", resp.Payload.Quay.OrganisationName)
+		if err := d.Set("quay_use_organisation", resp.Payload.Quay.UseOrganisation); err != nil {
+			return diag.FromErr(err)
+		}
+		if err := d.Set("quay_organisation_name", resp.Payload.Quay.OrganisationName); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if resp.Payload.Gitlab != nil {
-		d.Set("instance_url", resp.Payload.Gitlab.InstanceURL)
+		if err := d.Set("instance_url", resp.Payload.Gitlab.InstanceURL); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if resp.Payload.Ecr != nil {
-		d.Set("aws_region", resp.Payload.Ecr.Region)
+		if err := d.Set("aws_region", resp.Payload.Ecr.Region); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil
 }
 
-func resourceRegistryUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceRegistryUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
@@ -174,7 +199,7 @@ func resourceRegistryUpdate(d *schema.ResourceData, meta interface{}) error {
 	url := d.Get("url").(string)
 	auth := d.Get("authentication").(bool)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := registries.NewRegistryUpdateParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -209,17 +234,17 @@ func resourceRegistryUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Registries.RegistryUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update registry: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to update registry: %w", decorateSDKError(err, errBody)))
 	}
 
-	return resourceRegistryRead(d, meta)
+	return resourceRegistryRead(ctx, d, meta)
 }
 
-func resourceRegistryDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceRegistryDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := registries.NewRegistryDeleteParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -234,7 +259,7 @@ func resourceRegistryDelete(d *schema.ResourceData, meta interface{}) error {
 		if strings.Contains(err.Error(), "status 200") {
 			return nil
 		}
-		return fmt.Errorf("failed to delete registry: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to delete registry: %w", decorateSDKError(err, errBody)))
 	}
 	return nil
 }

@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/portainer/client-api-go/v2/pkg/client/tags"
 )
 
 func dataSourceTag() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceTagRead,
+		ReadContext: dataSourceTagRead,
 
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -23,16 +24,16 @@ func dataSourceTag() *schema.Resource {
 	}
 }
 
-func dataSourceTagRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceTagRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := tags.NewTagListParams()
 	params.SetContext(ctx)
 	resp, err := client.Client.Tags.TagList(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list tags: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to list tags: %w", decorateSDKError(err, errBody)))
 	}
 
 	for _, t := range resp.Payload {
@@ -42,5 +43,5 @@ func dataSourceTagRead(d *schema.ResourceData, meta interface{}) error {
 		}
 	}
 
-	return fmt.Errorf("tag %s not found", name)
+	return diag.FromErr(fmt.Errorf("tag %s not found", name))
 }

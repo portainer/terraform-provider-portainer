@@ -43,7 +43,7 @@ func TestSettingsCreate_HappyPath(t *testing.T) {
 	_ = d.Set("edge_agent_checkin_interval", 30)
 	_ = d.Set("trust_on_first_connect", true)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -135,7 +135,7 @@ func TestSettingsCreate_OAuthBlock(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -257,7 +257,7 @@ func TestSettingsCreate_LDAPBlock(t *testing.T) {
 		},
 	})
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -373,7 +373,7 @@ func TestSettingsRead_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer-settings")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -467,7 +467,7 @@ func TestSettingsUpdate_ReusesApply(t *testing.T) {
 	_ = d.Set("authentication_method", 2)
 	_ = d.Set("snapshot_interval", "15m")
 
-	if err := r.Update(d, mock.Client()); err != nil {
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -504,7 +504,7 @@ func TestSettingsCreate_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("authentication_method", 1)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 400, got nil")
 	}
@@ -527,7 +527,7 @@ func TestSettingsRead_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer-settings")
 
-	if err := r.Read(d, mock.Client()); err == nil {
+	if err := rcRead(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }
@@ -542,7 +542,7 @@ func TestSettingsDelete_ClearsID(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("portainer-settings")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	if d.Id() != "" {

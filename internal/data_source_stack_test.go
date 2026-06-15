@@ -21,7 +21,7 @@ func TestDataSourceStackRead_HappyPath(t *testing.T) {
 	_ = d.Set("name", "mystack")
 	_ = d.Set("endpoint_id", 2)
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -50,7 +50,7 @@ func TestDataSourceStackRead_NameInWrongEndpoint(t *testing.T) {
 	_ = d.Set("name", "mystack")
 	_ = d.Set("endpoint_id", 99)
 
-	err := ds.Read(d, mock.Client())
+	err := rcRead(ds, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when name matches but endpoint differs, got nil")
 	}
@@ -71,7 +71,7 @@ func TestDataSourceStackRead_NotFound(t *testing.T) {
 	_ = d.Set("name", "missing")
 	_ = d.Set("endpoint_id", 1)
 
-	err := ds.Read(d, mock.Client())
+	err := rcRead(ds, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error when stack not found, got nil")
 	}
@@ -90,7 +90,7 @@ func TestDataSourceStackRead_HTTPError(t *testing.T) {
 	_ = d.Set("name", "mystack")
 	_ = d.Set("endpoint_id", 1)
 
-	err := ds.Read(d, mock.Client())
+	err := rcRead(ds, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}

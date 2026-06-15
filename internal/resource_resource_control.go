@@ -1,21 +1,23 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceResourceControl() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceResourceControlCreate,
-		Read:   resourceResourceControlRead,
-		Update: resourceResourceControlUpdate,
-		Delete: resourceResourceControlDelete,
+		CreateContext: resourceResourceControlCreate,
+		ReadContext:   resourceResourceControlRead,
+		UpdateContext: resourceResourceControlUpdate,
+		DeleteContext: resourceResourceControlDelete,
 
 		Schema: map[string]*schema.Schema{
 			"resource_id": {
@@ -97,7 +99,7 @@ func lookupResourceControlID(client *APIClient, resourceType int, resourceId str
 	}
 }
 
-func resourceResourceControlRead(d *schema.ResourceData, meta interface{}) error {
+func resourceResourceControlRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	// 1) Pokud máme přímo resource_control_id (třeba z docker_secret),
@@ -125,7 +127,7 @@ func resourceResourceControlRead(d *schema.ResourceData, meta interface{}) error
 	rcId, rcData, err := lookupResourceControlID(client, resourceType, resourceId)
 	if err != nil {
 		d.SetId("") // resource not found, remove from state
-		return nil  //nolint:nilerr // Terraform pattern: resource gone → clear ID, return nil
+		return nil
 	}
 
 	d.SetId(rcId)
@@ -174,11 +176,11 @@ func resourceResourceControlRead(d *schema.ResourceData, meta interface{}) error
 	return nil
 }
 
-func resourceResourceControlCreate(d *schema.ResourceData, meta interface{}) error {
-	return resourceResourceControlUpdate(d, meta)
+func resourceResourceControlCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	return resourceResourceControlUpdate(ctx, d, meta)
 }
 
-func resourceResourceControlUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceResourceControlUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	var rcId string
@@ -191,7 +193,7 @@ func resourceResourceControlUpdate(d *schema.ResourceData, meta interface{}) err
 		var err error
 		rcId, _, err = lookupResourceControlID(client, resourceType, resourceId)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 	}
 
@@ -204,19 +206,19 @@ func resourceResourceControlUpdate(d *schema.ResourceData, meta interface{}) err
 
 	resp, err := client.DoRequest("PUT", fmt.Sprintf("/resource_controls/%s", rcId), nil, body)
 	if err != nil {
-		return fmt.Errorf("failed to update resource control: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to update resource control: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update resource control: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to update resource control: %s", string(data)))
 	}
 
-	return resourceResourceControlRead(d, meta)
+	return resourceResourceControlRead(ctx, d, meta)
 }
 
-func resourceResourceControlDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceResourceControlDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	var rcId string
@@ -236,7 +238,7 @@ func resourceResourceControlDelete(d *schema.ResourceData, meta interface{}) err
 
 	resp, err := client.DoRequest("DELETE", fmt.Sprintf("/resource_controls/%s", rcId), nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to delete resource control: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to delete resource control: %w", err))
 	}
 	defer resp.Body.Close()
 
@@ -247,7 +249,7 @@ func resourceResourceControlDelete(d *schema.ResourceData, meta interface{}) err
 
 	if resp.StatusCode >= 400 {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete resource control: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to delete resource control: %s", string(data)))
 	}
 
 	d.SetId("")

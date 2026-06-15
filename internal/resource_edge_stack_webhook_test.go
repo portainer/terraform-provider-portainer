@@ -21,7 +21,7 @@ func TestEdgeStackWebhookCreate_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("webhook_id", webhookID)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -45,7 +45,7 @@ func TestEdgeStackWebhookCreate_200OK(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("webhook_id", webhookID)
 
-	if err := r.Create(d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != webhookID {
@@ -64,7 +64,7 @@ func TestEdgeStackWebhookCreate_HTTPError(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("webhook_id", webhookID)
 
-	err := r.Create(d, mock.Client())
+	err := rcCreate(r, d, mock.Client())
 	if err == nil {
 		t.Fatal("expected error on HTTP 404, got nil")
 	}
@@ -81,7 +81,7 @@ func TestEdgeStackWebhookRead_NoOp(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("any-id")
 
-	if err := r.Read(d, mock.Client()); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should be no-op, got error: %v", err)
 	}
 
@@ -98,7 +98,7 @@ func TestEdgeStackWebhookDelete_NoOp(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("any-id")
 
-	if err := r.Delete(d, mock.Client()); err != nil {
+	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete should be no-op, got error: %v", err)
 	}
 

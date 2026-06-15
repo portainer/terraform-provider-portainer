@@ -19,7 +19,7 @@ func TestDataSourceEdgeStackRead_HappyPath(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "my-edge-stack")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -42,7 +42,7 @@ func TestDataSourceEdgeStackRead_NotFound(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "missing")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error when edge stack not found, got nil")
 	}
 }
@@ -58,7 +58,7 @@ func TestDataSourceEdgeStackRead_HTTPError(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "x")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 502, got nil")
 	}
 }

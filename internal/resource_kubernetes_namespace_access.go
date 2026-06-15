@@ -2,20 +2,22 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceKubernetesNamespaceAccess() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceK8sAccessUpdate,
-		Read:   resourceK8sAccessReadNoop,
-		Update: resourceK8sAccessUpdate,
-		Delete: resourceK8sAccessDeleteNoop,
+		CreateContext: resourceK8sAccessUpdate,
+		ReadContext:   resourceK8sAccessReadNoop,
+		UpdateContext: resourceK8sAccessUpdate,
+		DeleteContext: resourceK8sAccessDeleteNoop,
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -66,10 +68,10 @@ func toIntSlices(raw []interface{}) []int {
 // getNamespaceRPN resolves namespace name against the Portainer API.
 // Even though API objects have an Id, the /pools/{rpn}/access endpoint
 // only works with the namespace name, so we must return Name.
-func getNamespaceRPN(client *APIClient, environmentID int, namespaceName string) (string, error) {
+func getNamespaceRPN(ctx context.Context, client *APIClient, environmentID int, namespaceName string) (string, error) {
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces", client.Endpoint, environmentID)
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
 	}
@@ -86,7 +88,7 @@ func getNamespaceRPN(client *APIClient, environmentID int, namespaceName string)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("failed to list namespaces: %s", string(data))
 	}
@@ -109,16 +111,16 @@ func getNamespaceRPN(client *APIClient, environmentID int, namespaceName string)
 	return "", fmt.Errorf("namespace %s not found", namespaceName)
 }
 
-func resourceK8sAccessUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceK8sAccessUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	endpointID := d.Get("endpoint_id").(int)
 	namespaceID := d.Get("namespace_id").(string)
 
 	if !containsColon(namespaceID) {
-		nsName, err := getNamespaceRPN(client, endpointID, namespaceID)
+		nsName, err := getNamespaceRPN(ctx, client, endpointID, namespaceID)
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 		namespaceID = nsName
 	}
@@ -132,13 +134,13 @@ func resourceK8sAccessUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/pools/%s/access", client.Endpoint, endpointID, namespaceID)
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	if client.APIKey != "" {
@@ -151,24 +153,24 @@ func resourceK8sAccessUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != http.StatusNoContent {
 		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update namespace access: %s", string(data))
+		return diag.FromErr(fmt.Errorf("failed to update namespace access: %s", string(data)))
 	}
 
 	d.SetId(fmt.Sprintf("%d/%s", endpointID, namespaceID))
 	return nil
 }
 
-func resourceK8sAccessReadNoop(d *schema.ResourceData, meta interface{}) error {
+func resourceK8sAccessReadNoop(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil
 }
 
-func resourceK8sAccessDeleteNoop(d *schema.ResourceData, meta interface{}) error {
+func resourceK8sAccessDeleteNoop(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil
 }
 

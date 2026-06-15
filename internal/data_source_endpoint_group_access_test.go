@@ -23,7 +23,7 @@ func TestDataSourceEndpointGroupAccessRead_Team_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_group_id", 4)
 	_ = d.Set("team_id", 11)
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -53,7 +53,7 @@ func TestDataSourceEndpointGroupAccessRead_User_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_group_id", 2)
 	_ = d.Set("user_id", 5)
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -74,7 +74,7 @@ func TestDataSourceEndpointGroupAccessRead_MissingTeamAndUser(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("endpoint_group_id", 4)
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error when both team_id and user_id are unset, got nil")
 	}
 }
@@ -96,7 +96,7 @@ func TestDataSourceEndpointGroupAccessRead_PolicyMissing(t *testing.T) {
 	_ = d.Set("endpoint_group_id", 4)
 	_ = d.Set("team_id", 11)
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error when policy missing, got nil")
 	}
 }
@@ -116,7 +116,7 @@ func TestDataSourceEndpointGroupAccessRead_GroupNotFound(t *testing.T) {
 	_ = d.Set("endpoint_group_id", 99)
 	_ = d.Set("team_id", 1)
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on 404, got nil")
 	}
 }

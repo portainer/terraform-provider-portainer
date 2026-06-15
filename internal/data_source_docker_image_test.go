@@ -20,7 +20,7 @@ func TestDataSourceDockerImageRead_ExactTag(t *testing.T) {
 	_ = d.Set("endpoint_id", 4)
 	_ = d.Set("name", "nginx:1.25")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -43,7 +43,7 @@ func TestDataSourceDockerImageRead_ImpliedLatest(t *testing.T) {
 	_ = d.Set("endpoint_id", 4)
 	_ = d.Set("name", "alpine")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestDataSourceDockerImageRead_NotFound(t *testing.T) {
 	_ = d.Set("endpoint_id", 4)
 	_ = d.Set("name", "nginx:1.25")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error for missing docker image, got nil")
 	}
 }
@@ -84,7 +84,7 @@ func TestDataSourceDockerImageRead_HTTPError(t *testing.T) {
 	_ = d.Set("endpoint_id", 4)
 	_ = d.Set("name", "nginx:1.25")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }

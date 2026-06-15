@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	httptransport "github.com/go-openapi/runtime/client"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/portainer/client-api-go/v2/pkg/client/auth"
@@ -17,13 +18,13 @@ import (
 
 func resourceUser() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceUserCreate,
-		Read:   resourceUserRead,
-		Delete: resourceUserDelete,
-		Update: resourceUserUpdate,
+		CreateContext: resourceUserCreate,
+		ReadContext:   resourceUserRead,
+		DeleteContext: resourceUserDelete,
+		UpdateContext: resourceUserUpdate,
 
 		Importer: &schema.ResourceImporter{
-			State: resourceUserImport,
+			StateContext: resourceUserImport,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -78,7 +79,7 @@ func resourceUser() *schema.Resource {
 	}
 }
 
-func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceUserCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	username := d.Get("username").(string)
 	password := d.Get("password").(string)
@@ -86,29 +87,29 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 	ldapUser := d.Get("ldap_user").(bool)
 
 	if ldapUser && password != "" {
-		return fmt.Errorf("cannot set password for LDAP user")
+		return diag.FromErr(fmt.Errorf("cannot set password for LDAP user"))
 	}
 	if !ldapUser && password == "" {
-		return fmt.Errorf("password is required for non-LDAP user")
+		return diag.FromErr(fmt.Errorf("password is required for non-LDAP user"))
 	}
 
 	// Check if user already exists
-	listCtx, listErrBody := withErrorCapture(context.Background())
+	listCtx, listErrBody := withErrorCapture(ctx)
 	paramsList := users.NewUserListParams()
 	paramsList.SetContext(listCtx)
 	respList, err := client.Client.Users.UserList(paramsList, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to list users: %w", decorateSDKError(err, listErrBody))
+		return diag.FromErr(fmt.Errorf("failed to list users: %w", decorateSDKError(err, listErrBody)))
 	}
 
 	for _, u := range respList.Payload {
 		if u.Username == username {
 			d.SetId(strconv.FormatInt(u.ID, 10))
-			return resourceUserUpdate(d, meta)
+			return resourceUserUpdate(ctx, d, meta)
 		}
 	}
 
-	createCtx, createErrBody := withErrorCapture(context.Background())
+	createCtx, createErrBody := withErrorCapture(ctx)
 	paramsCreate := users.NewUserCreateParams()
 	paramsCreate.SetContext(createCtx)
 	paramsCreate.Body = &models.UsersUserCreatePayload{
@@ -121,20 +122,20 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 
 	respCreate, err := client.Client.Users.UserCreate(paramsCreate, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to create user: %w", decorateSDKError(err, createErrBody))
+		return diag.FromErr(fmt.Errorf("failed to create user: %w", decorateSDKError(err, createErrBody)))
 	}
 
 	d.SetId(strconv.FormatInt(respCreate.Payload.ID, 10))
 
 	if teamIDInt, ok := d.GetOk("team_id"); ok {
 		if role != 2 {
-			return fmt.Errorf("team_id can only be used with standard users (role = 2)")
+			return diag.FromErr(fmt.Errorf("team_id can only be used with standard users (role = 2)"))
 		}
 		teamID := int64(teamIDInt.(int))
 		userID := respCreate.Payload.ID
 		roleMember := int64(2)
 
-		teamCtx, teamErrBody := withErrorCapture(context.Background())
+		teamCtx, teamErrBody := withErrorCapture(ctx)
 		paramsTeam := team_memberships.NewTeamMembershipCreateParams()
 		paramsTeam.SetContext(teamCtx)
 		paramsTeam.Body = &models.TeammembershipsTeamMembershipCreatePayload{
@@ -145,18 +146,18 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 
 		_, err := client.Client.TeamMemberships.TeamMembershipCreate(paramsTeam, client.AuthInfo)
 		if err != nil {
-			return fmt.Errorf("failed to assign user to team: %w", decorateSDKError(err, teamErrBody))
+			return diag.FromErr(fmt.Errorf("failed to assign user to team: %w", decorateSDKError(err, teamErrBody)))
 		}
 	}
 
 	if d.Get("generate_api_key").(bool) {
 		description := d.Get("api_key_description").(string)
 		if password == "" {
-			return fmt.Errorf("password must be set to generate API key")
+			return diag.FromErr(fmt.Errorf("password must be set to generate API key"))
 		}
 
 		// Authenticate as new user
-		authCtx, authErrBody := withErrorCapture(context.Background())
+		authCtx, authErrBody := withErrorCapture(ctx)
 		paramsAuth := auth.NewAuthenticateUserParams()
 		paramsAuth.SetContext(authCtx)
 		paramsAuth.Body = &models.AuthAuthenticatePayload{
@@ -166,12 +167,12 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 
 		respAuth, err := client.Client.Auth.AuthenticateUser(paramsAuth)
 		if err != nil {
-			return fmt.Errorf("failed to authenticate as new user: %w", decorateSDKError(err, authErrBody))
+			return diag.FromErr(fmt.Errorf("failed to authenticate as new user: %w", decorateSDKError(err, authErrBody)))
 		}
 
 		userAuthInfo := httptransport.BearerToken(respAuth.Payload.Jwt)
 
-		keyCtx, keyErrBody := withErrorCapture(context.Background())
+		keyCtx, keyErrBody := withErrorCapture(ctx)
 		paramsKey := users.NewUserGenerateAPIKeyParams()
 		paramsKey.SetContext(keyCtx)
 		paramsKey.ID = respCreate.Payload.ID
@@ -182,20 +183,22 @@ func resourceUserCreate(d *schema.ResourceData, meta interface{}) error {
 
 		respKey, err := client.Client.Users.UserGenerateAPIKey(paramsKey, userAuthInfo)
 		if err != nil {
-			return fmt.Errorf("failed to generate API key: %w", decorateSDKError(err, keyErrBody))
+			return diag.FromErr(fmt.Errorf("failed to generate API key: %w", decorateSDKError(err, keyErrBody)))
 		}
 
-		d.Set("api_key_raw", respKey.Payload.RawAPIKey)
+		if err := d.Set("api_key_raw", respKey.Payload.RawAPIKey); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
-	return resourceUserRead(d, meta)
+	return resourceUserRead(ctx, d, meta)
 }
 
-func resourceUserRead(d *schema.ResourceData, meta interface{}) error {
+func resourceUserRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := users.NewUserInspectParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -207,11 +210,15 @@ func resourceUserRead(d *schema.ResourceData, meta interface{}) error {
 			d.SetId("")
 			return nil
 		}
-		return fmt.Errorf("failed to read user: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to read user: %w", decorateSDKError(err, errBody)))
 	}
 
-	d.Set("username", resp.Payload.Username)
-	d.Set("role", resp.Payload.Role)
+	if err := d.Set("username", resp.Payload.Username); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("role", resp.Payload.Role); err != nil {
+		return diag.FromErr(err)
+	}
 
 	// Attempt to find team_id for standard users. Best-effort: errors here
 	// don't fail Read, so we don't decorate them.
@@ -221,7 +228,9 @@ func resourceUserRead(d *schema.ResourceData, meta interface{}) error {
 		if err == nil {
 			for _, m := range respTM.Payload {
 				if m.UserID == id {
-					d.Set("team_id", int(m.TeamID))
+					if err := d.Set("team_id", int(m.TeamID)); err != nil {
+						return diag.FromErr(err)
+					}
 					break
 				}
 			}
@@ -231,21 +240,21 @@ func resourceUserRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceUserImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+func resourceUserImport(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 	client := meta.(*APIClient)
 
 	// Check if the ID is a numeric ID
 	if _, err := strconv.ParseInt(d.Id(), 10, 64); err == nil {
 		// It's a numeric ID, so just read it
-		if err := resourceUserRead(d, meta); err != nil {
-			return nil, err
+		if diags := resourceUserRead(ctx, d, meta); diags.HasError() {
+			return nil, fmt.Errorf("%s", diags[0].Summary)
 		}
 		return []*schema.ResourceData{d}, nil
 	}
 
 	// It's not a numeric ID, so treat it as a username
 	username := d.Id()
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := users.NewUserListParams()
 	params.SetContext(ctx)
 	resp, err := client.Client.Users.UserList(params, client.AuthInfo)
@@ -256,8 +265,8 @@ func resourceUserImport(d *schema.ResourceData, meta interface{}) ([]*schema.Res
 	for _, u := range resp.Payload {
 		if u.Username == username {
 			d.SetId(strconv.FormatInt(u.ID, 10))
-			if err := resourceUserRead(d, meta); err != nil {
-				return nil, err
+			if diags := resourceUserRead(context.Background(), d, meta); diags.HasError() {
+				return nil, fmt.Errorf("%s", diags[0].Summary)
 			}
 			return []*schema.ResourceData{d}, nil
 		}
@@ -266,7 +275,7 @@ func resourceUserImport(d *schema.ResourceData, meta interface{}) ([]*schema.Res
 	return nil, fmt.Errorf("user %s not found", username)
 }
 
-func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceUserUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
@@ -278,7 +287,7 @@ func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
 		// Skip password update when old password is unknown (e.g. after import).
 		// The Portainer API requires the current password to change it.
 		if oldPwString != "" && newPwString != "" {
-			pwCtx, pwErrBody := withErrorCapture(context.Background())
+			pwCtx, pwErrBody := withErrorCapture(ctx)
 			paramsPwd := users.NewUserUpdatePasswordParams()
 			paramsPwd.SetContext(pwCtx)
 			paramsPwd.ID = id
@@ -289,7 +298,7 @@ func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
 
 			_, err := client.Client.Users.UserUpdatePassword(paramsPwd, client.AuthInfo)
 			if err != nil {
-				return fmt.Errorf("failed to update password: %w", decorateSDKError(err, pwErrBody))
+				return diag.FromErr(fmt.Errorf("failed to update password: %w", decorateSDKError(err, pwErrBody)))
 			}
 		}
 	}
@@ -298,7 +307,7 @@ func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
 	role := int64(d.Get("role").(int))
 	useCache := true
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := users.NewUserUpdateParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -310,17 +319,17 @@ func resourceUserUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	_, err := client.Client.Users.UserUpdate(params, client.AuthInfo)
 	if err != nil {
-		return fmt.Errorf("failed to update user: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to update user: %w", decorateSDKError(err, errBody)))
 	}
 
-	return resourceUserRead(d, meta)
+	return resourceUserRead(ctx, d, meta)
 }
 
-func resourceUserDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceUserDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(context.Background())
+	ctx, errBody := withErrorCapture(ctx)
 	params := users.NewUserDeleteParams()
 	params.SetContext(ctx)
 	params.ID = id
@@ -331,7 +340,7 @@ func resourceUserDelete(d *schema.ResourceData, meta interface{}) error {
 		if errors.As(err, &notFoundDel) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete user: %w", decorateSDKError(err, errBody))
+		return diag.FromErr(fmt.Errorf("failed to delete user: %w", decorateSDKError(err, errBody)))
 	}
 
 	return nil

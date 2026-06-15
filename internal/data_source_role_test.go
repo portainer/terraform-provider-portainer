@@ -20,7 +20,7 @@ func TestDataSourceRoleRead_AllRoles(t *testing.T) {
 	ds := dataSourceRole()
 	d := ds.TestResourceData()
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -50,7 +50,7 @@ func TestDataSourceRoleRead_FilterByName(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "helpdesk")
 
-	if err := ds.Read(d, mock.Client()); err != nil {
+	if err := rcRead(ds, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 
@@ -80,7 +80,7 @@ func TestDataSourceRoleRead_FilterNoMatch(t *testing.T) {
 	d := ds.TestResourceData()
 	_ = d.Set("name", "ghost")
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error when role name not found, got nil")
 	}
 }
@@ -97,7 +97,7 @@ func TestDataSourceRoleRead_HTTPError(t *testing.T) {
 	ds := dataSourceRole()
 	d := ds.TestResourceData()
 
-	if err := ds.Read(d, mock.Client()); err == nil {
+	if err := rcRead(ds, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
 	}
 }

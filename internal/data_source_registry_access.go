@@ -1,16 +1,18 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceRegistryAccess() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceRegistryAccessRead,
+		ReadContext: dataSourceRegistryAccessRead,
 
 		Schema: map[string]*schema.Schema{
 			"registry_id": {
@@ -42,7 +44,7 @@ func dataSourceRegistryAccess() *schema.Resource {
 	}
 }
 
-func dataSourceRegistryAccessRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceRegistryAccessRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	registryID := d.Get("registry_id").(int)
 	endpointID := d.Get("endpoint_id").(int)
@@ -50,15 +52,15 @@ func dataSourceRegistryAccessRead(d *schema.ResourceData, meta interface{}) erro
 	userID, hasUser := d.GetOk("user_id")
 
 	if !hasTeam && !hasUser {
-		return fmt.Errorf("either team_id or user_id must be provided")
+		return diag.FromErr(fmt.Errorf("either team_id or user_id must be provided"))
 	}
 
 	policies, err := getRegistryPolicies(client, registryID, endpointID)
 	if err != nil {
 		if errors.Is(err, ErrRegistryNotFound) {
-			return fmt.Errorf("registry %d not found", registryID)
+			return diag.FromErr(fmt.Errorf("registry %d not found", registryID))
 		}
-		return err
+		return diag.FromErr(err)
 	}
 
 	found := false
@@ -67,21 +69,25 @@ func dataSourceRegistryAccessRead(d *schema.ResourceData, meta interface{}) erro
 	if hasTeam {
 		tidStr := strconv.Itoa(teamID.(int))
 		if p, ok := policies.TeamAccessPolicies[tidStr]; ok {
-			d.Set("role_id", int(p.RoleID))
+			if err := d.Set("role_id", int(p.RoleID)); err != nil {
+				return diag.FromErr(err)
+			}
 			idStr += fmt.Sprintf("team/%s", tidStr)
 			found = true
 		}
 	} else if hasUser {
 		uidStr := strconv.Itoa(userID.(int))
 		if p, ok := policies.UserAccessPolicies[uidStr]; ok {
-			d.Set("role_id", int(p.RoleID))
+			if err := d.Set("role_id", int(p.RoleID)); err != nil {
+				return diag.FromErr(err)
+			}
 			idStr += fmt.Sprintf("user/%s", uidStr)
 			found = true
 		}
 	}
 
 	if !found {
-		return fmt.Errorf("access policy not found for the given team_id/user_id on registry %d and endpoint %d", registryID, endpointID)
+		return diag.FromErr(fmt.Errorf("access policy not found for the given team_id/user_id on registry %d and endpoint %d", registryID, endpointID))
 	}
 
 	d.SetId(idStr)

@@ -1,11 +1,13 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
@@ -18,12 +20,12 @@ type CloudCredentialPayload struct {
 
 func resourceCloudCredentials() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceCloudCredentialsCreate,
-		Update: resourceCloudCredentialsUpdate,
-		Delete: resourceCloudCredentialsDelete,
-		Read:   resourceCloudCredentialsRead,
+		CreateContext: resourceCloudCredentialsCreate,
+		UpdateContext: resourceCloudCredentialsUpdate,
+		DeleteContext: resourceCloudCredentialsDelete,
+		ReadContext:   resourceCloudCredentialsRead,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"cloud_provider": {
@@ -48,7 +50,7 @@ func resourceCloudCredentials() *schema.Resource {
 	}
 }
 
-func resourceCloudCredentialsCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceCloudCredentialsCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	payload := CloudCredentialPayload{
@@ -63,53 +65,53 @@ func resourceCloudCredentialsCreate(d *schema.ResourceData, meta interface{}) er
 
 	resp, err := client.DoRequest(http.MethodPost, "/cloud/credentials", nil, payload)
 	if err != nil {
-		return fmt.Errorf("failed to create cloud credential: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to create cloud credential: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to create cloud credential: HTTP %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to create cloud credential: HTTP %d", resp.StatusCode))
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	d.SetId(strconv.Itoa(result.ID))
 	return nil
 }
 
-func resourceCloudCredentialsDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceCloudCredentialsDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
 	path := fmt.Sprintf("/cloud/credentials/%s", d.Id())
 	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to delete cloud credential: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to delete cloud credential: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to delete cloud credential: HTTP %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to delete cloud credential: HTTP %d", resp.StatusCode))
 	}
 
 	d.SetId("")
 	return nil
 }
 
-func resourceCloudCredentialsRead(d *schema.ResourceData, meta interface{}) error {
+func resourceCloudCredentialsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Id()
 
 	path := fmt.Sprintf("/cloud/credentials/%s", id)
 	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to read cloud credential: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to read cloud credential: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to read cloud credential: HTTP %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to read cloud credential: HTTP %d", resp.StatusCode))
 	}
 
 	var result struct {
@@ -119,23 +121,29 @@ func resourceCloudCredentialsRead(d *schema.ResourceData, meta interface{}) erro
 		Credentials map[string]interface{} `json:"credentials"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to decode response: %w", err))
 	}
 
-	d.Set("name", result.Name)
-	d.Set("cloud_provider", result.Provider)
-	d.Set("credentials", result.Credentials)
+	if err := d.Set("name", result.Name); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("cloud_provider", result.Provider); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("credentials", result.Credentials); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
 
-func resourceCloudCredentialsUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceCloudCredentialsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id := d.Id()
 
 	credentialsJSON, err := json.Marshal(mapStringInterface(d.Get("credentials").(map[string]interface{})))
 	if err != nil {
-		return fmt.Errorf("failed to encode credentials to JSON: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to encode credentials to JSON: %w", err))
 	}
 
 	form := map[string]string{
@@ -146,12 +154,12 @@ func resourceCloudCredentialsUpdate(d *schema.ResourceData, meta interface{}) er
 
 	resp, err := client.DoRequest(http.MethodPut, fmt.Sprintf("/cloud/credentials/%s", id), form, nil)
 	if err != nil {
-		return fmt.Errorf("failed to update cloud credential: %w", err)
+		return diag.FromErr(fmt.Errorf("failed to update cloud credential: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to update cloud credential: HTTP %d", resp.StatusCode)
+		return diag.FromErr(fmt.Errorf("failed to update cloud credential: HTTP %d", resp.StatusCode))
 	}
 
 	return nil
