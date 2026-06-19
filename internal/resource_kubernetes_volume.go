@@ -20,6 +20,10 @@ func resourceKubernetesVolumes() *schema.Resource {
 		UpdateContext: resourceKubernetesVolumesUpdate,
 		DeleteContext: resourceKubernetesVolumesDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -162,7 +166,28 @@ func resourceKubernetesVolumesUpdate(ctx context.Context, d *schema.ResourceData
 }
 
 func resourceKubernetesVolumesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// Optional: implement if needed
+	client := meta.(*APIClient)
+
+	endpointID, namespace, volType, name := parseVolumesID(d.Id())
+	if endpointID == 0 || volType == "" || name == "" {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'endpointID:namespace:type:name': %s", d.Id()))
+	}
+
+	url, err := volumeAPIURL(client.Endpoint, endpointID, namespace, volType, true, name)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if diags := k8sConfirmExistsByGET(ctx, d, client, url, volType+" "+name); diags.HasError() {
+		return diags
+	}
+	if d.Id() == "" {
+		return nil
+	}
+
+	d.Set("endpoint_id", endpointID)
+	d.Set("namespace", namespace)
+	d.Set("type", volType)
+	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
 	return nil
 }
 

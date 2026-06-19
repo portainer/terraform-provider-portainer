@@ -20,6 +20,10 @@ func resourceKubernetesHelm() *schema.Resource {
 		ReadContext:   resourceKubernetesHelmRead,
 		DeleteContext: resourceKubernetesHelmDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(15 * time.Minute),
 			Delete: schema.DefaultTimeout(10 * time.Minute),
@@ -114,7 +118,70 @@ func resourceKubernetesHelmCreate(ctx context.Context, d *schema.ResourceData, m
 }
 
 func resourceKubernetesHelmRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// No-op for now
+	client := meta.(*APIClient)
+
+	idParts := strings.SplitN(d.Id(), ":", 3)
+	if len(idParts) != 3 {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'envID:namespace:release': %s", d.Id()))
+	}
+	var envID int
+	fmt.Sscanf(idParts[0], "%d", &envID)
+	namespace := idParts[1]
+	release := idParts[2]
+	if envID == 0 || release == "" {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'envID:namespace:release': %s", d.Id()))
+	}
+
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/helm/%s?namespace=%s", client.Endpoint, envID, release, namespace)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		d.SetId("")
+		return nil
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return diag.FromErr(fmt.Errorf("failed to read helm release %s (%d): %s", release, resp.StatusCode, string(body)))
+	}
+
+	var helmRelease struct {
+		ChartReference struct {
+			ChartPath string `json:"chartPath"`
+			RepoURL   string `json:"repoURL"`
+		} `json:"chartReference"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&helmRelease); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to decode helm release response: %w", err))
+	}
+
+	d.Set("environment_id", envID)
+	d.Set("namespace", namespace)
+	d.Set("name", release)
+	if helmRelease.ChartReference.ChartPath != "" {
+		d.Set("chart", helmRelease.ChartReference.ChartPath)
+	}
+	if helmRelease.ChartReference.RepoURL != "" {
+		d.Set("repo", helmRelease.ChartReference.RepoURL)
+	}
+	// values not restored — the API returns server-merged computed values, not the
+	// original user-supplied YAML. Keep whatever is currently in state; users with
+	// custom values should add lifecycle { ignore_changes = [values] } after import.
 	return nil
 }
 

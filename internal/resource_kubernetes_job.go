@@ -20,6 +20,10 @@ func resourceKubernetesJob() *schema.Resource {
 		UpdateContext: resourceKubernetesJobUpdate,
 		DeleteContext: resourceKubernetesJobDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -139,6 +143,24 @@ func resourceKubernetesJobUpdate(ctx context.Context, d *schema.ResourceData, me
 }
 
 func resourceKubernetesJobRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*APIClient)
+
+	endpointID, namespace, name := parseJobID(d.Id())
+	if endpointID == 0 || namespace == "" || name == "" {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'endpointID:namespace:name': %s", d.Id()))
+	}
+
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/batch/v1/namespaces/%s/jobs/%s", client.Endpoint, endpointID, namespace, name)
+	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "job "+name); diags.HasError() {
+		return diags
+	}
+	if d.Id() == "" {
+		return nil
+	}
+
+	d.Set("endpoint_id", endpointID)
+	d.Set("namespace", namespace)
+	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
 	return nil
 }
 

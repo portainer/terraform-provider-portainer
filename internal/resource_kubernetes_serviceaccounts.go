@@ -20,6 +20,10 @@ func resourceKubernetesServiceAccounts() *schema.Resource {
 		UpdateContext: resourceKubernetesServiceAccountsUpdate,
 		DeleteContext: resourceKubernetesServiceAccountsDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -141,6 +145,24 @@ func resourceKubernetesServiceAccountsUpdate(ctx context.Context, d *schema.Reso
 }
 
 func resourceKubernetesServiceAccountsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*APIClient)
+
+	endpointID, namespace, name := parseServiceAccountsID(d.Id())
+	if endpointID == 0 || namespace == "" || name == "" {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'endpointID:namespace:name': %s", d.Id()))
+	}
+
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/api/v1/namespaces/%s/serviceaccounts/%s", client.Endpoint, endpointID, namespace, name)
+	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "serviceaccount "+name); diags.HasError() {
+		return diags
+	}
+	if d.Id() == "" {
+		return nil
+	}
+
+	d.Set("endpoint_id", endpointID)
+	d.Set("namespace", namespace)
+	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
 	return nil
 }
 

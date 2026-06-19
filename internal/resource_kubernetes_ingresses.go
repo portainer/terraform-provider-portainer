@@ -20,6 +20,10 @@ func resourceKubernetesNamespaceIngress() *schema.Resource {
 		UpdateContext: resourceKubernetesNamespaceIngressUpdate,
 		DeleteContext: resourceKubernetesNamespaceIngressDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
 				Type:        schema.TypeInt,
@@ -215,7 +219,37 @@ func createOrUpdateIngress(ctx context.Context, d *schema.ResourceData, client *
 }
 
 func resourceKubernetesNamespaceIngressRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	return nil // No-op
+	client := meta.(*APIClient)
+
+	parts := strings.SplitN(d.Id(), ":", 3)
+	if len(parts) != 3 {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'envID:namespace:name': %s", d.Id()))
+	}
+	var envID int
+	fmt.Sscanf(parts[0], "%d", &envID)
+	namespace := parts[1]
+	name := parts[2]
+	if envID == 0 || namespace == "" || name == "" {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'envID:namespace:name': %s", d.Id()))
+	}
+
+	// Existence check via the K8s proxy (standard networking.k8s.io path) for clean 404s.
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/networking.k8s.io/v1/namespaces/%s/ingresses/%s", client.Endpoint, envID, namespace, name)
+	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "ingress "+name); diags.HasError() {
+		return diags
+	}
+	if d.Id() == "" {
+		return nil
+	}
+
+	d.Set("environment_id", envID)
+	d.Set("namespace", namespace)
+	d.Set("name", name)
+	// Nested spec (hosts/tls/paths/annotations/labels/class_name) intentionally not
+	// refreshed — reconstructing it from the live Ingress object is lossy and would diff
+	// against the authored config. The config stays the source of truth; only deletion is
+	// detected. After `terraform import`, set those fields to match.
+	return nil
 }
 
 func resourceKubernetesNamespaceIngressDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {

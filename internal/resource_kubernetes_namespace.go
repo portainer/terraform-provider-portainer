@@ -22,6 +22,10 @@ func resourceKubernetesNamespace() *schema.Resource {
 		UpdateContext: resourceKubernetesNamespaceUpdate,
 		DeleteContext: resourceKubernetesNamespaceDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
 				Type:        schema.TypeInt,
@@ -135,7 +139,101 @@ func resourceKubernetesNamespaceCreate(ctx context.Context, d *schema.ResourceDa
 }
 
 func resourceKubernetesNamespaceRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// No-op for now
+	client := meta.(*APIClient)
+
+	idParts := strings.SplitN(d.Id(), ":", 2)
+	if len(idParts) != 2 {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'envID:name': %s", d.Id()))
+	}
+	envID, err := strconv.Atoi(idParts[0])
+	if err != nil {
+		return diag.FromErr(fmt.Errorf("invalid environment ID in resource ID %q: %w", d.Id(), err))
+	}
+	name := idParts[1]
+
+	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s?withResourceQuota=true", client.Endpoint, envID, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	defer resp.Body.Close()
+
+	// Namespace deleted out-of-band — clear from state so the next plan recreates.
+	if resp.StatusCode == http.StatusNotFound {
+		d.SetId("")
+		return nil
+	}
+	if resp.StatusCode >= 400 {
+		data, _ := io.ReadAll(resp.Body)
+		return diag.FromErr(fmt.Errorf("failed to read namespace %q: %s", name, string(data)))
+	}
+
+	var ns struct {
+		Name           string            `json:"Name"`
+		NamespaceOwner string            `json:"NamespaceOwner"`
+		Annotations    map[string]string `json:"Annotations"`
+		ResourceQuota  *struct {
+			Spec struct {
+				Hard map[string]string `json:"hard"`
+			} `json:"spec"`
+		} `json:"ResourceQuota"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&ns); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to decode namespace response: %w", err))
+	}
+
+	d.Set("environment_id", envID)
+	d.Set("name", ns.Name)
+	// NamespaceOwner is a Portainer-level label the API does not reliably persist back —
+	// GET returns "" even when the namespace was created with an owner. Only overwrite
+	// state when the API returns something, so we don't generate permanent drift.
+	if ns.NamespaceOwner != "" {
+		d.Set("owner", ns.NamespaceOwner)
+	}
+
+	if ns.Annotations != nil {
+		d.Set("annotations", ns.Annotations)
+	} else {
+		d.Set("annotations", map[string]string{})
+	}
+
+	// Map the K8s ResourceQuota spec.hard keys ("limits.cpu", "requests.memory", …) back
+	// to the friendlier schema keys (cpu_limit, memory_limit, cpu_request, memory_request).
+	// When EnableResourceOverCommit is true Portainer does not persist quotas and the API
+	// returns an empty spec.hard; skip d.Set in that case so the authored quota stays in
+	// state and does not generate permanent drift on over-commit environments.
+	quota := map[string]string{}
+	if ns.ResourceQuota != nil {
+		hard := ns.ResourceQuota.Spec.Hard
+		if v, ok := hard["limits.cpu"]; ok {
+			quota["cpu_limit"] = v
+		}
+		if v, ok := hard["limits.memory"]; ok {
+			quota["memory_limit"] = v
+		}
+		if v, ok := hard["requests.cpu"]; ok {
+			quota["cpu_request"] = v
+		}
+		if v, ok := hard["requests.memory"]; ok {
+			quota["memory_request"] = v
+		}
+	}
+	if len(quota) > 0 {
+		d.Set("resource_quota", quota)
+	}
+
 	return nil
 }
 

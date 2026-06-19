@@ -20,6 +20,10 @@ func resourceKubernetesClusterRoles() *schema.Resource {
 		UpdateContext: resourceKubernetesClusterRolesUpdate,
 		DeleteContext: resourceKubernetesClusterRolesDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -133,6 +137,23 @@ func resourceKubernetesClusterRolesUpdate(ctx context.Context, d *schema.Resourc
 }
 
 func resourceKubernetesClusterRolesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*APIClient)
+
+	endpointID, name := parseClusterRolesID(d.Id())
+	if endpointID == 0 || name == "" {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'endpointID:name': %s", d.Id()))
+	}
+
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/rbac.authorization.k8s.io/v1/clusterroles/%s", client.Endpoint, endpointID, name)
+	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "clusterrole "+name); diags.HasError() {
+		return diags
+	}
+	if d.Id() == "" {
+		return nil
+	}
+
+	d.Set("endpoint_id", endpointID)
+	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
 	return nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -18,6 +19,10 @@ func resourceKubernetesNamespaceSystem() *schema.Resource {
 		ReadContext:   resourceKubernetesNamespaceSystemRead,
 		UpdateContext: resourceKubernetesNamespaceSystemToggle,
 		DeleteContext: resourceKubernetesNamespaceSystemUnset,
+
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
@@ -81,6 +86,57 @@ func resourceKubernetesNamespaceSystemToggle(ctx context.Context, d *schema.Reso
 }
 
 func resourceKubernetesNamespaceSystemRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*APIClient)
+
+	parts := strings.SplitN(d.Id(), ":", 2)
+	if len(parts) != 2 {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'envID:namespace': %s", d.Id()))
+	}
+	var envID int
+	fmt.Sscanf(parts[0], "%d", &envID)
+	namespace := parts[1]
+	if envID == 0 || namespace == "" {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'envID:namespace': %s", d.Id()))
+	}
+
+	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s", client.Endpoint, envID, namespace)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		d.SetId("")
+		return nil
+	}
+	if resp.StatusCode >= 400 {
+		data, _ := io.ReadAll(resp.Body)
+		return diag.FromErr(fmt.Errorf("failed to read namespace %q: %s", namespace, string(data)))
+	}
+
+	var ns struct {
+		IsSystem bool `json:"IsSystem"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&ns); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to decode namespace response: %w", err))
+	}
+
+	d.Set("environment_id", envID)
+	d.Set("namespace", namespace)
+	d.Set("system", ns.IsSystem)
 	return nil
 }
 
