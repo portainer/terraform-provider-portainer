@@ -242,9 +242,15 @@ func resourceKubernetesNamespaceIngressRead(ctx context.Context, d *schema.Resou
 		return nil
 	}
 
-	d.Set("environment_id", envID)
-	d.Set("namespace", namespace)
-	d.Set("name", name)
+	if err := d.Set("environment_id", envID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("namespace", namespace); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("name", name); err != nil {
+		return diag.FromErr(err)
+	}
 	// Nested spec (hosts/tls/paths/annotations/labels/class_name) intentionally not
 	// refreshed — reconstructing it from the live Ingress object is lossy and would diff
 	// against the authored config. The config stays the source of truth; only deletion is

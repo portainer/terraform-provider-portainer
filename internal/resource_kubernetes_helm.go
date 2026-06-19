@@ -170,14 +170,24 @@ func resourceKubernetesHelmRead(ctx context.Context, d *schema.ResourceData, met
 		return diag.FromErr(fmt.Errorf("failed to decode helm release response: %w", err))
 	}
 
-	d.Set("environment_id", envID)
-	d.Set("namespace", namespace)
-	d.Set("name", release)
+	if err := d.Set("environment_id", envID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("namespace", namespace); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("name", release); err != nil {
+		return diag.FromErr(err)
+	}
 	if helmRelease.ChartReference.ChartPath != "" {
-		d.Set("chart", helmRelease.ChartReference.ChartPath)
+		if err := d.Set("chart", helmRelease.ChartReference.ChartPath); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if helmRelease.ChartReference.RepoURL != "" {
-		d.Set("repo", helmRelease.ChartReference.RepoURL)
+		if err := d.Set("repo", helmRelease.ChartReference.RepoURL); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	// values not restored — the API returns server-merged computed values, not the
 	// original user-supplied YAML. Keep whatever is currently in state; users with

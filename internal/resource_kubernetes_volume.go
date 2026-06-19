@@ -184,9 +184,15 @@ func resourceKubernetesVolumesRead(ctx context.Context, d *schema.ResourceData, 
 		return nil
 	}
 
-	d.Set("endpoint_id", endpointID)
-	d.Set("namespace", namespace)
-	d.Set("type", volType)
+	if err := d.Set("endpoint_id", endpointID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("namespace", namespace); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("type", volType); err != nil {
+		return diag.FromErr(err)
+	}
 	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
 	return nil
 }

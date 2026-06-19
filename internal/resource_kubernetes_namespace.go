@@ -194,19 +194,29 @@ func resourceKubernetesNamespaceRead(ctx context.Context, d *schema.ResourceData
 		return diag.FromErr(fmt.Errorf("failed to decode namespace response: %w", err))
 	}
 
-	d.Set("environment_id", envID)
-	d.Set("name", ns.Name)
+	if err := d.Set("environment_id", envID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("name", ns.Name); err != nil {
+		return diag.FromErr(err)
+	}
 	// NamespaceOwner is a Portainer-level label the API does not reliably persist back —
 	// GET returns "" even when the namespace was created with an owner. Only overwrite
 	// state when the API returns something, so we don't generate permanent drift.
 	if ns.NamespaceOwner != "" {
-		d.Set("owner", ns.NamespaceOwner)
+		if err := d.Set("owner", ns.NamespaceOwner); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	if ns.Annotations != nil {
-		d.Set("annotations", ns.Annotations)
+		if err := d.Set("annotations", ns.Annotations); err != nil {
+			return diag.FromErr(err)
+		}
 	} else {
-		d.Set("annotations", map[string]string{})
+		if err := d.Set("annotations", map[string]string{}); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	// Map the K8s ResourceQuota spec.hard keys ("limits.cpu", "requests.memory", …) back
@@ -231,7 +241,9 @@ func resourceKubernetesNamespaceRead(ctx context.Context, d *schema.ResourceData
 		}
 	}
 	if len(quota) > 0 {
-		d.Set("resource_quota", quota)
+		if err := d.Set("resource_quota", quota); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil

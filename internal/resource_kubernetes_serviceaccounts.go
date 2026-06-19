@@ -160,8 +160,12 @@ func resourceKubernetesServiceAccountsRead(ctx context.Context, d *schema.Resour
 		return nil
 	}
 
-	d.Set("endpoint_id", endpointID)
-	d.Set("namespace", namespace)
+	if err := d.Set("endpoint_id", endpointID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("namespace", namespace); err != nil {
+		return diag.FromErr(err)
+	}
 	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
 	return nil
 }

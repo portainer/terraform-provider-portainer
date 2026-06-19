@@ -152,7 +152,9 @@ func resourceKubernetesClusterRolesRead(ctx context.Context, d *schema.ResourceD
 		return nil
 	}
 
-	d.Set("endpoint_id", endpointID)
+	if err := d.Set("endpoint_id", endpointID); err != nil {
+		return diag.FromErr(err)
+	}
 	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
 	return nil
 }

@@ -134,9 +134,15 @@ func resourceKubernetesNamespaceSystemRead(ctx context.Context, d *schema.Resour
 		return diag.FromErr(fmt.Errorf("failed to decode namespace response: %w", err))
 	}
 
-	d.Set("environment_id", envID)
-	d.Set("namespace", namespace)
-	d.Set("system", ns.IsSystem)
+	if err := d.Set("environment_id", envID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("namespace", namespace); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("system", ns.IsSystem); err != nil {
+		return diag.FromErr(err)
+	}
 	return nil
 }
 
