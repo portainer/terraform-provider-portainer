@@ -63,10 +63,14 @@ func TestKubernetesServiceDelete_404IsSuccess(t *testing.T) {
 }
 
 func TestKubernetesServiceRead_NoOp(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/api/v1/namespaces/ns/services/keep",
+		RespondString(http.StatusOK, "application/json", "{}"))
+
 	r := resourceKubernetesService()
 	d := r.TestResourceData()
 	d.SetId("1:ns:keep")
-	if err := rcRead(r, d, nil); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should be no-op, got %v", err)
 	}
 	if d.Id() != "1:ns:keep" {

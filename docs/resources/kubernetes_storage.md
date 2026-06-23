@@ -43,3 +43,11 @@ terraform destroy
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | 	ID in the format endpoint_id:namespace:storage:name    |
+
+## Import
+
+Kubernetes StorageClass resources can be imported using the composite ID `endpointID:name`:
+
+```shell
+terraform import portainer_kubernetes_storage.example 1:my-storageclass
+```

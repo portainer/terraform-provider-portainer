@@ -43,3 +43,11 @@ terraform destroy
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | 	ID in the format endpoint_id:namespace:clusterrolebinding:name    |
+
+## Import
+
+Kubernetes ClusterRoleBinding resources can be imported using the composite ID `endpointID:name`:
+
+```shell
+terraform import portainer_kubernetes_clusterrolebinding.example 1:my-clusterrolebinding
+```

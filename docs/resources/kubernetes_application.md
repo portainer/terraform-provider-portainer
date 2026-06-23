@@ -73,3 +73,11 @@ resource "portainer_portainer_kubernetes_application" "example" {
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | 	ID in the format endpoint_id:namespace:application:name    |
+
+## Import
+
+Kubernetes application resources can be imported using the composite ID `endpointID:namespace:name`:
+
+```shell
+terraform import portainer_kubernetes_application.example 1:default:my-app
+```

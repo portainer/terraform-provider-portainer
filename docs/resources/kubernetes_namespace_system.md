@@ -30,3 +30,11 @@ resource "portainer_kubernetes_namespace_system" "system_flag" {
 | Name  | Description                                              |
 |-------|----------------------------------------------------------|
 | `id`  | Composite ID in format `environment_id:namespace`.       |
+
+## Import
+
+Kubernetes namespace system flag resources can be imported using the composite ID `environmentID:namespace`:
+
+```shell
+terraform import portainer_kubernetes_namespace_system.example 1:kube-system
+```

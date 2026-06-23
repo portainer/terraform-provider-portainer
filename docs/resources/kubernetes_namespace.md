@@ -58,3 +58,11 @@ resource "portainer_kubernetes_namespace" "test" {
 | Name  | Description                                  |
 |-------|----------------------------------------------|
 | `id`  | Composite ID in format `environmentID:name`  |
+
+## Import
+
+Kubernetes namespaces can be imported using the composite ID `environmentID:name`:
+
+```shell
+terraform import portainer_kubernetes_namespace.example 1:my-namespace
+```

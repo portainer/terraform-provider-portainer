@@ -45,3 +45,11 @@ terraform destroy
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | 	ID in the format endpoint_id:namespace:serviceaccount:name    |
+
+## Import
+
+Kubernetes ServiceAccount resources can be imported using the composite ID `endpointID:namespace:name`:
+
+```shell
+terraform import portainer_kubernetes_serviceaccounts.example 1:default:my-serviceaccount
+```

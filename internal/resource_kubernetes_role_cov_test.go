@@ -53,6 +53,8 @@ func TestKubernetesRoleCreate_MissingName(t *testing.T) {
 // TestKubernetesRoleReadNoop covers the no-op Read handler.
 func TestKubernetesRoleReadNoop(t *testing.T) {
 	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/rbac.authorization.k8s.io/v1/namespaces/default/roles/pod-reader",
+		RespondString(http.StatusOK, "application/json", "{}"))
 
 	r := resourceKubernetesRoles()
 	d := r.TestResourceData()

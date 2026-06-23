@@ -45,3 +45,11 @@ terraform destroy
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | 	ID in the format endpoint_id:namespace:role:name    |
+
+## Import
+
+Kubernetes Role resources can be imported using the composite ID `endpointID:namespace:name`:
+
+```shell
+terraform import portainer_kubernetes_role.example 1:default:my-role
+```

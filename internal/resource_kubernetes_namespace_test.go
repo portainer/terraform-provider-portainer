@@ -14,6 +14,7 @@ func TestKubernetesNamespaceCreate_HappyPath_Unlicensed(t *testing.T) {
 	// Unlicensed: /licenses returns empty list.
 	mock.On("GET", "/licenses", RespondJSON(http.StatusOK, []map[string]interface{}{}))
 	mock.On("POST", "/kubernetes/1/namespaces", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	mock.On("GET", "/kubernetes/1/namespaces/my-ns", RespondJSON(http.StatusOK, map[string]interface{}{"Name": "my-ns"}))
 
 	r := resourceKubernetesNamespace()
 	d := r.TestResourceData()
@@ -70,6 +71,7 @@ func TestKubernetesNamespaceCreate_HappyPath_Licensed(t *testing.T) {
 		{"id": 1, "company": "ACME"},
 	}))
 	mock.On("POST", "/kubernetes/2/namespaces", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	mock.On("GET", "/kubernetes/2/namespaces/team-a", RespondJSON(http.StatusOK, map[string]interface{}{"Name": "team-a"}))
 
 	r := resourceKubernetesNamespace()
 	d := r.TestResourceData()

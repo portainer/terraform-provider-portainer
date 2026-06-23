@@ -73,10 +73,14 @@ func TestKubernetesStorageDelete_404IsSuccess(t *testing.T) {
 
 // TestKubernetesStorageRead_NoOp verifies Read is a no-op returning nil.
 func TestKubernetesStorageRead_NoOp(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/storage.k8s.io/v1/storageclasses/keep",
+		RespondString(http.StatusOK, "application/json", "{}"))
+
 	r := resourceKubernetesStorage()
 	d := r.TestResourceData()
 	d.SetId("1:keep")
-	if err := rcRead(r, d, nil); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should be no-op, got %v", err)
 	}
 	if d.Id() != "1:keep" {

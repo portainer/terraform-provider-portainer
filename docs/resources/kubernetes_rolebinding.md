@@ -45,3 +45,11 @@ terraform destroy
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | 	ID in the format endpoint_id:namespace:rolebinding:name    |
+
+## Import
+
+Kubernetes RoleBinding resources can be imported using the composite ID `endpointID:namespace:name`:
+
+```shell
+terraform import portainer_kubernetes_rolebinding.example 1:default:my-rolebinding
+```

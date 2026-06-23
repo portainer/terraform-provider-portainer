@@ -74,3 +74,11 @@ terraform destroy
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | 	ID in the format endpoint_id:namespace:volumee:name    |
+
+## Import
+
+Kubernetes PersistentVolumeClaim resources can be imported using the composite ID `endpointID:namespace:name`:
+
+```shell
+terraform import portainer_kubernetes_volume.example 1:default:my-pvc
+```

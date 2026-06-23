@@ -66,3 +66,11 @@ resource "portainer_kubernetes_helm" "example" {
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | Unique identifier for the Helm release    |
+
+## Import
+
+Kubernetes Helm releases can be imported using the composite ID `environmentID:namespace:releaseName`:
+
+```shell
+terraform import portainer_kubernetes_helm.example 1:default:my-release
+```

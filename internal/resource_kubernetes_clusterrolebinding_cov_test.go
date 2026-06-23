@@ -53,6 +53,8 @@ func TestKubernetesClusterRoleBindingCreate_HTTPError(t *testing.T) {
 // TestKubernetesClusterRoleBindingReadNoop covers the no-op Read handler.
 func TestKubernetesClusterRoleBindingReadNoop(t *testing.T) {
 	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/rbac.authorization.k8s.io/v1/clusterrolebindings/global-admin",
+		RespondString(http.StatusOK, "application/json", "{}"))
 
 	r := resourceKubernetesClusterRoleBindings()
 	d := r.TestResourceData()

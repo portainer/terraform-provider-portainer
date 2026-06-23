@@ -169,6 +169,8 @@ func TestKubernetesVolumesCreate_HTTPError(t *testing.T) {
 // TestKubernetesVolumesRead_NoOp verifies Read is a no-op (returns nil).
 func TestKubernetesVolumesRead_NoOp(t *testing.T) {
 	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/api/v1/namespaces/default/persistentvolumeclaims/my-pvc",
+		RespondString(http.StatusOK, "application/json", "{}"))
 
 	r := resourceKubernetesVolumes()
 	d := r.TestResourceData()
