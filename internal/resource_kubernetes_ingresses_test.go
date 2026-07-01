@@ -112,3 +112,20 @@ func TestKubernetesIngressDelete_NoOp(t *testing.T) {
 		t.Errorf("expected no requests for no-op Delete, got %d", len(reqs))
 	}
 }
+
+func TestKubernetesNamespaceIngressRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/networking.k8s.io/v1/namespaces/default/ingresses/gone",
+		RespondString(http.StatusNotFound, "application/json", "{\"message\":\"not found\"}"))
+
+	r := resourceKubernetesNamespaceIngress()
+	d := r.TestResourceData()
+	d.SetId("1:default:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
+	}
+}

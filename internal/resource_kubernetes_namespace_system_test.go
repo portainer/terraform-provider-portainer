@@ -121,3 +121,20 @@ func TestKubernetesNamespaceSystemCreate_HTTPError(t *testing.T) {
 		t.Errorf("expected empty ID after error, got %q", d.Id())
 	}
 }
+
+func TestKubernetesNamespaceSystemRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/kubernetes/1/namespaces/gone",
+		RespondString(http.StatusNotFound, "application/json", "{\"message\":\"not found\"}"))
+
+	r := resourceKubernetesNamespaceSystem()
+	d := r.TestResourceData()
+	d.SetId("1:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
+	}
+}

@@ -108,3 +108,20 @@ func TestKubernetesCronJobParseID_Malformed(t *testing.T) {
 		t.Errorf("expected zero values, got (%d, %q, %q)", endpointID, namespace, name)
 	}
 }
+
+func TestKubernetesCronJobRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/batch/v1/namespaces/ns/cronjobs/gone",
+		RespondString(http.StatusNotFound, "application/json", "{\"message\":\"not found\"}"))
+
+	r := resourceKubernetesCronJob()
+	d := r.TestResourceData()
+	d.SetId("1:ns:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
+	}
+}

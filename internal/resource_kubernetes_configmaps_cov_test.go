@@ -101,3 +101,20 @@ func TestKubernetesConfigMapsCreate_MissingMetadataName(t *testing.T) {
 		t.Fatal("expected error for missing metadata.name")
 	}
 }
+
+func TestKubernetesConfigMapsRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/api/v1/namespaces/ns/configmaps/gone",
+		RespondString(http.StatusNotFound, "application/json", "{\"message\":\"not found\"}"))
+
+	r := resourceKubernetesConfigMaps()
+	d := r.TestResourceData()
+	d.SetId("1:ns:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
+	}
+}

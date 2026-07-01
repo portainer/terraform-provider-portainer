@@ -53,3 +53,5 @@ Kubernetes RoleBinding resources can be imported using the composite ID `endpoin
 ```shell
 terraform import portainer_kubernetes_rolebinding.example 1:default:my-rolebinding
 ```
+
+After import, set the `manifest` field in config to match the live object — Read only confirms the resource exists and restores identity fields, it does not reconstruct the manifest. If `manifest` is left blank after import, the next `terraform apply` will treat it as a change and may recreate the resource.

@@ -181,9 +181,8 @@ func resourceKubernetesNamespaceRead(ctx context.Context, d *schema.ResourceData
 	}
 
 	var ns struct {
-		Name           string            `json:"Name"`
-		NamespaceOwner string            `json:"NamespaceOwner"`
-		Annotations    map[string]string `json:"Annotations"`
+		Name           string `json:"Name"`
+		NamespaceOwner string `json:"NamespaceOwner"`
 		ResourceQuota  *struct {
 			Spec struct {
 				Hard map[string]string `json:"hard"`
@@ -209,15 +208,12 @@ func resourceKubernetesNamespaceRead(ctx context.Context, d *schema.ResourceData
 		}
 	}
 
-	if ns.Annotations != nil {
-		if err := d.Set("annotations", ns.Annotations); err != nil {
-			return diag.FromErr(err)
-		}
-	} else {
-		if err := d.Set("annotations", map[string]string{}); err != nil {
-			return diag.FromErr(err)
-		}
-	}
+	// annotations intentionally not refreshed — the live namespace object includes
+	// system-managed annotations the user never authored (e.g.
+	// kubectl.kubernetes.io/last-applied-configuration, controller-injected keys).
+	// Writing the full server map back into state would produce a permanent diff
+	// against the user's config. The authored annotations stay the source of truth;
+	// after `terraform import`, set this field in config to match what's live.
 
 	// Map the K8s ResourceQuota spec.hard keys ("limits.cpu", "requests.memory", …) back
 	// to the friendlier schema keys (cpu_limit, memory_limit, cpu_request, memory_request).

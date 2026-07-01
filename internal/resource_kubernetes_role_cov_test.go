@@ -112,3 +112,20 @@ func TestKubernetesRoleParseID_Malformed(t *testing.T) {
 		t.Errorf("expected zero values on malformed ID, got (%d, %q, %q)", endpointID, namespace, name)
 	}
 }
+
+func TestKubernetesRoleRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/rbac.authorization.k8s.io/v1/namespaces/default/roles/gone",
+		RespondString(http.StatusNotFound, "application/json", "{\"message\":\"not found\"}"))
+
+	r := resourceKubernetesRoles()
+	d := r.TestResourceData()
+	d.SetId("1:default:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
+	}
+}

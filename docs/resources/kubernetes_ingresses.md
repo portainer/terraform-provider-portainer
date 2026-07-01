@@ -104,3 +104,5 @@ Kubernetes Ingress resources can be imported using the composite ID `environment
 ```shell
 terraform import portainer_kubernetes_ingresses.example 1:default:my-ingress
 ```
+
+After import, set `hosts`, `paths`, `tls`, `annotations`, `labels`, and `class_name` in config to match the live Ingress — Read only confirms it exists and restores identity fields, it does not reconstruct the routing spec.

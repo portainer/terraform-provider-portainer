@@ -66,3 +66,5 @@ Kubernetes namespaces can be imported using the composite ID `environmentID:name
 ```shell
 terraform import portainer_kubernetes_namespace.example 1:my-namespace
 ```
+
+After import, set `annotations` and `resource_quota` in config to match the live namespace — Read only restores `name`/`owner` (when set) reliably. The live namespace may include system-managed annotations that are never written back to state, so `annotations` in config stays the source of truth.

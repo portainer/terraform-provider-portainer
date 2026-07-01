@@ -160,16 +160,6 @@ func resourceKubernetesHelmRead(ctx context.Context, d *schema.ResourceData, met
 		return diag.FromErr(fmt.Errorf("failed to read helm release %s (%d): %s", release, resp.StatusCode, string(body)))
 	}
 
-	var helmRelease struct {
-		ChartReference struct {
-			ChartPath string `json:"chartPath"`
-			RepoURL   string `json:"repoURL"`
-		} `json:"chartReference"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&helmRelease); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode helm release response: %w", err))
-	}
-
 	if err := d.Set("environment_id", envID); err != nil {
 		return diag.FromErr(err)
 	}
@@ -179,19 +169,12 @@ func resourceKubernetesHelmRead(ctx context.Context, d *schema.ResourceData, met
 	if err := d.Set("name", release); err != nil {
 		return diag.FromErr(err)
 	}
-	if helmRelease.ChartReference.ChartPath != "" {
-		if err := d.Set("chart", helmRelease.ChartReference.ChartPath); err != nil {
-			return diag.FromErr(err)
-		}
-	}
-	if helmRelease.ChartReference.RepoURL != "" {
-		if err := d.Set("repo", helmRelease.ChartReference.RepoURL); err != nil {
-			return diag.FromErr(err)
-		}
-	}
-	// values not restored — the API returns server-merged computed values, not the
-	// original user-supplied YAML. Keep whatever is currently in state; users with
-	// custom values should add lifecycle { ignore_changes = [values] } after import.
+	// chart/repo/values intentionally not refreshed — the release detail API returns a
+	// server-normalised chartReference (chartPath/repoURL) that may not byte-match the
+	// user's authored config, and chart/repo are ForceNew: any mismatch would trigger a
+	// destroy+recreate instead of a benign diff. Read only confirms the release exists
+	// and restores identity fields. After `terraform import`, chart/repo/values must be
+	// set in config to match the live release or the next apply recreates it.
 	return nil
 }
 
