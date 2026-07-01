@@ -63,10 +63,14 @@ func TestKubernetesConfigMapsDelete_404IsSuccess(t *testing.T) {
 }
 
 func TestKubernetesConfigMapsRead_NoOp(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/api/v1/namespaces/ns/configmaps/keep",
+		RespondString(http.StatusOK, "application/json", "{}"))
+
 	r := resourceKubernetesConfigMaps()
 	d := r.TestResourceData()
 	d.SetId("1:ns:keep")
-	if err := rcRead(r, d, nil); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should be no-op, got %v", err)
 	}
 	if d.Id() != "1:ns:keep" {
@@ -95,5 +99,22 @@ func TestKubernetesConfigMapsCreate_MissingMetadataName(t *testing.T) {
 
 	if err := rcCreate(r, d, &APIClient{}); err == nil {
 		t.Fatal("expected error for missing metadata.name")
+	}
+}
+
+func TestKubernetesConfigMapsRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/api/v1/namespaces/ns/configmaps/gone",
+		RespondString(http.StatusNotFound, "application/json", "{\"message\":\"not found\"}"))
+
+	r := resourceKubernetesConfigMaps()
+	d := r.TestResourceData()
+	d.SetId("1:ns:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
 	}
 }

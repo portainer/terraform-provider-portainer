@@ -20,6 +20,10 @@ func resourceKubernetesCronJob() *schema.Resource {
 		UpdateContext: resourceKubernetesCronJobUpdate,
 		DeleteContext: resourceKubernetesCronJobDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -139,6 +143,28 @@ func resourceKubernetesCronJobUpdate(ctx context.Context, d *schema.ResourceData
 }
 
 func resourceKubernetesCronJobRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*APIClient)
+
+	endpointID, namespace, name := parseCronJobID(d.Id())
+	if endpointID == 0 || namespace == "" || name == "" {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'endpointID:namespace:name': %s", d.Id()))
+	}
+
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/batch/v1/namespaces/%s/cronjobs/%s", client.Endpoint, endpointID, namespace, name)
+	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "cronjob "+name); diags.HasError() {
+		return diags
+	}
+	if d.Id() == "" {
+		return nil
+	}
+
+	if err := d.Set("endpoint_id", endpointID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("namespace", namespace); err != nil {
+		return diag.FromErr(err)
+	}
+	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
 	return nil
 }
 

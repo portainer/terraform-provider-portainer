@@ -53,6 +53,8 @@ func TestKubernetesRoleCreate_MissingName(t *testing.T) {
 // TestKubernetesRoleReadNoop covers the no-op Read handler.
 func TestKubernetesRoleReadNoop(t *testing.T) {
 	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/rbac.authorization.k8s.io/v1/namespaces/default/roles/pod-reader",
+		RespondString(http.StatusOK, "application/json", "{}"))
 
 	r := resourceKubernetesRoles()
 	d := r.TestResourceData()
@@ -108,5 +110,22 @@ func TestKubernetesRoleParseID_Malformed(t *testing.T) {
 	endpointID, namespace, name := parseRolesID("1:onlytwo")
 	if endpointID != 0 || namespace != "" || name != "" {
 		t.Errorf("expected zero values on malformed ID, got (%d, %q, %q)", endpointID, namespace, name)
+	}
+}
+
+func TestKubernetesRoleRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/rbac.authorization.k8s.io/v1/namespaces/default/roles/gone",
+		RespondString(http.StatusNotFound, "application/json", "{\"message\":\"not found\"}"))
+
+	r := resourceKubernetesRoles()
+	d := r.TestResourceData()
+	d.SetId("1:default:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
 	}
 }

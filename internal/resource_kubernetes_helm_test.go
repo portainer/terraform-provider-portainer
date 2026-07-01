@@ -12,6 +12,12 @@ func TestKubernetesHelmCreate_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 
 	mock.On("POST", "/endpoints/3/kubernetes/helm", RespondJSON(http.StatusCreated, map[string]interface{}{}))
+	mock.On("GET", "/endpoints/3/kubernetes/helm/my-nginx", RespondJSON(http.StatusOK, map[string]interface{}{
+		"chartReference": map[string]interface{}{
+			"chartPath": "nginx",
+			"repoURL":   "https://charts.bitnami.com/bitnami",
+		},
+	}))
 
 	r := resourceKubernetesHelm()
 	d := r.TestResourceData()
@@ -108,6 +114,8 @@ func TestKubernetesHelmDelete_HappyPath(t *testing.T) {
 // TestKubernetesHelmRead_Noop verifies Read is a no-op.
 func TestKubernetesHelmRead_Noop(t *testing.T) {
 	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/3/kubernetes/helm/my-nginx",
+		RespondJSON(http.StatusOK, map[string]interface{}{"chartReference": map[string]interface{}{"chartPath": "nginx", "repoURL": "https://charts.bitnami.com/bitnami"}}))
 
 	r := resourceKubernetesHelm()
 	d := r.TestResourceData()
@@ -115,5 +123,22 @@ func TestKubernetesHelmRead_Noop(t *testing.T) {
 
 	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should be a no-op, got error: %v", err)
+	}
+}
+
+func TestKubernetesHelmRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/helm/gone",
+		RespondString(http.StatusNotFound, "application/json", "{\"message\":\"not found\"}"))
+
+	r := resourceKubernetesHelm()
+	d := r.TestResourceData()
+	d.SetId("1:default:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
 	}
 }

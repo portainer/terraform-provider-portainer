@@ -50,6 +50,8 @@ func TestKubernetesClusterRoleCreate_MissingName(t *testing.T) {
 // TestKubernetesClusterRoleReadNoop covers the no-op Read handler.
 func TestKubernetesClusterRoleReadNoop(t *testing.T) {
 	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/rbac.authorization.k8s.io/v1/clusterroles/cluster-reader",
+		RespondString(http.StatusOK, "application/json", "{}"))
 
 	r := resourceKubernetesClusterRoles()
 	d := r.TestResourceData()
@@ -133,5 +135,25 @@ func TestKubernetesClusterRoleParseID_ThreeParts(t *testing.T) {
 	endpointID, name := parseClusterRolesID("2:foo:bar")
 	if endpointID != 2 || name != "foo" {
 		t.Errorf("expected (2, foo), got (%d, %q)", endpointID, name)
+	}
+}
+
+// TestKubernetesClusterRoleRead_404ClearsID verifies out-of-band deletion is
+// detected: a 404 from the live cluster clears the resource ID so the next
+// plan recreates it.
+func TestKubernetesClusterRoleRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/rbac.authorization.k8s.io/v1/clusterroles/gone",
+		RespondString(http.StatusNotFound, "application/json", `{"message":"not found"}`))
+
+	r := resourceKubernetesClusterRoles()
+	d := r.TestResourceData()
+	d.SetId("1:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
 	}
 }

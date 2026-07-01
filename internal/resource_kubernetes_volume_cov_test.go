@@ -169,6 +169,8 @@ func TestKubernetesVolumesCreate_HTTPError(t *testing.T) {
 // TestKubernetesVolumesRead_NoOp verifies Read is a no-op (returns nil).
 func TestKubernetesVolumesRead_NoOp(t *testing.T) {
 	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/api/v1/namespaces/default/persistentvolumeclaims/my-pvc",
+		RespondString(http.StatusOK, "application/json", "{}"))
 
 	r := resourceKubernetesVolumes()
 	d := r.TestResourceData()
@@ -231,5 +233,22 @@ func TestKubernetesVolumesDelete_HTTPError(t *testing.T) {
 
 	if err := rcDelete(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
+	}
+}
+
+func TestKubernetesVolumesRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/api/v1/namespaces/default/persistentvolumeclaims/gone",
+		RespondString(http.StatusNotFound, "application/json", "{\"message\":\"not found\"}"))
+
+	r := resourceKubernetesVolumes()
+	d := r.TestResourceData()
+	d.SetId("1:default:persistent-volume-claim:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
 	}
 }

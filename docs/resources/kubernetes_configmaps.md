@@ -45,3 +45,13 @@ terraform destroy
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | 	ID in the format endpoint_id:namespace:configmaps:name    |
+
+## Import
+
+Kubernetes ConfigMap resources can be imported using the composite ID `endpointID:namespace:name`:
+
+```shell
+terraform import portainer_kubernetes_configmaps.example 1:default:my-configmap
+```
+
+After import, set the `manifest` field in config to match the live object — Read only confirms the resource exists and restores identity fields, it does not reconstruct the manifest. If `manifest` is left blank after import, the next `terraform apply` will treat it as a change and may recreate the resource.

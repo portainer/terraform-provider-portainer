@@ -63,10 +63,14 @@ func TestKubernetesJobDelete_404IsSuccess(t *testing.T) {
 }
 
 func TestKubernetesJobRead_NoOp(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/batch/v1/namespaces/ns/jobs/keep",
+		RespondString(http.StatusOK, "application/json", "{}"))
+
 	r := resourceKubernetesJob()
 	d := r.TestResourceData()
 	d.SetId("1:ns:keep")
-	if err := rcRead(r, d, nil); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read should be no-op, got %v", err)
 	}
 	if d.Id() != "1:ns:keep" {
@@ -102,5 +106,22 @@ func TestKubernetesJobParseID_Malformed(t *testing.T) {
 	endpointID, namespace, name := parseJobID("bad")
 	if endpointID != 0 || namespace != "" || name != "" {
 		t.Errorf("expected zero values, got (%d, %q, %q)", endpointID, namespace, name)
+	}
+}
+
+func TestKubernetesJobRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/batch/v1/namespaces/ns/jobs/gone",
+		RespondString(http.StatusNotFound, "application/json", "{\"message\":\"not found\"}"))
+
+	r := resourceKubernetesJob()
+	d := r.TestResourceData()
+	d.SetId("1:ns:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
 	}
 }

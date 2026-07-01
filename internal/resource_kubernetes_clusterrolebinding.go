@@ -20,6 +20,10 @@ func resourceKubernetesClusterRoleBindings() *schema.Resource {
 		UpdateContext: resourceKubernetesClusterRoleBindingsUpdate,
 		DeleteContext: resourceKubernetesClusterRoleBindingsDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -133,6 +137,25 @@ func resourceKubernetesClusterRoleBindingsUpdate(ctx context.Context, d *schema.
 }
 
 func resourceKubernetesClusterRoleBindingsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*APIClient)
+
+	endpointID, name := parseClusterRolesBindingsID(d.Id())
+	if endpointID == 0 || name == "" {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'endpointID:name': %s", d.Id()))
+	}
+
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/rbac.authorization.k8s.io/v1/clusterrolebindings/%s", client.Endpoint, endpointID, name)
+	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "clusterrolebinding "+name); diags.HasError() {
+		return diags
+	}
+	if d.Id() == "" {
+		return nil
+	}
+
+	if err := d.Set("endpoint_id", endpointID); err != nil {
+		return diag.FromErr(err)
+	}
+	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
 	return nil
 }
 

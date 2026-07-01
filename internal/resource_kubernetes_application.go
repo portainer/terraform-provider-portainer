@@ -21,6 +21,10 @@ func resourceKubernetesApplication() *schema.Resource {
 		UpdateContext: resourceKubernetesApplicationUpdate,
 		DeleteContext: resourceKubernetesApplicationDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(10 * time.Minute),
 			Update: schema.DefaultTimeout(10 * time.Minute),
@@ -154,6 +158,28 @@ func resourceKubernetesApplicationUpdate(ctx context.Context, d *schema.Resource
 }
 
 func resourceKubernetesApplicationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*APIClient)
+
+	endpointID, namespace, name := parseApllicationsID(d.Id())
+	if endpointID == 0 || namespace == "" || name == "" {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'endpointID:namespace:name': %s", d.Id()))
+	}
+
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/apps/v1/namespaces/%s/deployments/%s", client.Endpoint, endpointID, namespace, name)
+	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "deployment "+name); diags.HasError() {
+		return diags
+	}
+	if d.Id() == "" {
+		return nil
+	}
+
+	if err := d.Set("endpoint_id", endpointID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("namespace", namespace); err != nil {
+		return diag.FromErr(err)
+	}
+	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
 	return nil
 }
 

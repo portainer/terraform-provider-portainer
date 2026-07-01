@@ -66,3 +66,13 @@ resource "portainer_kubernetes_helm" "example" {
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | Unique identifier for the Helm release    |
+
+## Import
+
+Kubernetes Helm releases can be imported using the composite ID `environmentID:namespace:releaseName`:
+
+```shell
+terraform import portainer_kubernetes_helm.example 1:default:my-release
+```
+
+After import, set `chart`, `repo`, and `values` in config to match the live release — Read only confirms the release exists and restores identity fields. The chart/repo fields are `ForceNew`, so leaving them blank after import will trigger a destroy+recreate on the next apply, not a benign diff.

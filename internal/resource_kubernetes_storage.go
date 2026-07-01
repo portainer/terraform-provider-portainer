@@ -20,6 +20,10 @@ func resourceKubernetesStorage() *schema.Resource {
 		UpdateContext: resourceKubernetesStorageUpdate,
 		DeleteContext: resourceKubernetesStorageDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -133,6 +137,25 @@ func resourceKubernetesStorageUpdate(ctx context.Context, d *schema.ResourceData
 }
 
 func resourceKubernetesStorageRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*APIClient)
+
+	endpointID, name := parseStorageID(d.Id())
+	if endpointID == 0 || name == "" {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'endpointID:name': %s", d.Id()))
+	}
+
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/storage.k8s.io/v1/storageclasses/%s", client.Endpoint, endpointID, name)
+	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "storageclass "+name); diags.HasError() {
+		return diags
+	}
+	if d.Id() == "" {
+		return nil
+	}
+
+	if err := d.Set("endpoint_id", endpointID); err != nil {
+		return diag.FromErr(err)
+	}
+	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
 	return nil
 }
 

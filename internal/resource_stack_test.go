@@ -479,6 +479,83 @@ func TestStackCreate_KubernetesString_HappyPath(t *testing.T) {
 	}
 }
 
+func TestStackCreate_KubernetesString_IDRecoveredByName(t *testing.T) {
+	mock := NewMockServer(t)
+
+	stacksCalls := 0
+	mock.On("GET", "/stacks", func(w http.ResponseWriter, _ *http.Request) {
+		stacksCalls++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if stacksCalls == 1 {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		_, _ = w.Write([]byte(`[{"Id":13,"Name":"terraform-new-secrets","EndpointId":1}]`))
+	})
+
+	// Create body deliberately omits "Id" (mirrors the affected Portainer response).
+	mock.On("POST", "/stacks/create/kubernetes/string", RespondString(
+		http.StatusOK, "application/json", `{"Name":"terraform-new-secrets"}`,
+	))
+	mock.On("PUT", "/stacks/13", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 13}))
+	mock.On("GET", "/stacks/13", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 13, "Name": "terraform-new-secrets", "Status": 1, "Type": 3, "EndpointId": 1, "namespace": "default",
+	}))
+	mock.On("GET", "/stacks/13/file", RespondJSON(http.StatusOK, map[string]interface{}{
+		"StackFileContent": "apiVersion: v1",
+	}))
+
+	r := resourcePortainerStack()
+	d := r.TestResourceData()
+	_ = d.Set("deployment_type", "kubernetes")
+	_ = d.Set("method", "string")
+	_ = d.Set("name", "terraform-new-secrets")
+	_ = d.Set("endpoint_id", 1)
+	_ = d.Set("namespace", "default")
+	_ = d.Set("stack_file_content", "apiVersion: v1")
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	if d.Id() != "13" {
+		t.Errorf("expected recovered ID %q, got %q", "13", d.Id())
+	}
+	// The finalize PUT must have targeted the recovered ID, not /stacks/0.
+	if mock.FindRequest("PUT", "/stacks/13") == nil {
+		t.Error("expected finalize PUT to target recovered /stacks/13")
+	}
+	if mock.FindRequest("PUT", "/stacks/0") != nil {
+		t.Error("finalize PUT must not target /stacks/0")
+	}
+}
+
+func TestStackCreate_KubernetesString_IDUnrecoverable(t *testing.T) {
+	mock := NewMockServer(t)
+	mockEmptyStackList(mock) // always empty → recovery lookup also finds nothing
+
+	mock.On("POST", "/stacks/create/kubernetes/string", RespondString(
+		http.StatusOK, "application/json", `{"Name":"ghost"}`,
+	))
+
+	r := resourcePortainerStack()
+	d := r.TestResourceData()
+	_ = d.Set("deployment_type", "kubernetes")
+	_ = d.Set("method", "string")
+	_ = d.Set("name", "ghost")
+	_ = d.Set("endpoint_id", 1)
+	_ = d.Set("namespace", "default")
+	_ = d.Set("stack_file_content", "apiVersion: v1")
+
+	err := rcCreate(r, d, mock.Client())
+	if err == nil {
+		t.Fatal("expected error when created stack ID cannot be resolved, got nil")
+	}
+	if !strings.Contains(err.Error(), "could not be found by name") {
+		t.Errorf("expected a resolve-by-name error, got: %v", err)
+	}
+}
+
 // TestStackCreate_HTTPError ensures a non-200 from the create endpoint
 // propagates as an error and leaves the resource ID empty.
 func TestStackCreate_HTTPError(t *testing.T) {

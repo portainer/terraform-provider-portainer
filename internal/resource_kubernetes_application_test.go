@@ -135,3 +135,20 @@ func TestKubernetesApplicationRead_Noop(t *testing.T) {
 		t.Fatalf("Read should be a no-op, got error: %v", err)
 	}
 }
+
+func TestKubernetesApplicationRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/apps/v1/namespaces/default/deployments/gone",
+		RespondString(http.StatusNotFound, "application/json", "{\"message\":\"not found\"}"))
+
+	r := resourceKubernetesApplication()
+	d := r.TestResourceData()
+	d.SetId("1:default:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
+	}
+}

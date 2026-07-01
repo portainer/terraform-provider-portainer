@@ -445,6 +445,17 @@ func resourcePortainerStackCreate(ctx context.Context, d *schema.ResourceData, m
 		return diag.FromErr(err)
 	}
 
+	if id := d.Id(); id == "" || id == "0" {
+		resolvedID, lookupErr := findExistingStackByName(ctx, client, name, endpointID)
+		if lookupErr != nil {
+			return diag.FromErr(fmt.Errorf("stack %q was created but its ID could not be resolved by name on endpoint %d: %w", name, endpointID, lookupErr))
+		}
+		if resolvedID == 0 {
+			return diag.FromErr(fmt.Errorf("stack %q was created but could not be found by name on endpoint %d to resolve its ID", name, endpointID))
+		}
+		d.SetId(strconv.Itoa(resolvedID))
+	}
+
 	if method != "repository" {
 		var webhookToken string
 		if d.Get("stack_webhook").(bool) {

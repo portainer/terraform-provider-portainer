@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"net/http"
 	"testing"
 )
 
@@ -8,6 +9,8 @@ import (
 // (returns nil and touches no endpoint).
 func TestKubernetesNamespaceSystemCov2_Read_NoOp(t *testing.T) {
 	mock := NewMockServer(t)
+	mock.On("GET", "/kubernetes/1/namespaces/kube-system",
+		RespondJSON(http.StatusOK, map[string]interface{}{"IsSystem": false}))
 
 	r := resourceKubernetesNamespaceSystem()
 	d := r.TestResourceData()

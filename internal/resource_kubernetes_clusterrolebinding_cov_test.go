@@ -53,6 +53,8 @@ func TestKubernetesClusterRoleBindingCreate_HTTPError(t *testing.T) {
 // TestKubernetesClusterRoleBindingReadNoop covers the no-op Read handler.
 func TestKubernetesClusterRoleBindingReadNoop(t *testing.T) {
 	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/rbac.authorization.k8s.io/v1/clusterrolebindings/global-admin",
+		RespondString(http.StatusOK, "application/json", "{}"))
 
 	r := resourceKubernetesClusterRoleBindings()
 	d := r.TestResourceData()
@@ -107,5 +109,25 @@ func TestKubernetesClusterRoleBindingParseID_Malformed(t *testing.T) {
 	endpointID, name := parseClusterRolesBindingsID("noseparator")
 	if endpointID != 0 || name != "" {
 		t.Errorf("expected zero values on malformed ID, got (%d, %q)", endpointID, name)
+	}
+}
+
+// TestKubernetesClusterRoleBindingRead_404ClearsID verifies out-of-band
+// deletion is detected: a 404 from the live cluster clears the resource ID
+// so the next plan recreates it.
+func TestKubernetesClusterRoleBindingRead_404ClearsID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/kubernetes/apis/rbac.authorization.k8s.io/v1/clusterrolebindings/gone",
+		RespondString(http.StatusNotFound, "application/json", `{"message":"not found"}`))
+
+	r := resourceKubernetesClusterRoleBindings()
+	d := r.TestResourceData()
+	d.SetId("1:gone")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read on 404 should not error, got %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected ID cleared on 404, got %q", d.Id())
 	}
 }

@@ -74,3 +74,13 @@ terraform destroy
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | 	ID in the format endpoint_id:namespace:volumee:name    |
+
+## Import
+
+Kubernetes volume resources can be imported using the composite ID `endpointID:namespace:type:name` (namespace is empty for cluster-scoped types like `persistent-volume`):
+
+```shell
+terraform import portainer_kubernetes_volume.example 1:default:persistent-volume-claim:my-pvc
+```
+
+After import, set the `manifest` field in config to match the live object — Read only confirms the volume exists and restores `endpoint_id`/`namespace`/`type`, it does not reconstruct the manifest from the live resource.
