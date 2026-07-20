@@ -259,7 +259,12 @@ func resourcePortainerStack() *schema.Resource {
 			"repository_git_credential_id": {
 				Type:        schema.TypeInt,
 				Optional:    true,
-				Description: "ID of the Git credentials to use for authentication.",
+				Description: "ID of the shared Git credentials to use for authentication (Portainer < 2.43). Replaced by 'source_id' in Portainer 2.43 STS, which switched to the Sources model; on 2.43+ this field is ignored. Both are sent, so a single configuration stays compatible with old and new Portainer.",
+			},
+			"source_id": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "ID of a Portainer Source (Git source) providing the repository URL and credentials. Introduced in Portainer 2.43 STS, which replaced 'repository_git_credential_id'. When set (non-zero), Portainer resolves the repository URL/credentials from the referenced Source and ignores the inline repository_username/repository_password and repository_git_credential_id fields.",
 			},
 			"resource_control_id": {
 				Type:        schema.TypeInt,
@@ -556,6 +561,7 @@ func resourcePortainerStackRead(ctx context.Context, d *schema.ResourceData, met
 		Name                string `json:"Name"`
 		Status              int    `json:"Status"`
 		Type                int    `json:"Type"`
+		SourceID            int    `json:"SourceID"`
 		SwarmID             string `json:"SwarmId"`
 		Namespace           string `json:"namespace"`
 		ComposeFmt          bool   `json:"composeFormat"`
@@ -689,6 +695,9 @@ func resourcePortainerStackRead(ctx context.Context, d *schema.ResourceData, met
 	_ = d.Set("method", method)
 	_ = d.Set("endpoint_id", stack.EndpointID)
 	_ = d.Set("support_relative_path", stack.SupportRelativePath)
+	if stack.SourceID != 0 {
+		_ = d.Set("source_id", stack.SourceID)
+	}
 	if method == "repository" && stack.GitConfig != nil {
 		_ = d.Set("tlsskip_verify", stack.GitConfig.TLSSkipVerify)
 		_ = d.Set("repository_git_credential_id", stack.GitConfig.Authentication.GitCredentialID)
@@ -875,6 +884,7 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 			"repositoryPassword":        d.Get("repository_password").(string),
 			"repositoryReferenceName":   d.Get("repository_reference_name").(string),
 			"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
+			"sourceID":                  d.Get("source_id").(int),
 			"tlsskipVerify":             d.Get("tlsskip_verify").(bool),
 			"additionalFiles":           expandStringList(d.Get("additional_files").([]interface{})),
 			"registries":                expandIntList(d.Get("registries").([]interface{})),
@@ -954,6 +964,7 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 			"repositoryPassword":        d.Get("repository_password").(string),
 			"repositoryReferenceName":   d.Get("repository_reference_name").(string),
 			"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
+			"sourceID":                  d.Get("source_id").(int),
 			"stackName":                 d.Get("name").(string),
 			"additionalFiles":           expandStringList(d.Get("additional_files").([]interface{})),
 			"registries":                expandIntList(d.Get("registries").([]interface{})),
@@ -1177,6 +1188,7 @@ func createStackStandaloneRepo(ctx context.Context, d *schema.ResourceData, clie
 		"repositoryReferenceName":   d.Get("repository_reference_name").(string),
 		"repositoryAuthentication":  d.Get("git_repository_authentication").(bool),
 		"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
+		"sourceID":                  d.Get("source_id").(int),
 		"supportRelativePath":       d.Get("support_relative_path").(bool),
 		"env":                       flattenEnvList(d.Get("env").([]interface{})),
 		"fromAppTemplate":           false,
@@ -1324,6 +1336,7 @@ func createStackSwarmRepo(ctx context.Context, d *schema.ResourceData, client *A
 		"repositoryReferenceName":   d.Get("repository_reference_name").(string),
 		"repositoryAuthentication":  d.Get("git_repository_authentication").(bool),
 		"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
+		"sourceID":                  d.Get("source_id").(int),
 		"supportRelativePath":       d.Get("support_relative_path").(bool),
 		"env":                       flattenEnvList(d.Get("env").([]interface{})),
 		"fromAppTemplate":           false,
@@ -1489,6 +1502,7 @@ func createStackK8sRepo(ctx context.Context, d *schema.ResourceData, client *API
 		"repositoryReferenceName":   d.Get("repository_reference_name").(string),
 		"repositoryAuthentication":  d.Get("git_repository_authentication").(bool),
 		"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
+		"sourceID":                  d.Get("source_id").(int),
 		"tlsskipVerify":             d.Get("tlsskip_verify").(bool),
 		"fromAppTemplate":           false,
 		"additionalFiles":           expandStringList(d.Get("additional_files").([]interface{})),

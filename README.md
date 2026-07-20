@@ -115,6 +115,16 @@ $ export PORTAINER_PASSWORD="your-password"
 $ export PORTAINER_SKIP_SSL_VERIFY=true
 ```
 
+### HTTP Proxy Support
+The provider honors the standard `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` environment variables (same behavior as Go's `http.DefaultTransport`). This lets you reach a Portainer endpoint that is only accessible through an HTTP(S) proxy – no provider configuration is required.
+
+```hcl
+$ export HTTPS_PROXY="http://proxy.example.com:8080"
+$ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
+```
+
+> These variables are a no-op when unset, so existing setups are unaffected. Lowercase variants (`http_proxy`, `https_proxy`, `no_proxy`) are also recognized.
+
 ## Arguments Reference
 | Name              | Type    | Required | Description                                                                                         |
 | ----------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------|
