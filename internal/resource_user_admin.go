@@ -65,7 +65,9 @@ func resourceUserAdminCreate(ctx context.Context, d *schema.ResourceData, meta i
 			if d.Id() == "" {
 				d.SetId("portainer-admin")
 			}
-			_ = d.Set("initialized", true)
+			if err := d.Set("initialized", true); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 		return diag.FromErr(fmt.Errorf("failed to initialize admin user: %w", decorateSDKError(err, errBody)))
@@ -77,7 +79,9 @@ func resourceUserAdminCreate(ctx context.Context, d *schema.ResourceData, meta i
 		d.SetId("portainer-admin")
 	}
 
-	_ = d.Set("initialized", true)
+	if err := d.Set("initialized", true); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }

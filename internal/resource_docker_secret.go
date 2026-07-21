@@ -211,7 +211,9 @@ func resourceDockerSecretCreate(ctx context.Context, d *schema.ResourceData, met
 
 	// ID resource controlu
 	if response.Portainer.ResourceControl.Id != 0 {
-		_ = d.Set("resource_control_id", response.Portainer.ResourceControl.Id)
+		if err := d.Set("resource_control_id", response.Portainer.ResourceControl.Id); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil
@@ -299,7 +301,9 @@ func resourceDockerSecretRead(ctx context.Context, d *schema.ResourceData, meta 
 	}
 
 	if result.Portainer.ResourceControl.Id != 0 {
-		_ = d.Set("resource_control_id", result.Portainer.ResourceControl.Id)
+		if err := d.Set("resource_control_id", result.Portainer.ResourceControl.Id); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil

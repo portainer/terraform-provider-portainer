@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -31,7 +32,9 @@ func resourceDockerNetwork() *schema.Resource {
 				if err != nil {
 					return nil, fmt.Errorf("invalid endpoint ID: %w", err)
 				}
-				_ = d.Set("endpoint_id", endpointID)
+				if err := d.Set("endpoint_id", endpointID); err != nil {
+					return nil, err
+				}
 				d.SetId(parts[1])
 				return []*schema.ResourceData{d}, nil
 			},
@@ -219,7 +222,12 @@ func resourceDockerNetworkCreate(ctx context.Context, d *schema.ResourceData, me
 	d.SetId(response.ID)
 
 	if response.Portainer.ResourceControl.Id != 0 {
-		_ = d.Set("resource_control_id", response.Portainer.ResourceControl.Id)
+		fields := map[string]interface{}{
+			"resource_control_id": response.Portainer.ResourceControl.Id,
+		}
+		if err := setFields(d, fields); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil
@@ -351,17 +359,18 @@ func resourceDockerNetworkRead(ctx context.Context, d *schema.ResourceData, meta
 		driver = d.Get("driver").(string)
 		scope = d.Get("scope").(string)
 	}
-	_ = d.Set("driver", driver)
-	_ = d.Set("scope", scope)
-
-	// name a config_only
-	_ = d.Set("name", result.Name)
-	_ = d.Set("config_only", configOnly)
+	fields := map[string]interface{}{
+		"driver": driver,
+		"scope":  scope,
+		// name a config_only
+		"name":        result.Name,
+		"config_only": configOnly,
+	}
 
 	if !configOnly {
-		_ = d.Set("internal", result.Internal)
-		_ = d.Set("attachable", result.Attachable)
-		_ = d.Set("ingress", result.Ingress)
+		fields["internal"] = result.Internal
+		fields["attachable"] = result.Attachable
+		fields["ingress"] = result.Ingress
 		enableIPv4 := result.EnableIPv4
 		enableIPv6 := result.EnableIPv6
 		if !enableIPv4 && !enableIPv6 {
@@ -372,57 +381,68 @@ func resourceDockerNetworkRead(ctx context.Context, d *schema.ResourceData, meta
 				enableIPv6 = true
 			}
 		}
-		_ = d.Set("enable_ipv4", enableIPv4)
-		_ = d.Set("enable_ipv6", enableIPv6)
+		fields["enable_ipv4"] = enableIPv4
+		fields["enable_ipv6"] = enableIPv6
 	} else {
-		_ = d.Set("internal", d.Get("internal").(bool))
-		_ = d.Set("attachable", d.Get("attachable").(bool))
-		_ = d.Set("ingress", d.Get("ingress").(bool))
-		_ = d.Set("enable_ipv4", d.Get("enable_ipv4").(bool))
-		_ = d.Set("enable_ipv6", d.Get("enable_ipv6").(bool))
+		fields["internal"] = d.Get("internal").(bool)
+		fields["attachable"] = d.Get("attachable").(bool)
+		fields["ingress"] = d.Get("ingress").(bool)
+		fields["enable_ipv4"] = d.Get("enable_ipv4").(bool)
+		fields["enable_ipv6"] = d.Get("enable_ipv6").(bool)
 	}
 
 	// options
 	if len(result.Options) == 0 {
 		if v, ok := d.GetOk("options"); ok {
-			_ = d.Set("options", v)
+			fields["options"] = v
 		}
 	} else {
-		_ = d.Set("options", result.Options)
+		fields["options"] = result.Options
 	}
 
 	// labels
 	if len(result.Labels) == 0 {
 		if v, ok := d.GetOk("labels"); ok {
-			_ = d.Set("labels", v)
+			fields["labels"] = v
 		}
 	} else {
 		labels := make(map[string]interface{}, len(result.Labels))
 		for k, v := range result.Labels {
 			labels[k] = v
 		}
-		_ = d.Set("labels", labels)
+		fields["labels"] = labels
 	}
 
 	// IPAM
-	_ = d.Set("ipam_driver", result.IPAM.Driver)
+	fields["ipam_driver"] = result.IPAM.Driver
 
 	if len(result.IPAM.Options) == 0 {
 		if v, ok := d.GetOk("ipam_options"); ok {
-			_ = d.Set("ipam_options", v)
+			fields["ipam_options"] = v
 		}
 	} else {
 		ipamOpts := make(map[string]interface{}, len(result.IPAM.Options))
 		for k, v := range result.IPAM.Options {
 			ipamOpts[k] = v
 		}
-		_ = d.Set("ipam_options", ipamOpts)
+		fields["ipam_options"] = ipamOpts
 	}
 
-	_ = d.Set("ipam_config", result.IPAM.Config)
-
 	if result.Portainer.ResourceControl.Id != 0 {
-		_ = d.Set("resource_control_id", result.Portainer.ResourceControl.Id)
+		fields["resource_control_id"] = result.Portainer.ResourceControl.Id
+	}
+
+	if err := setFields(d, fields); err != nil {
+		return diag.FromErr(err)
+	}
+
+	// ipam_config: the Docker API returns Docker-style keys (Subnet/Gateway/IPRange)
+	// that don't match this resource's schema keys (subnet/gateway/ip_range), so this
+	// Set has always failed and ipam_config is not refreshed from the API. Keep it
+	// best-effort (log, don't fail) to preserve prior behavior — fixing the mapping
+	// would change state for existing users and belongs in a separate change.
+	if err := d.Set("ipam_config", result.IPAM.Config); err != nil {
+		log.Printf("[WARN] docker_network %s: skipping ipam_config refresh (schema mismatch): %v", d.Id(), err)
 	}
 
 	return nil

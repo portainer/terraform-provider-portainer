@@ -72,12 +72,8 @@ func resourceKubernetesClusterRoleBindingsCreate(ctx context.Context, d *schema.
 		return diag.FromErr(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 
 	resp, err := client.HTTPClient.Do(req)
@@ -106,12 +102,8 @@ func resourceKubernetesClusterRoleBindingsDelete(ctx context.Context, d *schema.
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 
 	resp, err := client.HTTPClient.Do(req)

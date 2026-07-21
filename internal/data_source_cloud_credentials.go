@@ -58,7 +58,9 @@ func dataSourceCloudCredentialsRead(ctx context.Context, d *schema.ResourceData,
 	for _, c := range credentials {
 		if c.Name == name {
 			d.SetId(strconv.Itoa(c.ID))
-			_ = d.Set("cloud_provider", c.Provider)
+			if err := d.Set("cloud_provider", c.Provider); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 	}

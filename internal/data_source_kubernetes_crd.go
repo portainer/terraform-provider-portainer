@@ -119,7 +119,9 @@ func dataSourceKubernetesCRDRead(ctx context.Context, d *schema.ResourceData, me
 				"release_version":   crd.ReleaseVersion,
 			},
 		}
-		_ = d.Set("crds", crds)
+		if err := d.Set("crds", crds); err != nil {
+			return diag.FromErr(err)
+		}
 		d.SetId(fmt.Sprintf("%d/%s", envID, crd.Name))
 	} else {
 		// List all CRDs
@@ -159,7 +161,9 @@ func dataSourceKubernetesCRDRead(ctx context.Context, d *schema.ResourceData, me
 				"release_version":   crd.ReleaseVersion,
 			}
 		}
-		_ = d.Set("crds", crds)
+		if err := d.Set("crds", crds); err != nil {
+			return diag.FromErr(err)
+		}
 		d.SetId(strconv.FormatInt(time.Now().Unix(), 10) + "/" + strconv.Itoa(envID))
 	}
 

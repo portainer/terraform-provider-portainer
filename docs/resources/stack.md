@@ -155,9 +155,18 @@ resource "portainer_stack" "repo_with_creds" {
   file_path_in_repository   = "docker-compose.yml"
 
   # Reference existing Git credentials by ID instead of providing username/password
+  # Portainer < 2.43: shared Git credential ID
   repository_git_credential_id = 5
+
+  # Portainer 2.43 STS+: the credentials model was replaced by "Sources".
+  # Reference an existing Source instead; on 2.43+ repository_git_credential_id is ignored.
+  # source_id = 3
 }
 ```
+
+**Portainer 2.43+ STS compatibility**
+- In 2.43 the shared Git credentials were replaced by the **Sources** model, and the stack API dropped `repositoryGitCredentialID` in favor of `SourceID`.
+- The provider sends both fields, so a single configuration works against old and new Portainer: set `repository_git_credential_id` for Portainer < 2.43 and `source_id` for 2.43+. On 2.43+, if you keep only `repository_git_credential_id` together with `git_repository_authentication = true` and no password, Portainer rejects the deploy with *"Password must be specified when authentication is enabled"* — set `source_id` (or fall back to inline `repository_username`/`repository_password`) instead.
 
 ### Deploy Swarm Stack from String
 ```hcl
@@ -454,7 +463,8 @@ terraform apply
 | `support_relative_path`             | bool   | 🚫 optional | Enable resolving of relative paths (default: `false`)                                                   |
 | `filesystem_path`                   | string | 🚫 optional | Base path on disk to resolve relative paths from                                                        |
 | `additional_files`                  | string | 🚫 optional | List of additional Compose/YAML file paths                                                              |
-| `repository_git_credential_id`      | int    | 🚫 optional | ID of the Git credentials to use (replaces username/password)                                           |
+| `repository_git_credential_id`      | int    | 🚫 optional | ID of the shared Git credentials to use (Portainer < 2.43). Replaced by `source_id` on 2.43+, where it is ignored. |
+| `source_id`                         | int    | 🚫 optional | ID of a Portainer Source (Git source) providing the repository URL/credentials. Portainer 2.43 STS+ replacement for `repository_git_credential_id`. When set, inline `repository_username`/`repository_password` and `repository_git_credential_id` are ignored. |
 
 #### Extra for `swarm`
 | Name       | Type   | Required    | Description                  |
@@ -493,6 +503,8 @@ terraform apply
 | `additional_files`                  | string | 🚫 optional | List of additional YAML/manifest file paths                                                             |
 | `helm_chart_path`                   | string | 🚫 optional | Path to a Helm chart folder in the Git repository (must contain `Chart.yaml`). When set, `file_path_in_repository` is not required. |
 | `additional_helm_values_files`      | list(string) | 🚫 optional | List of additional Helm values files (e.g. `values-prod.yaml`). Only used with `helm_chart_path`. |
+| `repository_git_credential_id`      | int    | 🚫 optional | ID of the shared Git credentials to use (Portainer < 2.43). Replaced by `source_id` on 2.43+, where it is ignored. |
+| `source_id`                         | int    | 🚫 optional | ID of a Portainer Source (Git source) providing the repository URL/credentials. Portainer 2.43 STS+ replacement for `repository_git_credential_id`. When set, inline `repository_username`/`repository_password` and `repository_git_credential_id` are ignored. |
 
 #### Method: `url`
 | Name             | Type   | Required    | Description                |

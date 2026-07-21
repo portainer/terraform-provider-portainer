@@ -35,7 +35,9 @@ func resourcePortainerUserGitCredential() *schema.Resource {
 				if err != nil {
 					return nil, fmt.Errorf("invalid credential ID: %w", err)
 				}
-				_ = d.Set("user_id", userID)
+				if err := d.Set("user_id", userID); err != nil {
+					return nil, err
+				}
 				d.SetId(fmt.Sprintf("%d:%d", userID, credentialID))
 				return []*schema.ResourceData{d}, nil
 			},
@@ -114,7 +116,9 @@ func resourcePortainerUserGitCredentialCreate(ctx context.Context, d *schema.Res
 
 	credentialID := result.GitCredential.ID
 	d.SetId(fmt.Sprintf("%d:%d", userID, credentialID))
-	_ = d.Set("credential_id", credentialID)
+	if err := d.Set("credential_id", credentialID); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return resourcePortainerUserGitCredentialRead(ctx, d, meta)
 }
@@ -155,11 +159,15 @@ func resourcePortainerUserGitCredentialRead(ctx context.Context, d *schema.Resou
 		return diag.FromErr(fmt.Errorf("failed to decode user git credential response: %w", err))
 	}
 
-	_ = d.Set("user_id", userID)
-	_ = d.Set("credential_id", credentialID)
-	_ = d.Set("name", result.Name)
-	_ = d.Set("username", result.Username)
-	_ = d.Set("authorization_type", result.AuthorizationType)
+	if err := setFields(d, map[string]interface{}{
+		"user_id":            userID,
+		"credential_id":      credentialID,
+		"name":               result.Name,
+		"username":           result.Username,
+		"authorization_type": result.AuthorizationType,
+	}); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }

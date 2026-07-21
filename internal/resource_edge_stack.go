@@ -216,12 +216,8 @@ func findExistingEdgeStackByName(ctx context.Context, client *APIClient, name st
 	if err != nil {
 		return 0, err
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return 0, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	if err := setAuthHeader(req, client); err != nil {
+		return 0, err
 	}
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
@@ -324,12 +320,8 @@ func resourceEdgeStackCreate(ctx context.Context, d *schema.ResourceData, meta i
 			endpoint += "?dryrun=true"
 		}
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
-		if client.APIKey != "" {
-			req.Header.Set("X-API-Key", client.APIKey)
-		} else if client.JWTToken != "" {
-			req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-		} else {
-			return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+		if err := setAuthHeader(req, client); err != nil {
+			return diag.FromErr(err)
 		}
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 
@@ -570,12 +562,8 @@ func createEdgeStackFromJSON(ctx context.Context, client *APIClient, d *schema.R
 	if err != nil {
 		return err
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	if err := setAuthHeader(req, client); err != nil {
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -610,12 +598,8 @@ func resourceEdgeStackRead(ctx context.Context, d *schema.ResourceData, meta int
 	client := meta.(*APIClient)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil)
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 
 	resp, err := client.HTTPClient.Do(req)
@@ -816,12 +800,8 @@ func resourceEdgeStackDelete(ctx context.Context, d *schema.ResourceData, meta i
 	client := meta.(*APIClient)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil)
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 
 	resp, err := client.HTTPClient.Do(req)

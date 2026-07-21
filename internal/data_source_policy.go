@@ -126,20 +126,21 @@ func readPolicyByID(d *schema.ResourceData, client *APIClient, policyID int) err
 
 	d.SetId(idStr)
 
+	fields := map[string]interface{}{}
 	if v, ok := policy["Name"]; ok {
-		_ = d.Set("name", v)
+		fields["name"] = v
 	}
 	if v, ok := policy["EnvironmentType"]; ok {
-		_ = d.Set("environment_type", v)
+		fields["environment_type"] = v
 	}
 	if v, ok := policy["Type"]; ok {
-		_ = d.Set("policy_type", v)
+		fields["policy_type"] = v
 	}
 	if v, ok := policy["CreatedAt"]; ok {
-		_ = d.Set("created_at", v)
+		fields["created_at"] = v
 	}
 	if v, ok := policy["UpdatedAt"]; ok {
-		_ = d.Set("updated_at", v)
+		fields["updated_at"] = v
 	}
 
 	if groups, ok := policy["EnvironmentGroups"]; ok && groups != nil {
@@ -150,16 +151,16 @@ func readPolicyByID(d *schema.ResourceData, client *APIClient, policyID int) err
 					intGroups = append(intGroups, int(gf))
 				}
 			}
-			_ = d.Set("environment_groups", intGroups)
+			fields["environment_groups"] = intGroups
 		}
 	}
 
 	if data, ok := policy["Data"]; ok && data != nil {
 		dataJSON, err := json.Marshal(data)
 		if err == nil {
-			_ = d.Set("data", string(dataJSON))
+			fields["data"] = string(dataJSON)
 		}
 	}
 
-	return nil
+	return setFields(d, fields)
 }

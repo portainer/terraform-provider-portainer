@@ -204,25 +204,30 @@ func resourcePortainerAlertingRuleRead(ctx context.Context, d *schema.ResourceDa
 	}
 
 	d.SetId(strconv.Itoa(rule.ID))
-	_ = d.Set("rule_id", rule.ID)
-	_ = d.Set("name", rule.Name)
-	_ = d.Set("description", rule.Description)
-	_ = d.Set("summary", rule.Summary)
-	_ = d.Set("enabled", rule.Enabled)
-	_ = d.Set("severity", rule.Severity)
-	_ = d.Set("metric_type", rule.MetricType)
-	_ = d.Set("condition_operator", rule.ConditionOperator)
-	_ = d.Set("threshold", rule.Threshold)
-	_ = d.Set("duration", rule.Duration)
-	_ = d.Set("alert_manager_id", rule.AlertManagerID)
-	_ = d.Set("is_editable", rule.IsEditable)
-	_ = d.Set("is_internal", rule.IsInternal)
-	_ = d.Set("labels", rule.Labels)
-	_ = d.Set("supported_agent_version", rule.SupportedAgentVersion)
-	_ = d.Set("supported_environment_types", rule.SupportedEnvironmentTypes)
-	_ = d.Set("created_at", rule.CreatedAt)
-	_ = d.Set("created_by", rule.CreatedBy)
-	_ = d.Set("updated_at", rule.UpdatedAt)
+	fields := map[string]interface{}{
+		"rule_id":                     rule.ID,
+		"name":                        rule.Name,
+		"description":                 rule.Description,
+		"summary":                     rule.Summary,
+		"enabled":                     rule.Enabled,
+		"severity":                    rule.Severity,
+		"metric_type":                 rule.MetricType,
+		"condition_operator":          rule.ConditionOperator,
+		"threshold":                   rule.Threshold,
+		"duration":                    rule.Duration,
+		"alert_manager_id":            rule.AlertManagerID,
+		"is_editable":                 rule.IsEditable,
+		"is_internal":                 rule.IsInternal,
+		"labels":                      rule.Labels,
+		"supported_agent_version":     rule.SupportedAgentVersion,
+		"supported_environment_types": rule.SupportedEnvironmentTypes,
+		"created_at":                  rule.CreatedAt,
+		"created_by":                  rule.CreatedBy,
+		"updated_at":                  rule.UpdatedAt,
+	}
+	if err := setFields(d, fields); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }

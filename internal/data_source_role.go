@@ -97,7 +97,9 @@ func dataSourceRoleRead(ctx context.Context, d *schema.ResourceData, meta interf
 		return diag.FromErr(fmt.Errorf("role with name %q not found", nameFilter.(string)))
 	}
 
-	_ = d.Set("roles", roles)
+	if err := d.Set("roles", roles); err != nil {
+		return diag.FromErr(err)
+	}
 
 	if nameFilterSet && len(roles) == 1 {
 		d.SetId(strconv.Itoa(roles[0]["id"].(int)))

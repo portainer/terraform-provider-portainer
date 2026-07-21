@@ -164,7 +164,9 @@ func resourceDockerConfigCreate(ctx context.Context, d *schema.ResourceData, met
 	d.SetId(response.ID)
 
 	if response.Portainer.ResourceControl.Id != 0 {
-		_ = d.Set("resource_control_id", response.Portainer.ResourceControl.Id)
+		if err := d.Set("resource_control_id", response.Portainer.ResourceControl.Id); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil
@@ -209,9 +211,6 @@ func resourceDockerConfigRead(ctx context.Context, d *schema.ResourceData, meta 
 		return diag.FromErr(fmt.Errorf("failed to decode docker config: %w", err))
 	}
 
-	_ = d.Set("name", result.Spec.Name)
-	_ = d.Set("labels", result.Spec.Labels)
-
 	templ := make(map[string]interface{})
 	if t := result.Spec.Templating; t != nil {
 		if name, ok := t["Name"]; ok {
@@ -223,10 +222,17 @@ func resourceDockerConfigRead(ctx context.Context, d *schema.ResourceData, meta 
 			}
 		}
 	}
-	_ = d.Set("templating", templ)
 
+	fields := map[string]interface{}{
+		"name":       result.Spec.Name,
+		"labels":     result.Spec.Labels,
+		"templating": templ,
+	}
 	if result.Portainer.ResourceControl.Id != 0 {
-		_ = d.Set("resource_control_id", result.Portainer.ResourceControl.Id)
+		fields["resource_control_id"] = result.Portainer.ResourceControl.Id
+	}
+	if err := setFields(d, fields); err != nil {
+		return diag.FromErr(err)
 	}
 
 	return nil

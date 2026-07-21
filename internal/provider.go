@@ -306,6 +306,9 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	}
 
 	transport := &http.Transport{
+		// Honor HTTP_PROXY / HTTPS_PROXY / NO_PROXY like http.DefaultTransport,
+		// so the provider works behind corporate or userspace proxies.
+		Proxy: http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: skipSSL,
 		},

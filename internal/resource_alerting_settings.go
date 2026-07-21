@@ -250,15 +250,17 @@ func resourcePortainerAlertingSettingsRead(ctx context.Context, d *schema.Resour
 		return nil
 	}
 
-	_ = d.Set("enabled", settings.Enabled)
-	_ = d.Set("name", settings.Name)
-	_ = d.Set("url", settings.URL)
-	_ = d.Set("portainer_url", settings.PortainerURL)
-	_ = d.Set("is_internal", settings.IsInternal)
-	_ = d.Set("status", settings.Status)
-	_ = d.Set("uptime", settings.Uptime)
-	_ = d.Set("created_at", settings.CreatedAt)
-	_ = d.Set("created_by", settings.CreatedBy)
+	fields := map[string]interface{}{
+		"enabled":       settings.Enabled,
+		"name":          settings.Name,
+		"url":           settings.URL,
+		"portainer_url": settings.PortainerURL,
+		"is_internal":   settings.IsInternal,
+		"status":        settings.Status,
+		"uptime":        settings.Uptime,
+		"created_at":    settings.CreatedAt,
+		"created_by":    settings.CreatedBy,
+	}
 
 	channels := make([]map[string]interface{}, 0, len(settings.NotificationChannels))
 	for _, ch := range settings.NotificationChannels {
@@ -274,7 +276,11 @@ func resourcePortainerAlertingSettingsRead(ctx context.Context, d *schema.Resour
 			"config":     cfg,
 		})
 	}
-	_ = d.Set("notification_channels", channels)
+	fields["notification_channels"] = channels
+
+	if err := setFields(d, fields); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }

@@ -589,12 +589,8 @@ func resourceSettingsApply(ctx context.Context, d *schema.ResourceData, meta int
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -619,12 +615,8 @@ func resourceSettingsRead(ctx context.Context, d *schema.ResourceData, meta inte
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 
 	resp, err := client.HTTPClient.Do(req)
@@ -643,26 +635,28 @@ func resourceSettingsRead(ctx context.Context, d *schema.ResourceData, meta inte
 	}
 
 	d.SetId("portainer-settings")
-	_ = d.Set("edge_portainer_url", result.EdgePortainerURL)
-	_ = d.Set("authentication_method", result.AuthenticationMethod)
-	// _ = d.Set("enable_telemetry", result.EnableTelemetry)
-	_ = d.Set("logo_url", result.LogoURL)
-	_ = d.Set("snapshot_interval", result.SnapshotInterval)
-	_ = d.Set("templates_url", result.TemplatesURL)
-	_ = d.Set("enable_edge_compute_features", result.EnableEdgeComputeFeatures)
-	_ = d.Set("enforce_edge_id", result.EnforceEdgeID)
-	_ = d.Set("user_session_timeout", result.UserSessionTimeout)
-	_ = d.Set("kubeconfig_expiry", result.KubeconfigExpiry)
-	_ = d.Set("kubectl_shell_image", result.KubectlShellImage)
-	_ = d.Set("helm_repository_url", result.HelmRepositoryURL)
-	_ = d.Set("trust_on_first_connect", result.TrustOnFirstConnect)
-	_ = d.Set("edge_agent_checkin_interval", result.EdgeAgentCheckinInterval)
-	_ = d.Set("disable_kube_roles_sync", result.DisableKubeRolesSync)
-	_ = d.Set("disable_kube_shell", result.DisableKubeShell)
-	_ = d.Set("disable_kubeconfig_download", result.DisableKubeconfigDownload)
-	_ = d.Set("display_donation_header", result.DisplayDonationHeader)
-	_ = d.Set("display_external_contributors", result.DisplayExternalContributors)
-	_ = d.Set("is_docker_desktop_extension", result.IsDockerDesktopExtension)
+	fields := map[string]interface{}{
+		"edge_portainer_url":    result.EdgePortainerURL,
+		"authentication_method": result.AuthenticationMethod,
+		// "enable_telemetry": result.EnableTelemetry,
+		"logo_url":                      result.LogoURL,
+		"snapshot_interval":             result.SnapshotInterval,
+		"templates_url":                 result.TemplatesURL,
+		"enable_edge_compute_features":  result.EnableEdgeComputeFeatures,
+		"enforce_edge_id":               result.EnforceEdgeID,
+		"user_session_timeout":          result.UserSessionTimeout,
+		"kubeconfig_expiry":             result.KubeconfigExpiry,
+		"kubectl_shell_image":           result.KubectlShellImage,
+		"helm_repository_url":           result.HelmRepositoryURL,
+		"trust_on_first_connect":        result.TrustOnFirstConnect,
+		"edge_agent_checkin_interval":   result.EdgeAgentCheckinInterval,
+		"disable_kube_roles_sync":       result.DisableKubeRolesSync,
+		"disable_kube_shell":            result.DisableKubeShell,
+		"disable_kubeconfig_download":   result.DisableKubeconfigDownload,
+		"display_donation_header":       result.DisplayDonationHeader,
+		"display_external_contributors": result.DisplayExternalContributors,
+		"is_docker_desktop_extension":   result.IsDockerDesktopExtension,
+	}
 
 	// black_listed_labels
 	labels := make([]map[string]interface{}, 0, len(result.BlackListedLabels))
@@ -672,7 +666,11 @@ func resourceSettingsRead(ctx context.Context, d *schema.ResourceData, meta inte
 			"value": label.Value,
 		})
 	}
-	_ = d.Set("black_listed_labels", labels)
+	fields["black_listed_labels"] = labels
+
+	if err := setFields(d, fields); err != nil {
+		return diag.FromErr(err)
+	}
 
 	// internal_auth_settings
 	if result.InternalAuthSettings != nil {
@@ -747,9 +745,13 @@ func resourceSettingsRead(ctx context.Context, d *schema.ResourceData, meta inte
 			}
 		}
 
-		_ = d.Set("oauth_settings", []interface{}{oauth})
+		if err := d.Set("oauth_settings", []interface{}{oauth}); err != nil {
+			return diag.FromErr(err)
+		}
 	} else {
-		_ = d.Set("oauth_settings", nil)
+		if err := d.Set("oauth_settings", nil); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	// ldap_settings
@@ -807,9 +809,13 @@ func resourceSettingsRead(ctx context.Context, d *schema.ResourceData, meta inte
 			}}
 		}
 
-		_ = d.Set("ldap_settings", []interface{}{ldap})
+		if err := d.Set("ldap_settings", []interface{}{ldap}); err != nil {
+			return diag.FromErr(err)
+		}
 	} else {
-		_ = d.Set("ldap_settings", nil)
+		if err := d.Set("ldap_settings", nil); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil

@@ -128,7 +128,9 @@ func resourceCheckCreate(ctx context.Context, d *schema.ResourceData, meta inter
 		}
 	}
 
-	_ = d.Set("output", out.String())
+	if err := d.Set("output", out.String()); err != nil {
+		return diag.FromErr(err)
+	}
 	d.SetId(fmt.Sprintf("check-%d", time.Now().Unix()))
 	return nil
 }

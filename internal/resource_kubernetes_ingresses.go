@@ -194,12 +194,8 @@ func createOrUpdateIngress(ctx context.Context, d *schema.ResourceData, client *
 	if err != nil {
 		return err
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	if err := setAuthHeader(req, client); err != nil {
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 

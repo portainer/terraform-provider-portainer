@@ -257,8 +257,12 @@ func dataSourceUserActivityRead(ctx context.Context, d *schema.ResourceData, met
 				"context":   l.Context,
 			}
 		}
-		_ = d.Set("activity_logs", logs)
-		_ = d.Set("total_count", result.TotalCount)
+		if err := setFields(d, map[string]interface{}{
+			"activity_logs": logs,
+			"total_count":   result.TotalCount,
+		}); err != nil {
+			return diag.FromErr(err)
+		}
 	} else {
 		var result []struct {
 			ID        int    `json:"id"`
@@ -283,7 +287,9 @@ func dataSourceUserActivityRead(ctx context.Context, d *schema.ResourceData, met
 				"context":   l.Context,
 			}
 		}
-		_ = d.Set("auth_logs", logs)
+		if err := d.Set("auth_logs", logs); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	d.SetId(strconv.FormatInt(time.Now().Unix(), 10))

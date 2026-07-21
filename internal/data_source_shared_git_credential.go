@@ -71,10 +71,14 @@ func dataSourcePortainerSharedGitCredentialRead(ctx context.Context, d *schema.R
 	for _, c := range credentials {
 		if c.Name == name {
 			d.SetId(strconv.Itoa(c.ID))
-			_ = d.Set("name", c.Name)
-			_ = d.Set("username", c.Username)
-			_ = d.Set("authorization_type", c.AuthorizationType)
-			_ = d.Set("user_id", c.UserID)
+			if err := setFields(d, map[string]interface{}{
+				"name":               c.Name,
+				"username":           c.Username,
+				"authorization_type": c.AuthorizationType,
+				"user_id":            c.UserID,
+			}); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 	}
