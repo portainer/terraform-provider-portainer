@@ -113,7 +113,9 @@ func resourceResourceControlRead(ctx context.Context, d *schema.ResourceData, me
 
 		// Pro jistotu uložíme zpět i resource_control_id,
 		// kdyby přišlo z importu nebo staršího state.
-		_ = d.Set("resource_control_id", rcInt)
+		if err := d.Set("resource_control_id", rcInt); err != nil {
+			return diag.FromErr(err)
+		}
 
 		// Ostatní atributy (administrators_only, public, teams, users)
 		// necháme tak, jak jsou – pochází z konfigurace / předchozího apply.
@@ -139,16 +141,13 @@ func resourceResourceControlRead(ctx context.Context, d *schema.ResourceData, me
 	// Terraform to destroy and recreate the resource unnecessarily.
 	// The Terraform resource ID (d.SetId) is updated to track the current
 	// backend ID, which is sufficient for subsequent Update/Delete operations.
-	// save resource_control_id
-	// if v, ok := rcData["Id"].(float64); ok {
-	// 	_ = d.Set("resource_control_id", int(v))
-	// }
 
+	fields := map[string]interface{}{}
 	if v, ok := rcData["AdministratorsOnly"].(bool); ok {
-		_ = d.Set("administrators_only", v)
+		fields["administrators_only"] = v
 	}
 	if v, ok := rcData["Public"].(bool); ok {
-		_ = d.Set("public", v)
+		fields["public"] = v
 	}
 	if v, ok := rcData["TeamAccesses"].([]interface{}); ok {
 		teams := []int{}
@@ -159,7 +158,7 @@ func resourceResourceControlRead(ctx context.Context, d *schema.ResourceData, me
 				}
 			}
 		}
-		_ = d.Set("teams", teams)
+		fields["teams"] = teams
 	}
 	if v, ok := rcData["UserAccesses"].([]interface{}); ok {
 		users := []int{}
@@ -170,7 +169,11 @@ func resourceResourceControlRead(ctx context.Context, d *schema.ResourceData, me
 				}
 			}
 		}
-		_ = d.Set("users", users)
+		fields["users"] = users
+	}
+
+	if err := setFields(d, fields); err != nil {
+		return diag.FromErr(err)
 	}
 
 	return nil

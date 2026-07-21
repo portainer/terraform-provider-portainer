@@ -85,12 +85,8 @@ func resourcePortainerChatSend(ctx context.Context, d *schema.ResourceData, meta
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -110,8 +106,12 @@ func resourcePortainerChatSend(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(err)
 	}
 
-	_ = d.Set("response_message", chatResp.Message)
-	_ = d.Set("response_yaml", chatResp.YAML)
+	if err := setFields(d, map[string]interface{}{
+		"response_message": chatResp.Message,
+		"response_yaml":    chatResp.YAML,
+	}); err != nil {
+		return diag.FromErr(err)
+	}
 	d.SetId(fmt.Sprintf("chat-%d", reqBody.EnvironmentID))
 	return nil
 }

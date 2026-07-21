@@ -127,6 +127,42 @@ func TestMustMap_Cov(t *testing.T) {
 	}
 }
 
+// --- setAuthHeader -----------------------------------------------------------
+
+func TestSetAuthHeader_Cov(t *testing.T) {
+	newReq := func() *http.Request {
+		req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
+		return req
+	}
+
+	// API key takes precedence and sets X-API-Key.
+	req := newReq()
+	if err := setAuthHeader(req, &APIClient{APIKey: "k", JWTToken: "j"}); err != nil {
+		t.Fatalf("api-key: unexpected error: %v", err)
+	}
+	if got := req.Header.Get("X-API-Key"); got != "k" {
+		t.Errorf("X-API-Key: expected %q, got %q", "k", got)
+	}
+	if got := req.Header.Get("Authorization"); got != "" {
+		t.Errorf("Authorization should be empty when api key is set, got %q", got)
+	}
+
+	// JWT fallback sets a Bearer Authorization header.
+	req = newReq()
+	if err := setAuthHeader(req, &APIClient{JWTToken: "j"}); err != nil {
+		t.Fatalf("jwt: unexpected error: %v", err)
+	}
+	if got := req.Header.Get("Authorization"); got != "Bearer j" {
+		t.Errorf("Authorization: expected %q, got %q", "Bearer j", got)
+	}
+
+	// Neither credential -> error, no headers set.
+	req = newReq()
+	if err := setAuthHeader(req, &APIClient{}); err == nil {
+		t.Fatal("expected error when no credentials are configured, got nil")
+	}
+}
+
 // --- removeFromStateContext --------------------------------------------------
 
 func TestRemoveFromStateContext_Cov(t *testing.T) {

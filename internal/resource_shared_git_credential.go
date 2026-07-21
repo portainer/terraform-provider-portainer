@@ -122,10 +122,14 @@ func resourcePortainerSharedGitCredentialRead(ctx context.Context, d *schema.Res
 		return diag.FromErr(fmt.Errorf("failed to decode shared git credential response: %w", err))
 	}
 
-	_ = d.Set("name", result.Name)
-	_ = d.Set("username", result.Username)
-	_ = d.Set("authorization_type", result.AuthorizationType)
-	_ = d.Set("user_id", result.UserID)
+	if err := setFields(d, map[string]interface{}{
+		"name":               result.Name,
+		"username":           result.Username,
+		"authorization_type": result.AuthorizationType,
+		"user_id":            result.UserID,
+	}); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }

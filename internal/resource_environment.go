@@ -208,11 +208,15 @@ func resourceEnvironmentCreate(ctx context.Context, d *schema.ResourceData, meta
 
 	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
 
+	fields := map[string]interface{}{}
 	if resp.Payload.EdgeKey != "" {
-		_ = d.Set("edge_key", resp.Payload.EdgeKey)
+		fields["edge_key"] = resp.Payload.EdgeKey
 	}
 	if resp.Payload.EdgeID != "" {
-		_ = d.Set("edge_id", resp.Payload.EdgeID)
+		fields["edge_id"] = resp.Payload.EdgeID
+	}
+	if err := setFields(d, fields); err != nil {
+		return diag.FromErr(err)
 	}
 
 	// For edge agents, tags must be applied via Update after creation

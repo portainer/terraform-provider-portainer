@@ -62,12 +62,8 @@ func resourceEndpointServiceUpdateExecute(ctx context.Context, d *schema.Resourc
 
 	url := fmt.Sprintf("%s/endpoints/%d/forceupdateservice", client.Endpoint, endpointID)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -97,12 +93,8 @@ func resourceEndpointServiceUpdateExecute(ctx context.Context, d *schema.Resourc
 func resolveServiceID(ctx context.Context, client *APIClient, endpointID int, name string) (string, error) {
 	url := fmt.Sprintf("%s/endpoints/%d/docker/services", client.Endpoint, endpointID)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return "", fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	if err := setAuthHeader(req, client); err != nil {
+		return "", err
 	}
 
 	resp, err := client.HTTPClient.Do(req)

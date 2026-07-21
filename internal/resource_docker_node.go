@@ -93,12 +93,8 @@ func resourceDockerNodeUpdate(ctx context.Context, d *schema.ResourceData, meta 
 		return diag.FromErr(fmt.Errorf("failed to build request: %w", err))
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 
 	resp, err := client.HTTPClient.Do(req)
@@ -127,12 +123,8 @@ func resourceDockerNodeRead(ctx context.Context, d *schema.ResourceData, meta in
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to build read request: %w", err))
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 
 	resp, err := client.HTTPClient.Do(req)
@@ -195,12 +187,8 @@ func resourceDockerNodeDelete(ctx context.Context, d *schema.ResourceData, meta 
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to build delete request: %w", err))
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 
 	resp, err := client.HTTPClient.Do(req)

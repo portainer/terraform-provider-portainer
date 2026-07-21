@@ -49,8 +49,12 @@ func dataSourceCustomTemplateRead(ctx context.Context, d *schema.ResourceData, m
 	for _, t := range resp.Payload {
 		if t.Title == title {
 			d.SetId(strconv.FormatInt(t.ID, 10))
-			_ = d.Set("description", t.Description)
-			_ = d.Set("type", int(t.Type))
+			if err := setFields(d, map[string]interface{}{
+				"description": t.Description,
+				"type":        int(t.Type),
+			}); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 	}

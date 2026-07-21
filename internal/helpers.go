@@ -23,6 +23,37 @@ func removeFromStateContext(_ context.Context, d *schema.ResourceData, _ interfa
 	return nil
 }
 
+// setAuthHeader sets the Portainer authentication header on req from the
+// client's configured credentials: the API key (X-API-Key) is preferred, and
+// the JWT bearer token is used as a fallback. It returns an error when neither
+// credential is configured. This centralizes the auth-selection block that was
+// previously duplicated across every direct-HTTP call site.
+func setAuthHeader(req *http.Request, client *APIClient) error {
+	if client.APIKey != "" {
+		req.Header.Set("X-API-Key", client.APIKey)
+	} else if client.JWTToken != "" {
+		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
+	} else {
+		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	}
+	return nil
+}
+
+// setFields applies multiple d.Set calls and returns the first error encountered,
+// wrapping it with the offending field name. It replaces the repeated
+// `_ = d.Set(...)` pattern in Read handlers so schema mismatches surface as a
+// diagnostic instead of being silently dropped. d.Set only errors on a schema
+// type mismatch (a provider bug), so in practice this never fails at runtime —
+// it just makes those failures visible during development and testing.
+func setFields(d *schema.ResourceData, fields map[string]interface{}) error {
+	for k, v := range fields {
+		if err := d.Set(k, v); err != nil {
+			return fmt.Errorf("failed to set %q: %w", k, err)
+		}
+	}
+	return nil
+}
+
 func parseManifest(manifest string) (map[string]interface{}, error) {
 	var parsed map[string]interface{}
 

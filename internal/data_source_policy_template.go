@@ -112,25 +112,26 @@ func readPolicyTemplateByID(d *schema.ResourceData, client *APIClient, templateI
 
 	d.SetId(templateID)
 
+	fields := map[string]interface{}{}
 	if v, ok := tmpl["name"]; ok {
-		_ = d.Set("name", v)
+		fields["name"] = v
 	}
 	if v, ok := tmpl["description"]; ok {
-		_ = d.Set("description", v)
+		fields["description"] = v
 	}
 	if v, ok := tmpl["category"]; ok {
-		_ = d.Set("category", v)
+		fields["category"] = v
 	}
 	if v, ok := tmpl["type"]; ok {
-		_ = d.Set("policy_type", v)
+		fields["policy_type"] = v
 	}
 
 	if data, ok := tmpl["data"]; ok && data != nil {
 		dataJSON, err := json.Marshal(data)
 		if err == nil {
-			_ = d.Set("data", string(dataJSON))
+			fields["data"] = string(dataJSON)
 		}
 	}
 
-	return nil
+	return setFields(d, fields)
 }

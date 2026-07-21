@@ -257,7 +257,9 @@ func resourceDockerVolumeCreate(ctx context.Context, d *schema.ResourceData, met
 	d.SetId(fmt.Sprintf("%d-%s", endpointID, name))
 
 	if response.Portainer.ResourceControl.Id != 0 {
-		_ = d.Set("resource_control_id", response.Portainer.ResourceControl.Id)
+		if err := d.Set("resource_control_id", response.Portainer.ResourceControl.Id); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil
@@ -300,15 +302,21 @@ func resourceDockerVolumeRead(ctx context.Context, d *schema.ResourceData, meta 
 		return diag.FromErr(fmt.Errorf("failed to decode volume: %w", err))
 	}
 
-	_ = d.Set("name", result.Name)
-	_ = d.Set("driver", result.Driver)
-	_ = d.Set("labels", result.Labels)
-	_ = d.Set("driver_opts", result.Options)
+	if err := setFields(d, map[string]interface{}{
+		"name":        result.Name,
+		"driver":      result.Driver,
+		"labels":      result.Labels,
+		"driver_opts": result.Options,
+	}); err != nil {
+		return diag.FromErr(err)
+	}
 
 	d.SetId(fmt.Sprintf("%d-%s", endpointID, result.Name))
 
 	if result.Portainer.ResourceControl.Id != 0 {
-		_ = d.Set("resource_control_id", result.Portainer.ResourceControl.Id)
+		if err := d.Set("resource_control_id", result.Portainer.ResourceControl.Id); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil

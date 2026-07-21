@@ -69,7 +69,9 @@ func resourceHelmUserRepositoryCreate(ctx context.Context, d *schema.ResourceDat
 	}
 
 	d.SetId(strconv.Itoa(result.ID))
-	_ = d.Set("url", result.URL)
+	if err := d.Set("url", result.URL); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
@@ -104,8 +106,12 @@ func resourceHelmUserRepositoryRead(ctx context.Context, d *schema.ResourceData,
 
 	for _, repo := range result.UserRepositories {
 		if strconv.Itoa(repo.ID) == repoID {
-			_ = d.Set("url", repo.URL)
-			_ = d.Set("user_id", repo.UserID)
+			if err := setFields(d, map[string]interface{}{
+				"url":     repo.URL,
+				"user_id": repo.UserID,
+			}); err != nil {
+				return diag.FromErr(err)
+			}
 			return nil
 		}
 	}

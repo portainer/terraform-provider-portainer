@@ -113,12 +113,8 @@ func resourceKubernetesNamespaceCreate(ctx context.Context, d *schema.ResourceDa
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -156,12 +152,8 @@ func resourceKubernetesNamespaceRead(ctx context.Context, d *schema.ResourceData
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 
 	resp, err := client.HTTPClient.Do(req)
@@ -305,12 +297,8 @@ func resourceKubernetesNamespaceUpdate(ctx context.Context, d *schema.ResourceDa
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -352,12 +340,8 @@ func resourceKubernetesNamespaceDelete(ctx context.Context, d *schema.ResourceDa
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return diag.FromErr(fmt.Errorf("no valid authentication method provided (api_key or jwt token)"))
+	if err := setAuthHeader(req, client); err != nil {
+		return diag.FromErr(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -383,12 +367,8 @@ func hasLicense(ctx context.Context, client *APIClient) (bool, error) {
 		return false, err
 	}
 
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return false, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
+	if err := setAuthHeader(req, client); err != nil {
+		return false, err
 	}
 
 	resp, err := client.HTTPClient.Do(req)
