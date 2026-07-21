@@ -354,7 +354,7 @@ func TestStackCov4_UpdateNonRepo_WithWebhook(t *testing.T) {
 	// At least one PUT with a webhook token must have been sent.
 	var sawWebhookPut bool
 	for _, req := range mock.Requests() {
-		if req.Method == "PUT" && req.Path == "/stacks/215" {
+		if req.Method == http.MethodPut && req.Path == "/stacks/215" {
 			var payload map[string]interface{}
 			if err := req.DecodeJSON(&payload); err == nil {
 				if wh, ok := payload["webhook"]; ok && wh != "" && wh != nil {
