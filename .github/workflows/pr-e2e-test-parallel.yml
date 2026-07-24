@@ -1,6 +1,7 @@
 name: PR E2E Tests (parallel - preview)
 
 on:
+  pull_request:
   workflow_dispatch:
 
 jobs:
