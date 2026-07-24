@@ -3,9 +3,7 @@ package internal
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -70,19 +68,8 @@ func resourceLicensesCreate(ctx context.Context, d *schema.ResourceData, meta in
 	}
 
 	var result LicenseResponse
-	resp, err := client.DoRequest("POST", url, nil, payload)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to attach license: %s", string(body)))
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to parse license response: %w", err))
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+url, payload, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to attach license: %w", err))
 	}
 
 	if err := d.Set("conflicting_keys", result.ConflictingKeys); err != nil {
@@ -96,22 +83,11 @@ func resourceLicensesCreate(ctx context.Context, d *schema.ResourceData, meta in
 func resourceLicensesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	resp, err := client.DoRequest("GET", "/licenses", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to get licenses: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read licenses, status %d: %s", resp.StatusCode, string(body)))
-	}
-
 	var licenses []struct {
 		LicenseKey string `json:"licenseKey"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&licenses); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode licenses list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/licenses", nil, &licenses); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to get licenses: %w", err))
 	}
 
 	currentKey := d.Get("key").(string)
@@ -136,15 +112,8 @@ func resourceLicensesDelete(ctx context.Context, d *schema.ResourceData, meta in
 		"licenseKeys": []string{d.Get("key").(string)},
 	}
 
-	resp, err := client.DoRequest("POST", "/licenses/remove", nil, payload)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/licenses/remove", payload, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to send license removal request: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete license: %s", string(body)))
 	}
 
 	d.SetId("")

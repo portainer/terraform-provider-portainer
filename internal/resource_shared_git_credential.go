@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -66,24 +64,13 @@ func resourcePortainerSharedGitCredentialCreate(ctx context.Context, d *schema.R
 		"authorizationType": d.Get("authorization_type").(int),
 	}
 
-	resp, err := client.DoRequest(http.MethodPost, "/cloud/gitcredentials", nil, payload)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create shared git credential: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create shared git credential: HTTP %d - %s", resp.StatusCode, string(body)))
-	}
-
 	var result struct {
 		GitCredential struct {
 			ID int `json:"id"`
 		} `json:"gitCredential"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode shared git credential response: %w", err))
+	if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s/cloud/gitcredentials", client.Endpoint), payload, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create shared git credential: %w", err))
 	}
 
 	d.SetId(strconv.Itoa(result.GitCredential.ID))
@@ -94,23 +81,6 @@ func resourcePortainerSharedGitCredentialRead(ctx context.Context, d *schema.Res
 	client := meta.(*APIClient)
 	id := d.Id()
 
-	path := fmt.Sprintf("/cloud/gitcredentials/%s", id)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read shared git credential: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read shared git credential: HTTP %d - %s", resp.StatusCode, string(body)))
-	}
-
 	var result struct {
 		ID                int    `json:"id"`
 		Name              string `json:"name"`
@@ -118,8 +88,12 @@ func resourcePortainerSharedGitCredentialRead(ctx context.Context, d *schema.Res
 		AuthorizationType int    `json:"authorizationType"`
 		UserID            int    `json:"userId"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode shared git credential response: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/cloud/gitcredentials/%s", client.Endpoint, id), nil, &result); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read shared git credential: %w", err))
 	}
 
 	if err := setFields(d, map[string]interface{}{
@@ -145,16 +119,8 @@ func resourcePortainerSharedGitCredentialUpdate(ctx context.Context, d *schema.R
 		"authorizationType": d.Get("authorization_type").(int),
 	}
 
-	path := fmt.Sprintf("/cloud/gitcredentials/%s", id)
-	resp, err := client.DoRequest(http.MethodPut, path, nil, payload)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/cloud/gitcredentials/%s", client.Endpoint, id), payload, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update shared git credential: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update shared git credential: HTTP %d - %s", resp.StatusCode, string(body)))
 	}
 
 	return resourcePortainerSharedGitCredentialRead(ctx, d, meta)
@@ -164,16 +130,10 @@ func resourcePortainerSharedGitCredentialDelete(ctx context.Context, d *schema.R
 	client := meta.(*APIClient)
 	id := d.Id()
 
-	path := fmt.Sprintf("/cloud/gitcredentials/%s", id)
-	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to delete shared git credential: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete shared git credential: HTTP %d - %s", resp.StatusCode, string(body)))
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/cloud/gitcredentials/%s", client.Endpoint, id), nil, nil); err != nil {
+		if !isAPINotFound(err) {
+			return diag.FromErr(fmt.Errorf("failed to delete shared git credential: %w", err))
+		}
 	}
 
 	d.SetId("")

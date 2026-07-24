@@ -58,6 +58,7 @@ func TestStackCov4_StandaloneString_WithWebhook(t *testing.T) {
 	_ = d.Set("stack_file_content", "version: '3'")
 	_ = d.Set("stack_webhook", true)
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -115,6 +116,7 @@ func TestStackCov4_StandaloneRepo_WithWebhookAndInterval(t *testing.T) {
 	_ = d.Set("additional_files", []interface{}{"docker-compose.override.yml"})
 	_ = d.Set("registries", []interface{}{1, 2})
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -173,6 +175,7 @@ func TestStackCov4_SwarmRepo_IntervalOnly(t *testing.T) {
 	_ = d.Set("filesystem_path", "/srv/stack")
 	// stack_webhook intentionally left false -> autoUpdate built with empty webhook.
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -285,6 +288,7 @@ func TestStackCov4_K8sRepo_HelmChartWithWebhook(t *testing.T) {
 	_ = d.Set("stack_webhook", true)
 	_ = d.Set("update_interval", "1h")
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}

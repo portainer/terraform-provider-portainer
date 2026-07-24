@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -36,35 +33,9 @@ func resourcePortainerEdgeGenerateKeyCreate(ctx context.Context, d *schema.Resou
 	client := meta.(*APIClient)
 
 	// Proper JSON payload as required by API
-	jsonBody, err := json.Marshal(map[string]string{"edgeKey": ""})
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/endpoints/edge/generate-key", client.Endpoint), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to generate edge key: %s", string(body)))
-	}
-
 	var result GenerateEdgeKeyResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s/endpoints/edge/generate-key", client.Endpoint), map[string]string{"edgeKey": ""}, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to generate edge key: %w", err))
 	}
 
 	if err := d.Set("edge_key", result.EdgeKey); err != nil {

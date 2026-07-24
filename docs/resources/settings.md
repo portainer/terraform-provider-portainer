@@ -56,6 +56,8 @@ terraform apply
 | `display_donation_header`      | bool     | ❌ no    | Show the donation header in UI                                               |
 | `display_external_contributors`| bool     | ❌ no    | Show the list of external contributors in the UI                             |
 | `is_docker_desktop_extension`  | bool     | ❌ no    | Whether Portainer is running as Docker Desktop extension                     |
+| `edge_portainer_url`           | string   | 🚫 no    | Public URL of the Portainer instance that edge agents use to reach back for polling and tunneling |
+| `black_listed_labels`          | list(object) | 🚫 no | Container labels (`name`/`value` pairs) that Portainer should hide from the UI |
 
 ### `global_deployment_options` Block
 | Name                        | Type | Required | Description                     |

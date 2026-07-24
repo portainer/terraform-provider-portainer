@@ -312,6 +312,14 @@ import-doc-lint:
 	@echo "Linting import documentation..."
 	go run ./internal/tools/importdoclint .
 
+# docs-drift-check fails when a registered resource/data-source has a top-level
+# schema field that is not mentioned on its docs page — the guard that keeps the
+# hand-written docs in sync with the schema without forcing verbatim wording.
+.PHONY: docs-drift-check
+docs-drift-check:
+	@echo "Checking schema/docs field parity..."
+	go run ./internal/tools/docsdriftlint .
+
 ### Go
 .PHONY: go-fmt-check
 go-fmt-check:

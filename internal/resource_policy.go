@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -86,22 +85,11 @@ func resourcePortainerPolicyCreate(ctx context.Context, d *schema.ResourceData, 
 
 	payload := buildPolicyPayload(d)
 
-	resp, err := client.DoRequest("POST", "/policies", nil, payload)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create policy: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create policy, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var result struct {
 		ID int `json:"Id"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode policy create response: %w", err))
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/policies", payload, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create policy: %w", err))
 	}
 
 	d.SetId(strconv.Itoa(result.ID))
@@ -111,23 +99,13 @@ func resourcePortainerPolicyCreate(ctx context.Context, d *schema.ResourceData, 
 func resourcePortainerPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	resp, err := client.DoRequest("GET", fmt.Sprintf("/policies/%s", d.Id()), nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read policy: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	} else if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read policy, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var policy map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&policy); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode policy response: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/policies/%s", client.Endpoint, d.Id()), nil, &policy); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read policy: %w", err))
 	}
 
 	fields := map[string]interface{}{}
@@ -178,15 +156,8 @@ func resourcePortainerPolicyUpdate(ctx context.Context, d *schema.ResourceData, 
 
 	payload := buildPolicyPayload(d)
 
-	resp, err := client.DoRequest("PUT", fmt.Sprintf("/policies/%s", d.Id()), nil, payload)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/policies/%s", client.Endpoint, d.Id()), payload, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update policy: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update policy, status %d: %s", resp.StatusCode, string(data)))
 	}
 
 	return resourcePortainerPolicyRead(ctx, d, meta)
@@ -195,15 +166,8 @@ func resourcePortainerPolicyUpdate(ctx context.Context, d *schema.ResourceData, 
 func resourcePortainerPolicyDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	resp, err := client.DoRequest("DELETE", fmt.Sprintf("/policies/%s", d.Id()), nil, nil)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/policies/%s", client.Endpoint, d.Id()), nil, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to delete policy: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusNoContent {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete policy, status %d: %s", resp.StatusCode, string(data)))
 	}
 
 	return nil

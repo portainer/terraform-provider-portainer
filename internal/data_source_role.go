@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -58,24 +57,14 @@ func dataSourceRole() *schema.Resource {
 func dataSourceRoleRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	resp, err := client.DoRequest(http.MethodGet, "/roles", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list roles: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to list roles: HTTP %d", resp.StatusCode))
-	}
-
 	var result []struct {
 		ID          int    `json:"Id"`
 		Name        string `json:"Name"`
 		Description string `json:"Description"`
 		Priority    int    `json:"Priority"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode roles response: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/roles", nil, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list roles: %w", err))
 	}
 
 	nameFilter, nameFilterSet := d.GetOk("name")

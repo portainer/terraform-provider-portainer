@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -137,25 +135,14 @@ func dataSourceHelmGitDryRunRead(ctx context.Context, d *schema.ResourceData, me
 		payload["tlsSkipVerify"] = v.(bool)
 	}
 
-	resp, err := client.DoRequest("POST", fmt.Sprintf("/endpoints/%d/kubernetes/helm/git/dryrun", endpointID), nil, payload)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to perform Helm Git dry run: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("helm git dry run failed (status %d): %s", resp.StatusCode, string(data)))
-	}
-
 	var result struct {
 		Manifest  string `json:"manifest"`
 		Name      string `json:"name"`
 		Namespace string `json:"namespace"`
 		Version   int    `json:"version"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode dry run response: %w", err))
+	if err := doJSON(ctx, client, "POST", fmt.Sprintf("%s/endpoints/%d/kubernetes/helm/git/dryrun", client.Endpoint, endpointID), payload, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to perform Helm Git dry run: %w", err))
 	}
 
 	d.SetId(fmt.Sprintf("helm-git-dryrun-%d-%s", endpointID, d.Get("repository_url").(string)))

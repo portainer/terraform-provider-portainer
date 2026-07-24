@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -49,6 +50,83 @@ func setFields(d *schema.ResourceData, fields map[string]interface{}) error {
 	for k, v := range fields {
 		if err := d.Set(k, v); err != nil {
 			return fmt.Errorf("failed to set %q: %w", k, err)
+		}
+	}
+	return nil
+}
+
+// apiStatusError is returned by doJSON when the Portainer API responds with a
+// status code >= 400. It preserves the status code and raw body so callers can
+// react to specific statuses (most commonly 404, via isAPINotFound) instead of
+// string-matching the error text.
+type apiStatusError struct {
+	Method     string
+	URL        string
+	StatusCode int
+	Body       string
+}
+
+func (e *apiStatusError) Error() string {
+	return fmt.Sprintf("%s %s failed with status %d: %s", e.Method, e.URL, e.StatusCode, e.Body)
+}
+
+// isAPINotFound reports whether err is (or wraps) an apiStatusError with a 404
+// status. Read handlers use it to drop a resource from state when the backing
+// object no longer exists, replacing the hand-rolled StatusNotFound check.
+func isAPINotFound(err error) bool {
+	var se *apiStatusError
+	return errors.As(err, &se) && se.StatusCode == http.StatusNotFound
+}
+
+// doJSON performs an authenticated request against the Portainer API and
+// decodes a successful (2xx/3xx) JSON response into out. It centralizes the
+// request/auth/status/decode boilerplate that every direct-HTTP resource used
+// to repeat by hand: building the request, selecting the auth header,
+// JSON-marshaling the body, checking the status code, and reading the response
+// body (for both decode and error reporting).
+//
+// urlStr must be the fully-formed URL — callers build it from client.Endpoint
+// plus any path and query string. body may be nil (e.g. for GET/DELETE or
+// action-style PUT/POST calls); when non-nil it is JSON-marshaled and the
+// Content-Type header is set. out may be nil when the caller does not care
+// about the response payload; otherwise a non-empty response body is
+// unmarshaled into it. A status >= 400 is returned as an error that includes
+// the method, URL and raw response body.
+func doJSON(ctx context.Context, client *APIClient, method, urlStr string, body, out interface{}) error {
+	var reader io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("failed to marshal %s %s request body: %w", method, urlStr, err)
+		}
+		reader = bytes.NewReader(raw)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, urlStr, reader)
+	if err != nil {
+		return fmt.Errorf("failed to build %s %s request: %w", method, urlStr, err)
+	}
+	if err := setAuthHeader(req, client); err != nil {
+		return err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to perform %s %s request: %w", method, urlStr, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return &apiStatusError{Method: method, URL: urlStr, StatusCode: resp.StatusCode, Body: string(respBody)}
+	}
+
+	if out != nil && len(respBody) > 0 {
+		if err := json.Unmarshal(respBody, out); err != nil {
+			return fmt.Errorf("failed to decode %s %s response: %w", method, urlStr, err)
 		}
 	}
 	return nil

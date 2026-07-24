@@ -3,7 +3,6 @@ package internal
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -31,24 +30,8 @@ func resourcePortainerEdgeStackWebhookCreate(ctx context.Context, d *schema.Reso
 	webhookID := d.Get("webhook_id").(string)
 
 	url := fmt.Sprintf("%s/edge_stacks/webhooks/%s", client.Endpoint, webhookID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to build webhook trigger request: %w", err))
-	}
-
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPost, url, nil, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to trigger webhook: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to trigger webhook, status %d: %s", resp.StatusCode, string(body)))
 	}
 
 	d.SetId(webhookID)

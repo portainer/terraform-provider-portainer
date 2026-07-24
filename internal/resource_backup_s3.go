@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -82,15 +80,8 @@ func resourceBackupS3Create(ctx context.Context, d *schema.ResourceData, meta in
 		body["cronRule"] = v.(string)
 	}
 
-	resp, err := client.DoRequest("POST", "/backup/s3/execute", nil, body)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusNoContent {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to execute S3 backup: %s", string(data)))
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/backup/s3/execute", body, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to execute S3 backup: %w", err))
 	}
 
 	d.SetId("portainer_backup_s3")
@@ -99,17 +90,6 @@ func resourceBackupS3Create(ctx context.Context, d *schema.ResourceData, meta in
 
 func resourceBackupS3Read(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
-
-	resp, err := client.DoRequest("GET", "/backup/s3/settings", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to fetch S3 backup settings: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read S3 backup settings: %s", string(data)))
-	}
 
 	var result struct {
 		AccessKeyID      string `json:"accessKeyID"`
@@ -121,8 +101,8 @@ func resourceBackupS3Read(ctx context.Context, d *schema.ResourceData, meta inte
 		CronRule         string `json:"cronRule"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode S3 settings: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/backup/s3/settings", nil, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to read S3 backup settings: %w", err))
 	}
 
 	if err := d.Set("access_key_id", result.AccessKeyID); err != nil {

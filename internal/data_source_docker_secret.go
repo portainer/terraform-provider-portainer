@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -36,25 +34,14 @@ func dataSourceDockerSecretRead(ctx context.Context, d *schema.ResourceData, met
 	name := d.Get("name").(string)
 
 	path := fmt.Sprintf("/endpoints/%d/docker/secrets", endpointID)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list docker secrets: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to list docker secrets, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var secrets []struct {
 		ID   string `json:"ID"`
 		Spec struct {
 			Name string `json:"Name"`
 		} `json:"Spec"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&secrets); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode docker secret list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+path, nil, &secrets); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list docker secrets: %w", err))
 	}
 
 	for _, s := range secrets {

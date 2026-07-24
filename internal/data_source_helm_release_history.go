@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -95,20 +93,9 @@ func dataSourceHelmReleaseHistoryRead(ctx context.Context, d *schema.ResourceDat
 		path += "?namespace=" + v.(string)
 	}
 
-	resp, err := client.DoRequest("GET", path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to get Helm release history: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to get Helm release history (status %d): %s", resp.StatusCode, string(data)))
-	}
-
 	var releases []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode Helm release history: %w", err))
+	if err := doJSON(ctx, client, "GET", client.Endpoint+path, nil, &releases); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to get Helm release history: %w", err))
 	}
 
 	revisions := make([]map[string]interface{}, 0, len(releases))

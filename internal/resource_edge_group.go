@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -60,28 +57,9 @@ func resourceEdgeGroup() *schema.Resource {
 }
 
 func findExistingEdgeGroupByName(ctx context.Context, client *APIClient, name string) (int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_groups", client.Endpoint), nil)
-	if err != nil {
-		return 0, err
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return 0, err
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return 0, fmt.Errorf("failed to list edge groups: %s", string(data))
-	}
-
 	var groups []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&groups); err != nil {
-		return 0, err
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/edge_groups", client.Endpoint), nil, &groups); err != nil {
+		return 0, fmt.Errorf("failed to list edge groups: %w", err)
 	}
 
 	for _, g := range groups {
@@ -107,33 +85,12 @@ func resourceEdgeGroupCreate(ctx context.Context, d *schema.ResourceData, meta i
 	}
 
 	payload := buildEdgeGroupPayload(d)
-	jsonBody, _ := json.Marshal(payload)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/edge_groups", client.Endpoint), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create edge group: %s", string(data)))
-	}
 
 	var result struct {
 		ID int `json:"Id"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s/edge_groups", client.Endpoint), payload, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create edge group: %w", err))
 	}
 
 	d.SetId(strconv.Itoa(result.ID))
@@ -143,24 +100,6 @@ func resourceEdgeGroupCreate(ctx context.Context, d *schema.ResourceData, meta i
 func resourceEdgeGroupRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_groups/%s", client.Endpoint, d.Id()), nil)
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	} else if resp.StatusCode != http.StatusOK {
-		return diag.FromErr(fmt.Errorf("failed to read edge group"))
-	}
-
 	var group struct {
 		Name         string `json:"Name"`
 		Dynamic      bool   `json:"Dynamic"`
@@ -168,8 +107,12 @@ func resourceEdgeGroupRead(ctx context.Context, d *schema.ResourceData, meta int
 		TagIDs       []int  `json:"TagIds"`
 		Endpoints    []int  `json:"Endpoints"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&group); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/edge_groups/%s", client.Endpoint, d.Id()), nil, &group); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read edge group"))
 	}
 
 	if err := d.Set("name", group.Name); err != nil {
@@ -195,26 +138,9 @@ func resourceEdgeGroupUpdate(ctx context.Context, d *schema.ResourceData, meta i
 	client := meta.(*APIClient)
 
 	payload := buildEdgeGroupPayload(d)
-	jsonBody, _ := json.Marshal(payload)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/edge_groups/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update edge group: %s", string(data)))
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/edge_groups/%s", client.Endpoint, d.Id()), payload, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update edge group: %w", err))
 	}
 
 	return resourceEdgeGroupRead(ctx, d, meta)

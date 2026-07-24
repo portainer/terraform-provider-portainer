@@ -121,23 +121,9 @@ func customizeDiffEdgeConfigurationFileHash(_ context.Context, d *schema.Resourc
 
 // listEdgeConfigurations fetches all edge configurations from Portainer.
 func listEdgeConfigurations(ctx context.Context, client *APIClient) ([]EdgeConfiguration, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_configurations", client.Endpoint), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build list request: %w", err)
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	}
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list edge configurations: %w", err)
-	}
-	defer resp.Body.Close()
 	var configs []EdgeConfiguration
-	if err := json.NewDecoder(resp.Body).Decode(&configs); err != nil {
-		return nil, fmt.Errorf("failed to decode edge configurations list: %w", err)
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/edge_configurations", client.Endpoint), nil, &configs); err != nil {
+		return nil, fmt.Errorf("failed to list edge configurations: %w", err)
 	}
 	return configs, nil
 }
@@ -375,32 +361,13 @@ func resourcePortainerEdgeConfigurationsRead(ctx context.Context, d *schema.Reso
 	id := d.Id()
 	rawID := filepath.Base(id)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_configurations/%s", client.Endpoint, rawID), nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	res, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if res.StatusCode >= 400 {
-		body, _ := io.ReadAll(res.Body)
-		return diag.FromErr(fmt.Errorf("failed to read edge configuration: %s", string(body)))
-	}
-
 	var config EdgeConfiguration
-	if err := json.NewDecoder(res.Body).Decode(&config); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/edge_configurations/%s", client.Endpoint, rawID), nil, &config); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read edge configuration: %w", err))
 	}
 
 	if err := d.Set("name", config.Name); err != nil {
@@ -434,29 +401,12 @@ func resourcePortainerEdgeConfigurationsDelete(ctx context.Context, d *schema.Re
 	rawID := filepath.Base(d.Id())
 	url := fmt.Sprintf("%s/edge_configurations/%s", client.Endpoint, rawID)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete edge configuration: %s", string(body)))
+	if err := doJSON(ctx, client, http.MethodDelete, url, nil, nil); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to delete edge configuration: %w", err))
 	}
 
 	d.SetId("")

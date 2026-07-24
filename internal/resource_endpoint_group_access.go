@@ -1,12 +1,9 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -58,34 +55,12 @@ type EndpointGroupAccessPolicies struct {
 }
 
 func getEndpointGroupPolicies(ctx context.Context, client *APIClient, endpointGroupID int) (*EndpointGroupAccessPolicies, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), nil)
-	if err != nil {
-		return nil, err
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrEndpointGroupNotFound
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch endpoint group: %s", string(data))
-	}
-
 	var policies EndpointGroupAccessPolicies
-	if err := json.NewDecoder(resp.Body).Decode(&policies); err != nil {
-		return nil, err
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), nil, &policies); err != nil {
+		if isAPINotFound(err) {
+			return nil, ErrEndpointGroupNotFound
+		}
+		return nil, fmt.Errorf("failed to fetch endpoint group: %w", err)
 	}
 
 	if policies.UserAccessPolicies == nil {
@@ -166,63 +141,19 @@ func resourceEndpointGroupAccessCreate(ctx context.Context, d *schema.ResourceDa
 }
 
 func getEndpointGroupMap(ctx context.Context, client *APIClient, endpointGroupID int) (map[string]interface{}, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), nil)
-	if err != nil {
-		return nil, err
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrEndpointGroupNotFound
-	}
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch endpoint group: %s", string(data))
-	}
-
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), nil, &result); err != nil {
+		if isAPINotFound(err) {
+			return nil, ErrEndpointGroupNotFound
+		}
+		return nil, fmt.Errorf("failed to fetch endpoint group: %w", err)
 	}
 	return result, nil
 }
 
 func updateEndpointGroup(ctx context.Context, client *APIClient, endpointGroupID int, payload map[string]interface{}, d *schema.ResourceData, hasTeam bool, teamID interface{}, hasUser bool, userID interface{}) error {
-	jsonBody, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return err
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update endpoint group access: %s", string(data))
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), payload, nil); err != nil {
+		return fmt.Errorf("failed to update endpoint group access: %w", err)
 	}
 
 	id := fmt.Sprintf("%d/", endpointGroupID)
@@ -318,34 +249,11 @@ func resourceEndpointGroupAccessDelete(ctx context.Context, d *schema.ResourceDa
 	fullObject["UserAccessPolicies"] = userPolicies
 	fullObject["TeamAccessPolicies"] = teamPolicies
 
-	jsonBody, err := json.Marshal(fullObject)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil
-	}
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete endpoint group access: %s", string(data)))
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, endpointGroupID), fullObject, nil); err != nil {
+		if isAPINotFound(err) {
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to delete endpoint group access: %w", err))
 	}
 
 	return nil

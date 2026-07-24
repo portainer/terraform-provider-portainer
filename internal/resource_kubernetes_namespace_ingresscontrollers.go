@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -94,27 +91,10 @@ func resourceKubernetesNamespaceIngressControllersCreate(ctx context.Context, d 
 		controllers = append(controllers, controller)
 	}
 
-	jsonBody, _ := json.Marshal(controllers)
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s/ingresscontrollers", client.Endpoint, endpointID, namespace)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update namespace ingress controllers: %s", string(data)))
+	if err := doJSON(ctx, client, http.MethodPut, url, controllers, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update namespace ingress controllers: %w", err))
 	}
 
 	d.SetId(fmt.Sprintf("%d:%s", endpointID, namespace))
@@ -127,32 +107,14 @@ func resourceKubernetesNamespaceIngressControllersRead(ctx context.Context, d *s
 	namespace := d.Get("namespace").(string)
 
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s/ingresscontrollers", client.Endpoint, endpointID, namespace)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read namespace ingress controllers: %s", string(data)))
-	}
 
 	var controllers []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&controllers); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, &controllers); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read namespace ingress controllers: %w", err))
 	}
 
 	controllersList := make([]map[string]interface{}, len(controllers))
@@ -193,27 +155,10 @@ func resourceKubernetesNamespaceIngressControllersDelete(ctx context.Context, d 
 		controllers = append(controllers, controller)
 	}
 
-	jsonBody, _ := json.Marshal(controllers)
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s/ingresscontrollers", client.Endpoint, endpointID, namespace)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to disable namespace ingress controllers: %s", string(data)))
+	if err := doJSON(ctx, client, http.MethodPut, url, controllers, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to disable namespace ingress controllers: %w", err))
 	}
 
 	return nil

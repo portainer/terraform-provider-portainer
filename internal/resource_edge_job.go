@@ -75,28 +75,9 @@ func resourceEdgeJob() *schema.Resource {
 }
 
 func findExistingEdgeJobByName(ctx context.Context, client *APIClient, name string) (int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_jobs", client.Endpoint), nil)
-	if err != nil {
-		return 0, err
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return 0, err
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return 0, fmt.Errorf("failed to list edge jobs: %s", string(data))
-	}
-
 	var jobs []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&jobs); err != nil {
-		return 0, err
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/edge_jobs", client.Endpoint), nil, &jobs); err != nil {
+		return 0, fmt.Errorf("failed to list edge jobs: %w", err)
 	}
 
 	for _, job := range jobs {
@@ -140,32 +121,11 @@ func resourceEdgeJobCreate(ctx context.Context, d *schema.ResourceData, meta int
 			"fileContent":    v.(string),
 		}
 
-		jsonBody, _ := json.Marshal(body)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/edge_jobs/create/string", client.Endpoint), bytes.NewBuffer(jsonBody))
-		if err != nil {
-			return diag.FromErr(err)
-		}
-		if err := setAuthHeader(req, client); err != nil {
-			return diag.FromErr(err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.HTTPClient.Do(req)
-		if err != nil {
-			return diag.FromErr(err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			data, _ := io.ReadAll(resp.Body)
-			return diag.FromErr(fmt.Errorf("failed to create edge job: %s", string(data)))
-		}
-
 		var result struct {
 			Id int `json:"Id"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return diag.FromErr(err)
+		if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s/edge_jobs/create/string", client.Endpoint), body, &result); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to create edge job: %w", err))
 		}
 		d.SetId(strconv.Itoa(result.Id))
 		return nil
@@ -232,29 +192,6 @@ func resourceEdgeJobRead(ctx context.Context, d *schema.ResourceData, meta inter
 	client := meta.(*APIClient)
 	jobID := d.Id()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_jobs/%s", client.Endpoint, jobID), nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to build edge job read request: %w", err))
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to send edge job read request: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read edge job: %s", string(data)))
-	}
-
 	var result struct {
 		Name           string                 `json:"Name"`
 		CronExpression string                 `json:"CronExpression"`
@@ -264,8 +201,12 @@ func resourceEdgeJobRead(ctx context.Context, d *schema.ResourceData, meta inter
 		ScriptPath     string                 `json:"ScriptPath"` // not mapped back
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode edge job response: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/edge_jobs/%s", client.Endpoint, jobID), nil, &result); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read edge job: %w", err))
 	}
 
 	if err := d.Set("name", result.Name); err != nil {
@@ -309,26 +250,8 @@ func resourceEdgeJobUpdate(ctx context.Context, d *schema.ResourceData, meta int
 		payload["fileContent"] = v.(string)
 	}
 
-	jsonBody, _ := json.Marshal(payload)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/edge_jobs/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update edge job: %s", string(data)))
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/edge_jobs/%s", client.Endpoint, d.Id()), payload, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update edge job: %w", err))
 	}
 
 	return nil

@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -35,24 +33,13 @@ func dataSourceEdgeGroupRead(ctx context.Context, d *schema.ResourceData, meta i
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	resp, err := client.DoRequest("GET", "/edge_groups", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list edge groups: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to list edge groups, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var groups []struct {
 		ID      int    `json:"Id"`
 		Name    string `json:"Name"`
 		Dynamic bool   `json:"Dynamic"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&groups); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode edge group list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/edge_groups", nil, &groups); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list edge groups: %w", err))
 	}
 
 	for _, g := range groups {

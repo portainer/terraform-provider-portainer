@@ -205,6 +205,7 @@ func TestStackCreate_StandaloneString_HappyPath(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("stack_file_content", "version: '3'")
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -254,6 +255,65 @@ func TestStackCreate_StandaloneString_HappyPath(t *testing.T) {
 	}
 }
 
+// TestStackCreate_ActiveFalse_StopsStack verifies that creating a stack with
+// active = false stops it right after deployment. The Portainer API always
+// deploys a new stack in the running state, so Create must issue the stop call
+// itself rather than leaving it to a later update (issue #134).
+func TestStackCreate_ActiveFalse_StopsStack(t *testing.T) {
+	mock := NewMockServer(t)
+	mockEmptyStackList(mock)
+
+	mock.On("POST", "/stacks/create/standalone/string", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id":   5,
+		"Name": "web",
+	}))
+	mock.On("PUT", "/stacks/5", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id":   5,
+		"Name": "web",
+	}))
+	// The stop call Create must make when active = false.
+	mock.On("POST", "/stacks/5/stop", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id":   5,
+		"Name": "web",
+	}))
+	// Read chain reflects the stopped state (Status 2 => inactive).
+	mock.On("GET", "/stacks/5", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id":         5,
+		"Name":       "web",
+		"Status":     2,
+		"Type":       2,
+		"EndpointId": 1,
+	}))
+	mock.On("GET", "/stacks/5/file", RespondJSON(http.StatusOK, map[string]interface{}{
+		"StackFileContent": "version: '3'",
+	}))
+
+	r := resourcePortainerStack()
+	d := r.TestResourceData()
+	_ = d.Set("deployment_type", "standalone")
+	_ = d.Set("method", "string")
+	_ = d.Set("name", "web")
+	_ = d.Set("endpoint_id", 1)
+	_ = d.Set("stack_file_content", "version: '3'")
+	_ = d.Set("active", false)
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	stop := mock.FindRequest("POST", "/stacks/5/stop")
+	if stop == nil {
+		t.Fatal("expected Create to stop the stack via POST /stacks/5/stop when active = false")
+	}
+	if !strings.Contains(stop.Query, "endpointId=1") {
+		t.Errorf("expected stop query to carry endpointId=1, got %q", stop.Query)
+	}
+	// Read should refresh active to false from the stopped status.
+	if got := d.Get("active"); got != false {
+		t.Errorf("active: expected false (Status=2), got %v", got)
+	}
+}
+
 // TestStackCreate_SwarmString_HappyPath covers deployment_type=swarm,
 // method=string. swarm_id is provided so fetchSwarmID is NOT triggered.
 // Verifies the swarm create endpoint and that swarmID is carried in the
@@ -288,6 +348,7 @@ func TestStackCreate_SwarmString_HappyPath(t *testing.T) {
 	_ = d.Set("swarm_id", "swarm-abc") // pre-set so fetchSwarmID is skipped
 	_ = d.Set("stack_file_content", "version: '3'")
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -352,6 +413,7 @@ func TestStackCreate_StandaloneRepository_HappyPath(t *testing.T) {
 	_ = d.Set("repository_reference_name", "refs/heads/main")
 	_ = d.Set("file_path_in_repository", "docker-compose.yml")
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -416,6 +478,7 @@ func TestStackCreate_RepositoryDefaultsComposeFile(t *testing.T) {
 	_ = d.Set("repository_url", "https://github.com/acme/app.git")
 	// file_path_in_repository intentionally left unset.
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -456,6 +519,7 @@ func TestStackCreate_KubernetesString_HappyPath(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("stack_file_content", "apiVersion: v1")
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -515,6 +579,7 @@ func TestStackCreate_KubernetesString_IDRecoveredByName(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("stack_file_content", "apiVersion: v1")
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}

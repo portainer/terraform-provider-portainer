@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -70,34 +69,23 @@ func dataSourcePortainerPolicyRead(ctx context.Context, d *schema.ResourceData, 
 	// If policy_id is provided, look up directly
 	if v, ok := d.GetOk("policy_id"); ok {
 		policyID := v.(int)
-		return diag.FromErr(readPolicyByID(d, client, policyID))
+		return diag.FromErr(readPolicyByID(ctx, d, client, policyID))
 	}
 
 	// Otherwise, look up by name from the list
 	name := d.Get("name").(string)
 
-	resp, err := client.DoRequest("GET", "/policies", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list policies: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to list policies, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var listResp struct {
 		Policies []map[string]interface{} `json:"policies"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode policy list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/policies", nil, &listResp); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list policies: %w", err))
 	}
 
 	for _, p := range listResp.Policies {
 		if pName, ok := p["Name"].(string); ok && pName == name {
 			if id, ok := p["Id"].(float64); ok {
-				return diag.FromErr(readPolicyByID(d, client, int(id)))
+				return diag.FromErr(readPolicyByID(ctx, d, client, int(id)))
 			}
 		}
 	}
@@ -105,23 +93,12 @@ func dataSourcePortainerPolicyRead(ctx context.Context, d *schema.ResourceData, 
 	return diag.FromErr(fmt.Errorf("policy with name %q not found", name))
 }
 
-func readPolicyByID(d *schema.ResourceData, client *APIClient, policyID int) error {
+func readPolicyByID(ctx context.Context, d *schema.ResourceData, client *APIClient, policyID int) error {
 	idStr := strconv.Itoa(policyID)
 
-	resp, err := client.DoRequest("GET", fmt.Sprintf("/policies/%s", idStr), nil, nil)
-	if err != nil {
-		return fmt.Errorf("failed to read policy %d: %w", policyID, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to read policy %d, status %d: %s", policyID, resp.StatusCode, string(data))
-	}
-
 	var policy map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&policy); err != nil {
-		return fmt.Errorf("failed to decode policy response: %w", err)
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/policies/%s", client.Endpoint, idStr), nil, &policy); err != nil {
+		return fmt.Errorf("failed to read policy %d: %w", policyID, err)
 	}
 
 	d.SetId(idStr)

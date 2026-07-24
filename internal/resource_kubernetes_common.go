@@ -3,7 +3,6 @@ package internal
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -29,27 +28,12 @@ import (
 // diagnostics with the ID cleared when it is gone. Callers should check d.Id() == ""
 // before setting any other fields.
 func k8sConfirmExistsByGET(ctx context.Context, d *schema.ResourceData, client *APIClient, url, kind string) diag.Diagnostics {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read %s (%d): %s", kind, resp.StatusCode, string(body)))
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, nil); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read %s: %w", kind, err))
 	}
 	return nil
 }

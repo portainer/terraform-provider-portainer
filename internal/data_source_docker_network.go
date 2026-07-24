@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -46,25 +44,14 @@ func dataSourceDockerNetworkRead(ctx context.Context, d *schema.ResourceData, me
 	name := d.Get("name").(string)
 
 	path := fmt.Sprintf("/endpoints/%d/docker/networks", endpointID)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list docker networks: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to list docker networks, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var networks []struct {
 		ID     string `json:"Id"`
 		Name   string `json:"Name"`
 		Driver string `json:"Driver"`
 		Scope  string `json:"Scope"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&networks); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode docker network list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+path, nil, &networks); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list docker networks: %w", err))
 	}
 
 	for _, n := range networks {

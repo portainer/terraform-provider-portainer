@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -43,23 +41,12 @@ func dataSourceDockerImageRead(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	path := fmt.Sprintf("/endpoints/%d/docker/images/json", endpointID)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list docker images: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to list docker images, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var images []struct {
 		ID       string   `json:"Id"`
 		RepoTags []string `json:"RepoTags"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&images); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode docker image list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+path, nil, &images); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list docker images: %w", err))
 	}
 
 	for _, img := range images {

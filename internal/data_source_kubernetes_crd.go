@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -85,16 +84,6 @@ func dataSourceKubernetesCRDRead(ctx context.Context, d *schema.ResourceData, me
 	if nameSet {
 		// Get a specific CRD
 		path := fmt.Sprintf("/kubernetes/%d/customresourcedefinitions/%s", envID, crdName.(string))
-		resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to get CRD: %w", err))
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode >= 400 {
-			return diag.FromErr(fmt.Errorf("failed to get CRD: HTTP %d", resp.StatusCode))
-		}
-
 		var crd struct {
 			Name             string `json:"name"`
 			Group            string `json:"group"`
@@ -104,8 +93,8 @@ func dataSourceKubernetesCRDRead(ctx context.Context, d *schema.ResourceData, me
 			ReleaseNamespace string `json:"releaseNamespace"`
 			ReleaseVersion   string `json:"releaseVersion"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&crd); err != nil {
-			return diag.FromErr(fmt.Errorf("failed to decode CRD response: %w", err))
+		if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+path, nil, &crd); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to get CRD: %w", err))
 		}
 
 		crds := []map[string]interface{}{
@@ -126,16 +115,6 @@ func dataSourceKubernetesCRDRead(ctx context.Context, d *schema.ResourceData, me
 	} else {
 		// List all CRDs
 		path := fmt.Sprintf("/kubernetes/%d/customresourcedefinitions", envID)
-		resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to list CRDs: %w", err))
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode >= 400 {
-			return diag.FromErr(fmt.Errorf("failed to list CRDs: HTTP %d", resp.StatusCode))
-		}
-
 		var result []struct {
 			Name             string `json:"name"`
 			Group            string `json:"group"`
@@ -145,8 +124,8 @@ func dataSourceKubernetesCRDRead(ctx context.Context, d *schema.ResourceData, me
 			ReleaseNamespace string `json:"releaseNamespace"`
 			ReleaseVersion   string `json:"releaseVersion"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return diag.FromErr(fmt.Errorf("failed to decode CRDs response: %w", err))
+		if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+path, nil, &result); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to list CRDs: %w", err))
 		}
 
 		crds := make([]map[string]interface{}, len(result))

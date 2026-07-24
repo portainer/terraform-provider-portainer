@@ -71,35 +71,12 @@ func toIntSlices(raw []interface{}) []int {
 func getNamespaceRPN(ctx context.Context, client *APIClient, environmentID int, namespaceName string) (string, error) {
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces", client.Endpoint, environmentID)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", err
-	}
-
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("failed to list namespaces: %s", string(data))
-	}
-
 	var namespaces []struct {
 		Name string `json:"Name"`
 		Id   string `json:"Id"`
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&namespaces); err != nil {
-		return "", err
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, &namespaces); err != nil {
+		return "", fmt.Errorf("failed to list namespaces: %w", err)
 	}
 
 	for _, ns := range namespaces {

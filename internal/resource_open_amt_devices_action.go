@@ -1,9 +1,7 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -49,31 +47,10 @@ func resourcePortainerOpenAMTDeviceActionCreate(ctx context.Context, d *schema.R
 	action := d.Get("action").(string)
 
 	reqBody := OpenAMTDeviceActionRequest{Action: action}
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return diag.FromErr(err)
-	}
 
 	url := fmt.Sprintf("%s/open_amt/%d/devices/%d/action", client.Endpoint, envID, deviceID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to execute AMT action: %s", resp.Status))
+	if err := doJSON(ctx, client, http.MethodPost, url, reqBody, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to execute AMT action: %w", err))
 	}
 
 	id := fmt.Sprintf("openamt-device-%d-action-%s", deviceID, action)

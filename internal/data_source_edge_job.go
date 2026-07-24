@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -35,24 +33,13 @@ func dataSourceEdgeJobRead(ctx context.Context, d *schema.ResourceData, meta int
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	resp, err := client.DoRequest("GET", "/edge_jobs", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list edge jobs: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to list edge jobs, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var jobs []struct {
 		ID             int    `json:"Id"`
 		Name           string `json:"Name"`
 		CronExpression string `json:"CronExpression"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&jobs); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode edge job list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/edge_jobs", nil, &jobs); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list edge jobs: %w", err))
 	}
 
 	for _, j := range jobs {

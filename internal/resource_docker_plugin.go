@@ -167,16 +167,9 @@ func resourceDockerPluginDelete(ctx context.Context, d *schema.ResourceData, met
 	endpointID := d.Get("endpoint_id").(int)
 	plugin := d.Id()
 
-	path := fmt.Sprintf("/endpoints/%d/docker/plugins/%s", endpointID, plugin)
-	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
-	if err != nil {
+	url := fmt.Sprintf("%s/endpoints/%d/docker/plugins/%s", client.Endpoint, endpointID, plugin)
+	if err := doJSON(ctx, client, http.MethodDelete, url, nil, nil); err != nil && !isAPINotFound(err) {
 		return diag.FromErr(fmt.Errorf("failed to delete plugin: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete plugin: %s", string(body)))
 	}
 
 	d.SetId("")
@@ -188,26 +181,6 @@ func resourceDockerPluginRead(ctx context.Context, d *schema.ResourceData, meta 
 	endpointID := d.Get("endpoint_id").(int)
 	pluginName := d.Id()
 	url := fmt.Sprintf("%s/endpoints/%d/docker/plugins/%s/json", client.Endpoint, endpointID, pluginName)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to fetch docker plugin: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read docker plugin, status: %d, body: %s", resp.StatusCode, string(body)))
-	}
 
 	var plugin struct {
 		Enabled  bool `json:"Enabled"`
@@ -225,8 +198,12 @@ func resourceDockerPluginRead(ctx context.Context, d *schema.ResourceData, meta 
 			} `json:"Settings"`
 		} `json:"Config"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&plugin); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode plugin data: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, &plugin); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read docker plugin: %w", err))
 	}
 
 	if err := d.Set("enable", plugin.Enabled); err != nil {

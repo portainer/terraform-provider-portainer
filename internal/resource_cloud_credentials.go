@@ -63,18 +63,8 @@ func resourceCloudCredentialsCreate(ctx context.Context, d *schema.ResourceData,
 		ID int `json:"id"`
 	}
 
-	resp, err := client.DoRequest(http.MethodPost, "/cloud/credentials", nil, payload)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/cloud/credentials", payload, &result); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to create cloud credential: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to create cloud credential: HTTP %d", resp.StatusCode))
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(err)
 	}
 
 	d.SetId(strconv.Itoa(result.ID))
@@ -84,15 +74,8 @@ func resourceCloudCredentialsCreate(ctx context.Context, d *schema.ResourceData,
 func resourceCloudCredentialsDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	path := fmt.Sprintf("/cloud/credentials/%s", d.Id())
-	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/cloud/credentials/%s", client.Endpoint, d.Id()), nil, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to delete cloud credential: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to delete cloud credential: HTTP %d", resp.StatusCode))
 	}
 
 	d.SetId("")
@@ -103,25 +86,14 @@ func resourceCloudCredentialsRead(ctx context.Context, d *schema.ResourceData, m
 	client := meta.(*APIClient)
 	id := d.Id()
 
-	path := fmt.Sprintf("/cloud/credentials/%s", id)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read cloud credential: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to read cloud credential: HTTP %d", resp.StatusCode))
-	}
-
 	var result struct {
 		ID          int                    `json:"id"`
 		Name        string                 `json:"name"`
 		Provider    string                 `json:"provider"`
 		Credentials map[string]interface{} `json:"credentials"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode response: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/cloud/credentials/%s", client.Endpoint, id), nil, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to read cloud credential: %w", err))
 	}
 
 	if err := d.Set("name", result.Name); err != nil {

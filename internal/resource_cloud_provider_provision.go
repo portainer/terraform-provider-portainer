@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -76,37 +73,13 @@ func resourceCloudProvisionCreate(ctx context.Context, d *schema.ResourceData, m
 	defer cancel()
 
 	payload := mapStringInterfaceCloudProviderProvision(d.Get("payload").(map[string]interface{}))
-	jsonBody, err := json.Marshal(payload)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal payload: %w", err))
-	}
 
 	url := fmt.Sprintf("%s/cloud/%s/provision", client.Endpoint, provider)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to build request: %w", err))
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("request failed: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		msg, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("cloud provision failed: %s", msg))
-	}
-
 	var result struct {
 		Id int `json:"Id"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode response: %w", err))
+	if err := doJSON(ctx, client, http.MethodPost, url, payload, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("cloud provision failed: %w", err))
 	}
 	d.SetId(strconv.Itoa(result.Id))
 	return nil

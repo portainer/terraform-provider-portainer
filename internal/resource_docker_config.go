@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -76,22 +74,10 @@ func resourceDockerConfig() *schema.Resource {
 	}
 }
 
-func findExistingDockerConfigByName(client *APIClient, endpointID int, name string) (string, error) {
-	path := fmt.Sprintf("/endpoints/%d/docker/configs", endpointID)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to list docker configs: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("failed to list docker configs: %s", string(body))
-	}
-
+func findExistingDockerConfigByName(ctx context.Context, client *APIClient, endpointID int, name string) (string, error) {
 	var configs []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&configs); err != nil {
-		return "", err
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/endpoints/%d/docker/configs", client.Endpoint, endpointID), nil, &configs); err != nil {
+		return "", fmt.Errorf("failed to list docker configs: %w", err)
 	}
 
 	for _, cfg := range configs {
@@ -122,7 +108,7 @@ func resourceDockerConfigCreate(ctx context.Context, d *schema.ResourceData, met
 	endpointID := d.Get("endpoint_id").(int)
 	name := d.Get("name").(string)
 
-	if existingID, err := findExistingDockerConfigByName(client, endpointID, name); err != nil {
+	if existingID, err := findExistingDockerConfigByName(ctx, client, endpointID, name); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to check for existing docker config: %w", err))
 	} else if existingID != "" {
 		d.SetId(existingID)
@@ -145,20 +131,8 @@ func resourceDockerConfigCreate(ctx context.Context, d *schema.ResourceData, met
 
 	var response dockerConfigCreateResponse
 
-	path := fmt.Sprintf("/endpoints/%d/docker/configs/create", endpointID)
-	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s/endpoints/%d/docker/configs/create", client.Endpoint, endpointID), payload, &response); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to create docker config: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create docker config: %s", string(body)))
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return diag.FromErr(err)
 	}
 
 	d.SetId(response.ID)
@@ -177,22 +151,6 @@ func resourceDockerConfigRead(ctx context.Context, d *schema.ResourceData, meta 
 	endpointID := d.Get("endpoint_id").(int)
 	id := d.Id()
 
-	path := fmt.Sprintf("/endpoints/%d/docker/configs/%s", endpointID, id)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read docker config: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read docker config: %s", string(body)))
-	}
-
 	var result struct {
 		ID   string `json:"ID"`
 		Spec struct {
@@ -207,8 +165,12 @@ func resourceDockerConfigRead(ctx context.Context, d *schema.ResourceData, meta 
 		} `json:"Portainer"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode docker config: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/endpoints/%d/docker/configs/%s", client.Endpoint, endpointID, id), nil, &result); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read docker config: %w", err))
 	}
 
 	templ := make(map[string]interface{})
@@ -243,16 +205,10 @@ func resourceDockerConfigDelete(ctx context.Context, d *schema.ResourceData, met
 	endpointID := d.Get("endpoint_id").(int)
 	id := d.Id()
 
-	path := fmt.Sprintf("/endpoints/%d/docker/configs/%s", endpointID, id)
-	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to delete docker config: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete docker config: %s", string(body)))
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/endpoints/%d/docker/configs/%s", client.Endpoint, endpointID, id), nil, nil); err != nil {
+		if !isAPINotFound(err) {
+			return diag.FromErr(fmt.Errorf("failed to delete docker config: %w", err))
+		}
 	}
 
 	d.SetId("")
@@ -278,16 +234,8 @@ func resourceDockerConfigUpdate(ctx context.Context, d *schema.ResourceData, met
 		}
 	}
 
-	path := fmt.Sprintf("/endpoints/%d/docker/configs/%s/update", endpointID, id)
-	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s/endpoints/%d/docker/configs/%s/update", client.Endpoint, endpointID, id), payload, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update docker config: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update docker config: %s", string(body)))
 	}
 
 	return resourceDockerConfigRead(ctx, d, meta)

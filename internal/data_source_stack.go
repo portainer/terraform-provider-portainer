@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -46,17 +44,6 @@ func dataSourceStackRead(ctx context.Context, d *schema.ResourceData, meta inter
 	name := d.Get("name").(string)
 	endpointID := d.Get("endpoint_id").(int)
 
-	resp, err := client.DoRequest("GET", "/stacks", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list stacks: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to list stacks, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var stacks []struct {
 		ID         int    `json:"Id"`
 		Name       string `json:"Name"`
@@ -64,8 +51,8 @@ func dataSourceStackRead(ctx context.Context, d *schema.ResourceData, meta inter
 		Type       int    `json:"Type"`
 		SwarmID    string `json:"SwarmId"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&stacks); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode stack list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/stacks", nil, &stacks); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list stacks: %w", err))
 	}
 
 	for _, s := range stacks {

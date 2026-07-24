@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -189,32 +186,9 @@ func resourceEndpointSettingsUpdate(ctx context.Context, d *schema.ResourceData,
 		DeploymentOptions:       deploy,
 	}
 
-	jsonBody, err := json.Marshal(payload)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal request body: %w", err))
-	}
-
 	url := fmt.Sprintf("%s/endpoints/%d/settings", client.Endpoint, endpointID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create request: %w", err))
-	}
-
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("request failed: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update endpoint settings: %s", string(data)))
+	if err := doJSON(ctx, client, http.MethodPut, url, payload, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update endpoint settings: %w", err))
 	}
 	d.SetId(strconv.Itoa(endpointID))
 	return nil

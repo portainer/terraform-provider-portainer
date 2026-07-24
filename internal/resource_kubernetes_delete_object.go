@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -72,27 +69,10 @@ func resourceKubernetesDeleteObjectCreate(ctx context.Context, d *schema.Resourc
 		namespace: names,
 	}
 
-	jsonBody, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/kubernetes/%d/%s/delete", client.Endpoint, envID, typePath)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete %s: %s", typePath, string(data)))
+	if err := doJSON(ctx, client, http.MethodPost, url, body, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to delete %s: %w", typePath, err))
 	}
 
 	id := fmt.Sprintf("%d:%s:%s", envID, typePath, strings.Join(names, ","))

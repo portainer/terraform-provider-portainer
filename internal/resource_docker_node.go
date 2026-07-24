@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 
@@ -82,30 +79,9 @@ func resourceDockerNodeUpdate(ctx context.Context, d *schema.ResourceData, meta 
 		Labels:       convertMapsString(d.Get("labels").(map[string]interface{})),
 	}
 
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal node update payload: %w", err))
-	}
-
 	reqURL := fmt.Sprintf("%s/endpoints/%d/docker/nodes/%s/update?version=%d", client.Endpoint, endpointID, url.PathEscape(nodeID), version)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(body))
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to build request: %w", err))
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to send request: %w", err))
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to update node, status: %d, body: %s", resp.StatusCode, string(respBody)))
+	if err := doJSON(ctx, client, http.MethodPost, reqURL, payload, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update node: %w", err))
 	}
 
 	d.SetId(fmt.Sprintf("%d-%s", endpointID, nodeID))
@@ -117,29 +93,7 @@ func resourceDockerNodeRead(ctx context.Context, d *schema.ResourceData, meta in
 	endpointID := d.Get("endpoint_id").(int)
 	nodeID := d.Get("node_id").(string)
 
-	url := fmt.Sprintf("%s/endpoints/%d/docker/nodes/%s", client.Endpoint, endpointID, nodeID)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to build read request: %w", err))
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to send read request: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	} else if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read node: %s", string(body)))
-	}
+	reqURL := fmt.Sprintf("%s/endpoints/%d/docker/nodes/%s", client.Endpoint, endpointID, nodeID)
 
 	var result struct {
 		ID      string `json:"ID"`
@@ -154,8 +108,12 @@ func resourceDockerNodeRead(ctx context.Context, d *schema.ResourceData, meta in
 		} `json:"Spec"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode response: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, reqURL, nil, &result); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read node: %w", err))
 	}
 
 	if err := d.Set("version", result.Version.Index); err != nil {
@@ -183,23 +141,8 @@ func resourceDockerNodeDelete(ctx context.Context, d *schema.ResourceData, meta 
 	nodeID := d.Get("node_id").(string)
 
 	reqURL := fmt.Sprintf("%s/endpoints/%d/docker/nodes/%s", client.Endpoint, endpointID, url.PathEscape(nodeID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to build delete request: %w", err))
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to send delete request: %w", err))
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to delete node, status: %d, body: %s", resp.StatusCode, string(respBody)))
+	if err := doJSON(ctx, client, http.MethodDelete, reqURL, nil, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to delete node: %w", err))
 	}
 
 	d.SetId("")

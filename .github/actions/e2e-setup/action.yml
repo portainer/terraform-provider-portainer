@@ -1,0 +1,89 @@
+name: "E2E setup"
+description: >-
+  Shared setup for the end-to-end test jobs: build and install the local
+  provider, patch example/e2e main.tf files to use it, start Portainer, and
+  install Terraform. Kubernetes (k3d + agent + kompose) is set up only when the
+  `kubernetes` input is 'true', so Docker-only / Swarm / Edge / SSL jobs skip
+  that expensive step.
+inputs:
+  kubernetes:
+    description: "Set up a k3d cluster, deploy the Portainer agent and install kompose."
+    required: false
+    default: "false"
+  terraform-version:
+    description: "Terraform version to install."
+    required: false
+    default: "1.6.6"
+runs:
+  using: "composite"
+  steps:
+    - name: ⚙️ Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        cache-dependency-path: go.sum
+
+    - name: ⚙️ Build local provider
+      shell: bash
+      run: make build
+
+    - name: 🧩 Install local provider plugin
+      shell: bash
+      run: make install-plugin
+
+    - name: 🩹 Patch main.tf files to use local provider
+      shell: bash
+      run: |
+        find e2e-tests -name "main.tf" -exec sed -i 's|source *= *"portainer/portainer"|source = "localdomain/local/portainer"|' {} +
+
+    - name: 🐳 Start Portainer via Docker Compose
+      shell: bash
+      run: make up
+
+    - name: 🛠️ Install kubectl
+      if: inputs.kubernetes == 'true'
+      shell: bash
+      run: make install-kubectl
+
+    - name: 🔧 Install k3d
+      if: inputs.kubernetes == 'true'
+      shell: bash
+      run: make install-k3d
+
+    - name: ☸️ Create K3d cluster
+      if: inputs.kubernetes == 'true'
+      shell: bash
+      run: make k3d-up
+
+    - name: ☸️ Verify K3d cluster
+      if: inputs.kubernetes == 'true'
+      shell: bash
+      run: make k3d-status
+
+    - name: 🧠 Deploy Portainer Agent into Kubernetes
+      if: inputs.kubernetes == 'true'
+      shell: bash
+      run: make k8s-deploy-agent
+
+    - name: 🧬 Connect Portainer to k3d network
+      if: inputs.kubernetes == 'true'
+      shell: bash
+      run: make k3d-connect-portainer
+
+    - name: 🌐 Get Kubernetes server IP and export for Terraform
+      if: inputs.kubernetes == 'true'
+      shell: bash
+      run: make k3d-export-ip
+
+    - name: Install Kompose
+      if: inputs.kubernetes == 'true'
+      shell: bash
+      run: |
+        curl -L https://github.com/kubernetes/kompose/releases/download/v1.35.0/kompose-linux-amd64 -o kompose
+        chmod +x kompose
+        sudo mv ./kompose /usr/local/bin/kompose
+
+    - name: ⬇️ Install Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform-version }}

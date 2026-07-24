@@ -75,14 +75,8 @@ func resourceStackMigrateCreate(ctx context.Context, d *schema.ResourceData, met
 		path = fmt.Sprintf("%s?endpointId=%d", path, v.(int))
 	}
 
-	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s%s", client.Endpoint, path), payload, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to migrate stack: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to migrate stack: HTTP %d", resp.StatusCode))
 	}
 
 	d.SetId(strconv.Itoa(stackID) + "-" + strconv.FormatInt(time.Now().Unix(), 10))

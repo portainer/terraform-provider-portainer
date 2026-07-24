@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -43,29 +40,8 @@ func resourceExperimentalSettingsApply(ctx context.Context, d *schema.ResourceDa
 		OpenAIIntegration: d.Get("openai_integration").(bool),
 	}
 
-	jsonBody, err := json.Marshal(payload)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/settings/experimental", client.Endpoint), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to apply experimental settings: %s", string(body)))
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/settings/experimental", client.Endpoint), payload, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to apply experimental settings: %w", err))
 	}
 
 	d.SetId("portainer-experimental-settings")
@@ -75,33 +51,14 @@ func resourceExperimentalSettingsApply(ctx context.Context, d *schema.ResourceDa
 func resourceExperimentalSettingsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/settings/experimental", client.Endpoint), nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to retrieve experimental settings: %s", string(body)))
-	}
-
 	var result struct {
 		ExperimentalFeatures struct {
 			OpenAIIntegration bool `json:"OpenAIIntegration"`
 		} `json:"experimentalFeatures"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode response: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/settings/experimental", client.Endpoint), nil, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to retrieve experimental settings: %w", err))
 	}
 
 	if err := d.Set("openai_integration", result.ExperimentalFeatures.OpenAIIntegration); err != nil {

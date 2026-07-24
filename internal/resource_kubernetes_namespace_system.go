@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -54,27 +51,10 @@ func resourceKubernetesNamespaceSystemToggle(ctx context.Context, d *schema.Reso
 		"system": system,
 	}
 
-	jsonBody, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s/system", client.Endpoint, id, namespace)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to toggle namespace system state: %s", string(data)))
+	if err := doJSON(ctx, client, http.MethodPut, url, body, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to toggle namespace system state: %w", err))
 	}
 
 	d.SetId(fmt.Sprintf("%d:%s", id, namespace))
@@ -96,34 +76,16 @@ func resourceKubernetesNamespaceSystemRead(ctx context.Context, d *schema.Resour
 	}
 
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s", client.Endpoint, envID, namespace)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read namespace %q: %s", namespace, string(data)))
-	}
 
 	var ns struct {
 		IsSystem bool `json:"IsSystem"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&ns); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode namespace response: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, &ns); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read namespace %q: %w", namespace, err))
 	}
 
 	if err := d.Set("environment_id", envID); err != nil {

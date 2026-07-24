@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -71,26 +68,9 @@ func resourceKubernetesIngressControllersCreate(ctx context.Context, d *schema.R
 		})
 	}
 
-	jsonBody, _ := json.Marshal(controllers)
 	url := fmt.Sprintf("%s/kubernetes/%d/ingresscontrollers", client.Endpoint, id)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update ingress controllers: %s", body))
+	if err := doJSON(ctx, client, http.MethodPut, url, controllers, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update ingress controllers: %w", err))
 	}
 
 	d.SetId(strconv.Itoa(id))
@@ -102,32 +82,13 @@ func resourceKubernetesIngressControllersRead(ctx context.Context, d *schema.Res
 	id := d.Get("environment_id").(int)
 
 	url := fmt.Sprintf("%s/kubernetes/%d/ingresscontrollers", client.Endpoint, id)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read ingress controllers: %s", body))
-	}
-
 	controllers := make([]IngressController, 0, len(d.Get("controllers").([]interface{})))
-	if err := json.NewDecoder(resp.Body).Decode(&controllers); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, &controllers); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read ingress controllers: %w", err))
 	}
 
 	controllersList := make([]map[string]interface{}, len(controllers))
@@ -166,26 +127,9 @@ func resourceKubernetesIngressControllersDelete(ctx context.Context, d *schema.R
 		})
 	}
 
-	jsonBody, _ := json.Marshal(controllers)
 	url := fmt.Sprintf("%s/kubernetes/%d/ingresscontrollers", client.Endpoint, id)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to disable ingress controllers: %s", body))
+	if err := doJSON(ctx, client, http.MethodPut, url, controllers, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to disable ingress controllers: %w", err))
 	}
 
 	return nil
