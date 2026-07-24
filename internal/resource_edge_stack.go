@@ -190,14 +190,6 @@ func resourceEdgeStack() *schema.Resource {
 	}
 }
 
-func setAuthHeaders(client *APIClient, req *http.Request) {
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	}
-}
-
 func buildEnvVars(d *schema.ResourceData) []map[string]string {
 	envVars := []map[string]string{}
 	if envMap, ok := d.GetOk("environment"); ok {
@@ -212,27 +204,9 @@ func buildEnvVars(d *schema.ResourceData) []map[string]string {
 }
 
 func findExistingEdgeStackByName(ctx context.Context, client *APIClient, name string) (int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_stacks", client.Endpoint), nil)
-	if err != nil {
-		return 0, err
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return 0, err
-	}
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return 0, fmt.Errorf("failed to list edge stacks: %s", string(data))
-	}
-
 	var stacks []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&stacks); err != nil {
-		return 0, err
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/edge_stacks", client.Endpoint), nil, &stacks); err != nil {
+		return 0, fmt.Errorf("failed to list edge stacks: %w", err)
 	}
 
 	for _, stack := range stacks {
@@ -439,27 +413,8 @@ func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta i
 			payload["stackFileContent"] = v.(string)
 		}
 
-		jsonBody, err := json.Marshal(payload)
-		if err != nil {
-			return diag.FromErr(err)
-		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
-		if err != nil {
-			return diag.FromErr(err)
-		}
-		setAuthHeaders(client, req)
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.HTTPClient.Do(req)
-		if err != nil {
-			return diag.FromErr(err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			data, _ := io.ReadAll(resp.Body)
-			return diag.FromErr(fmt.Errorf("failed to update edge stack: %s", string(data)))
+		if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), payload, nil); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to update edge stack: %w", err))
 		}
 
 		return resourceEdgeStackRead(ctx, d, meta)
@@ -523,27 +478,8 @@ func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta i
 			}
 		}
 
-		jsonBody, err := json.Marshal(payload)
-		if err != nil {
-			return diag.FromErr(err)
-		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/edge_stacks/%s/git", client.Endpoint, d.Id()), bytes.NewBuffer(jsonBody))
-		if err != nil {
-			return diag.FromErr(err)
-		}
-		setAuthHeaders(client, req)
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.HTTPClient.Do(req)
-		if err != nil {
-			return diag.FromErr(err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			data, _ := io.ReadAll(resp.Body)
-			return diag.FromErr(fmt.Errorf("failed to update repository-based edge stack: %s", string(data)))
+		if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/edge_stacks/%s/git", client.Endpoint, d.Id()), payload, nil); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to update repository-based edge stack: %w", err))
 		}
 
 		return resourceEdgeStackRead(ctx, d, meta)
@@ -553,35 +489,12 @@ func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta i
 }
 
 func createEdgeStackFromJSON(ctx context.Context, client *APIClient, d *schema.ResourceData, payload map[string]interface{}, endpoint string) error {
-	jsonBody, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, client.Endpoint+endpoint, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return err
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create edge stack: %s", string(data))
-	}
-
 	var result struct {
 		ID int `json:"Id"`
 	}
-	_ = json.NewDecoder(resp.Body).Decode(&result)
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+endpoint, payload, &result); err != nil {
+		return fmt.Errorf("failed to create edge stack: %w", err)
+	}
 	d.SetId(strconv.Itoa(result.ID))
 	if diags := resourceEdgeStackRead(ctx, d, client); diags.HasError() {
 		return fmt.Errorf("%s", diags[0].Summary)
@@ -596,25 +509,6 @@ func toJSONString(input interface{}) string {
 
 func resourceEdgeStackRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
-
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil)
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	} else if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read edge stack: %s", string(data)))
-	}
 
 	var stack struct {
 		Name                              string `json:"Name"`
@@ -649,8 +543,12 @@ func resourceEdgeStackRead(ctx context.Context, d *schema.ResourceData, meta int
 		} `json:"AutoUpdate,omitempty"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil, &stack); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read edge stack: %w", err))
 	}
 
 	if err := d.Set("name", stack.Name); err != nil {
@@ -799,21 +697,12 @@ func resourceEdgeStackDelete(ctx context.Context, d *schema.ResourceData, meta i
 
 	client := meta.(*APIClient)
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil)
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil, nil); err != nil {
+		if isAPINotFound(err) {
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to delete edge stack: %w", err))
 	}
 
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound {
-		return nil
-	}
-
-	data, _ := io.ReadAll(resp.Body)
-	return diag.FromErr(fmt.Errorf("failed to delete edge stack: %s", string(data)))
+	return nil
 }

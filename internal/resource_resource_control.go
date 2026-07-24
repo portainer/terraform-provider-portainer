@@ -2,9 +2,8 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -70,22 +69,11 @@ func resourceResourceControl() *schema.Resource {
 func lookupResourceControlID(client *APIClient, resourceType int, resourceId string) (string, map[string]interface{}, error) {
 	switch resourceType {
 	case 6: // stack
-		resp, err := client.DoRequest("GET", fmt.Sprintf("/stacks/%s", resourceId), nil, nil)
-		if err != nil {
-			return "", nil, err
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode >= 400 {
-			data, _ := io.ReadAll(resp.Body)
-			return "", nil, fmt.Errorf("failed to lookup stack: %s", string(data))
-		}
-
 		var result struct {
 			ResourceControl map[string]interface{} `json:"ResourceControl"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return "", nil, err
+		if err := doJSON(context.Background(), client, http.MethodGet, fmt.Sprintf("%s/stacks/%s", client.Endpoint, resourceId), nil, &result); err != nil {
+			return "", nil, fmt.Errorf("failed to lookup stack: %w", err)
 		}
 		if result.ResourceControl == nil || result.ResourceControl["Id"] == nil {
 			return "", nil, fmt.Errorf("no resource control found for stack %s", resourceId)
@@ -207,15 +195,8 @@ func resourceResourceControlUpdate(ctx context.Context, d *schema.ResourceData, 
 		"users":              d.Get("users"),
 	}
 
-	resp, err := client.DoRequest("PUT", fmt.Sprintf("/resource_controls/%s", rcId), nil, body)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/resource_controls/%s", client.Endpoint, rcId), body, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update resource control: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update resource control: %s", string(data)))
 	}
 
 	return resourceResourceControlRead(ctx, d, meta)
@@ -239,20 +220,13 @@ func resourceResourceControlDelete(ctx context.Context, d *schema.ResourceData, 
 		}
 	}
 
-	resp, err := client.DoRequest("DELETE", fmt.Sprintf("/resource_controls/%s", rcId), nil, nil)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/resource_controls/%s", client.Endpoint, rcId), nil, nil); err != nil {
+		var se *apiStatusError
+		if errors.As(err, &se) && (se.StatusCode == http.StatusNotFound || se.StatusCode == http.StatusForbidden) {
+			d.SetId("")
+			return nil
+		}
 		return diag.FromErr(fmt.Errorf("failed to delete resource control: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusForbidden {
-		d.SetId("")
-		return nil
-	}
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete resource control: %s", string(data)))
 	}
 
 	d.SetId("")

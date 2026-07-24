@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 
@@ -230,23 +228,12 @@ func resourceDockerVolumeCreate(ctx context.Context, d *schema.ResourceData, met
 	}
 
 	endpointID := d.Get("endpoint_id").(int)
-	path := fmt.Sprintf("/endpoints/%d/docker/volumes/create", endpointID)
+	reqURL := fmt.Sprintf("%s/endpoints/%d/docker/volumes/create", client.Endpoint, endpointID)
 
 	var response dockerVolumeCreateResponse
 
-	resp, err := client.DoRequest(http.MethodPost, path, nil, volume)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPost, reqURL, volume, &response); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to create volume: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create volume, status code: %d, body: %s", resp.StatusCode, string(body)))
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode create volume response: %w", err))
 	}
 
 	name := response.Name
@@ -270,20 +257,7 @@ func resourceDockerVolumeRead(ctx context.Context, d *schema.ResourceData, meta 
 	endpointID := d.Get("endpoint_id").(int)
 	name := d.Get("name").(string)
 
-	path := fmt.Sprintf("/endpoints/%d/docker/volumes/%s", endpointID, url.PathEscape(name))
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read docker volume: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	} else if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read volume: %s", string(body)))
-	}
+	reqURL := fmt.Sprintf("%s/endpoints/%d/docker/volumes/%s", client.Endpoint, endpointID, url.PathEscape(name))
 
 	var result struct {
 		Name       string            `json:"Name"`
@@ -298,8 +272,12 @@ func resourceDockerVolumeRead(ctx context.Context, d *schema.ResourceData, meta 
 		} `json:"Portainer"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode volume: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, reqURL, nil, &result); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read volume: %w", err))
 	}
 
 	if err := setFields(d, map[string]interface{}{
@@ -327,16 +305,9 @@ func resourceDockerVolumeDelete(ctx context.Context, d *schema.ResourceData, met
 	endpointID := d.Get("endpoint_id").(int)
 	name := d.Get("name").(string)
 
-	path := fmt.Sprintf("/endpoints/%d/docker/volumes/%s", endpointID, url.PathEscape(name))
-	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
-	if err != nil {
+	reqURL := fmt.Sprintf("%s/endpoints/%d/docker/volumes/%s", client.Endpoint, endpointID, url.PathEscape(name))
+	if err := doJSON(ctx, client, http.MethodDelete, reqURL, nil, nil); err != nil && !isAPINotFound(err) {
 		return diag.FromErr(fmt.Errorf("failed to delete volume: %w", err))
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
-		return diag.FromErr(fmt.Errorf("failed to delete volume, status code: %d, body: %s", resp.StatusCode, string(body)))
 	}
 
 	d.SetId("")

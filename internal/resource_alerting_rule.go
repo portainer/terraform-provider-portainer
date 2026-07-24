@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -177,30 +174,13 @@ func resourcePortainerAlertingRuleCreate(ctx context.Context, d *schema.Resource
 func resourcePortainerAlertingRuleRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/observability/alerting/rules/%s", client.Endpoint, d.Id()), nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	setAlertingAuthHeaders(req, client)
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read alert rule %s, status %d: %s", d.Id(), resp.StatusCode, string(body)))
-	}
-
 	var rule AlertingRule
-	if err := json.NewDecoder(resp.Body).Decode(&rule); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode alert rule response: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/observability/alerting/rules/%s", client.Endpoint, d.Id()), nil, &rule); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read alert rule %s: %w", d.Id(), err))
 	}
 
 	d.SetId(strconv.Itoa(rule.ID))
@@ -237,27 +217,8 @@ func resourcePortainerAlertingRuleUpdate(ctx context.Context, d *schema.Resource
 
 	rule := buildAlertingRulePayload(d)
 
-	jsonPayload, err := json.Marshal(AlertRuleUpdatePayload{AlertingRule: rule})
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal alert rule payload: %w", err))
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/observability/alerting/rules/%s", client.Endpoint, d.Id()), bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	setAlertingAuthHeaders(req, client)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update alert rule %s: %s", d.Id(), string(body)))
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/observability/alerting/rules/%s", client.Endpoint, d.Id()), AlertRuleUpdatePayload{AlertingRule: rule}, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update alert rule %s: %w", d.Id(), err))
 	}
 
 	return resourcePortainerAlertingRuleRead(ctx, d, meta)
@@ -266,21 +227,10 @@ func resourcePortainerAlertingRuleUpdate(ctx context.Context, d *schema.Resource
 func resourcePortainerAlertingRuleDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("%s/observability/alerting/rules/%s", client.Endpoint, d.Id()), nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	setAlertingAuthHeaders(req, client)
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete alert rule %s: %s", d.Id(), string(body)))
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/observability/alerting/rules/%s", client.Endpoint, d.Id()), nil, nil); err != nil {
+		if !isAPINotFound(err) {
+			return diag.FromErr(fmt.Errorf("failed to delete alert rule %s: %w", d.Id(), err))
+		}
 	}
 
 	d.SetId("")

@@ -127,6 +127,7 @@ terraform apply
 | `pull_image`                | bool   | 🚫 optional | Pull latest image during update (default: `false`)                   |
 | `relative_path`             | string | 🚫 optional | Enables relative path volumes (from Compose) and sets the `filesystemPath` |
 | `repository_git_credential_id` | int | 🚫 optional | ID of the Git credentials to use (replaces username/password) |
+| `always_clone`              | bool   | 🚫 optional | Always clone the git repository for relative path. Only valid when `relative_path` is set (default: `false`) |
 
 ## 🧮 Computed Outputs
 | Name          | Description                     |

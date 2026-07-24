@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
+	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -218,20 +218,9 @@ func resourceLDAPSettingsApply(ctx context.Context, d *schema.ResourceData, meta
 	client := meta.(*APIClient)
 
 	// First read current settings to get the full payload
-	resp, err := client.DoRequest("GET", "/settings", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read current settings: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read current settings (status %d): %s", resp.StatusCode, string(data)))
-	}
-
 	var currentSettings map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&currentSettings); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode current settings: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/settings", nil, &currentSettings); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to read current settings: %w", err))
 	}
 
 	// Build LDAP settings
@@ -335,15 +324,8 @@ func resourceLDAPSettingsApply(ctx context.Context, d *schema.ResourceData, meta
 		"ldapsettings":         ldap,
 	}
 
-	resp2, err := client.DoRequest("PUT", "/settings", nil, payload)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPut, client.Endpoint+"/settings", payload, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update LDAP settings: %w", err))
-	}
-	defer resp2.Body.Close()
-
-	if resp2.StatusCode < 200 || resp2.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp2.Body)
-		return diag.FromErr(fmt.Errorf("failed to update LDAP settings (status %d): %s", resp2.StatusCode, string(data)))
 	}
 
 	d.SetId("portainer-ldap-settings")
@@ -353,20 +335,9 @@ func resourceLDAPSettingsApply(ctx context.Context, d *schema.ResourceData, meta
 func resourceLDAPSettingsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	resp, err := client.DoRequest("GET", "/settings", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read settings: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read settings (status %d): %s", resp.StatusCode, string(data)))
-	}
-
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode settings: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/settings", nil, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to read settings: %w", err))
 	}
 
 	ldapRaw, ok := result["LDAPSettings"]

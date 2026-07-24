@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -40,25 +38,14 @@ func dataSourceEdgeConfigurationRead(ctx context.Context, d *schema.ResourceData
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	resp, err := client.DoRequest("GET", "/edge_configurations", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list edge configurations: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to list edge configurations, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var configs []struct {
 		ID       int    `json:"id"`
 		Name     string `json:"name"`
 		Type     int    `json:"type"`
 		Category string `json:"category"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&configs); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode edge configuration list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/edge_configurations", nil, &configs); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list edge configurations: %w", err))
 	}
 
 	for _, c := range configs {

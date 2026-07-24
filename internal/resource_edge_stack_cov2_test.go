@@ -38,23 +38,9 @@ func TestEdgeStackCov2_BuildEnvVars(t *testing.T) {
 	})
 }
 
-// TestEdgeStackCov2_SetAuthHeaders covers both header branches of setAuthHeaders.
-func TestEdgeStackCov2_SetAuthHeaders(t *testing.T) {
-	t.Run("api key", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, "http://example/x", nil)
-		setAuthHeaders(&APIClient{APIKey: "k"}, req)
-		if req.Header.Get("X-API-Key") != "k" {
-			t.Errorf("expected X-API-Key header, got %q", req.Header.Get("X-API-Key"))
-		}
-	})
-	t.Run("jwt", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, "http://example/x", nil)
-		setAuthHeaders(&APIClient{JWTToken: "tok"}, req)
-		if req.Header.Get("Authorization") != "Bearer tok" {
-			t.Errorf("expected Bearer token, got %q", req.Header.Get("Authorization"))
-		}
-	})
-}
+// Note: the former TestEdgeStackCov2_SetAuthHeaders was removed together with the
+// local setAuthHeaders helper — edge stack handlers now authenticate through
+// doJSON/setAuthHeader, whose behavior is covered by the doJSON tests.
 
 // TestEdgeStackCov2_FindExistingByName_ListError covers the non-200 list branch
 // of findExistingEdgeStackByName.

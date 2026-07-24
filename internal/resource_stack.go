@@ -527,6 +527,14 @@ func resourcePortainerStackCreate(ctx context.Context, d *schema.ResourceData, m
 		return diag.FromErr(fmt.Errorf("failed to update stack access control: %w", err))
 	}
 
+	// The Portainer API always deploys a new stack in the running state, so if
+	// the user requested active = false we have to stop it right after creation.
+	if !d.Get("active").(bool) {
+		if err := setStackActive(ctx, client, d.Id(), endpointID, false); err != nil {
+			return diag.FromErr(err)
+		}
+	}
+
 	return resourcePortainerStackRead(ctx, d, meta)
 }
 
@@ -535,25 +543,6 @@ func resourcePortainerStackRead(ctx context.Context, d *schema.ResourceData, met
 	stackID := d.Id()
 
 	url := fmt.Sprintf("%s/stacks/%s", client.Endpoint, stackID)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to fetch stack: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read stack, status: %d, body: %s", resp.StatusCode, string(body)))
-	}
 
 	var stack struct {
 		Name                string `json:"Name"`
@@ -603,8 +592,12 @@ func resourcePortainerStackRead(ctx context.Context, d *schema.ResourceData, met
 			} `json:"ResourceControl"`
 		} `json:"Portainer"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&stack); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode stack response: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, &stack); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read stack: %w", err))
 	}
 
 	if err := d.Set("name", stack.Name); err != nil {
@@ -822,6 +815,37 @@ func resourcePortainerStackDelete(ctx context.Context, d *schema.ResourceData, m
 	}
 }
 
+// setStackActive starts or stops a stack via the Portainer stack start/stop
+// endpoints. The Portainer API has no way to create a stack in the stopped
+// state, so callers that want active = false must deploy the stack first and
+// then call this with active = false to stop it.
+func setStackActive(ctx context.Context, client *APIClient, stackID string, endpointID int, active bool) error {
+	action := "stop"
+	if active {
+		action = "start"
+	}
+	actionURL := fmt.Sprintf("%s/stacks/%s/%s?endpointId=%d", client.Endpoint, stackID, action, endpointID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, actionURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create %s request: %w", action, err)
+	}
+	if err := setAuthHeader(req, client); err != nil {
+		return err
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to %s stack: %w", action, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to %s stack: %s", action, string(body))
+	}
+	return nil
+}
+
 func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	stackID := d.Id()
@@ -830,31 +854,8 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 
 	// Handle start/stop
 	if d.HasChange("active") {
-		active := d.Get("active").(bool)
-		var action string
-		if active {
-			action = "start"
-		} else {
-			action = "stop"
-		}
-		actionURL := fmt.Sprintf("%s/stacks/%s/%s?endpointId=%d", client.Endpoint, stackID, action, endpointID)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, actionURL, nil)
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to create %s request: %w", action, err))
-		}
-		if err := setAuthHeader(req, client); err != nil {
+		if err := setStackActive(ctx, client, stackID, endpointID, d.Get("active").(bool)); err != nil {
 			return diag.FromErr(err)
-		}
-
-		resp, err := client.HTTPClient.Do(req)
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to %s stack: %w", action, err))
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode >= 400 {
-			body, _ := io.ReadAll(resp.Body)
-			return diag.FromErr(fmt.Errorf("failed to %s stack: %s", action, string(body)))
 		}
 	}
 
@@ -1631,31 +1632,14 @@ func updateStackAccessControl(d *schema.ResourceData, client *APIClient, stackID
 		}
 	}
 
-	resp, err := client.DoRequest("PUT", fmt.Sprintf("/resource_controls/%s", rcID), nil, payload)
-	if err != nil {
-		return fmt.Errorf("failed to update resource control: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update resource control %s: %s", rcID, string(data))
+	if err := doJSON(context.Background(), client, http.MethodPut, fmt.Sprintf("%s/resource_controls/%s", client.Endpoint, rcID), payload, nil); err != nil {
+		return fmt.Errorf("failed to update resource control %s: %w", rcID, err)
 	}
 
 	return nil
 }
 
 func readStackAccessControl(d *schema.ResourceData, client *APIClient, rcID string) error {
-	resp, err := client.DoRequest("GET", fmt.Sprintf("/resource_controls/%s", rcID), nil, nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("failed to fetch resource control %s", rcID)
-	}
-
 	var rc struct {
 		AdministratorsOnly bool `json:"AdministratorsOnly"`
 		Public             bool `json:"Public"`
@@ -1667,8 +1651,8 @@ func readStackAccessControl(d *schema.ResourceData, client *APIClient, rcID stri
 		} `json:"UserAccesses"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&rc); err != nil {
-		return err
+	if err := doJSON(context.Background(), client, http.MethodGet, fmt.Sprintf("%s/resource_controls/%s", client.Endpoint, rcID), nil, &rc); err != nil {
+		return fmt.Errorf("failed to fetch resource control %s: %w", rcID, err)
 	}
 
 	if rc.Public {

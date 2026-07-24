@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -580,29 +577,8 @@ func resourceSettingsApply(ctx context.Context, d *schema.ResourceData, meta int
 		LDAPSettings:              ldap,
 	}
 
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/settings", client.Endpoint), bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to update settings: %s", string(body)))
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/settings", client.Endpoint), payload, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update settings: %w", err))
 	}
 	d.SetId("portainer-settings")
 	return nil
@@ -611,27 +587,9 @@ func resourceSettingsApply(ctx context.Context, d *schema.ResourceData, meta int
 func resourceSettingsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/settings", client.Endpoint), nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return diag.FromErr(fmt.Errorf("failed to read settings, status: %d", resp.StatusCode))
-	}
-
 	var result SettingsPayload
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/settings", client.Endpoint), nil, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to read settings: %w", err))
 	}
 
 	d.SetId("portainer-settings")

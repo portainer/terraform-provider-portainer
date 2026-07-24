@@ -306,27 +306,8 @@ func resourcePortainerAlertingSettingsDelete(ctx context.Context, d *schema.Reso
 		}
 	}
 
-	jsonPayload, err := json.Marshal(AlertingUpdatePayload{AlertingSettings: disabledSettings})
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/observability/alerting/settings", client.Endpoint), bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	setAlertingAuthHeaders(req, client)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to disable alerting settings: %s", string(body)))
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/observability/alerting/settings", client.Endpoint), AlertingUpdatePayload{AlertingSettings: disabledSettings}, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to disable alerting settings: %w", err))
 	}
 
 	d.SetId("")

@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/go-cty/cty"
@@ -90,21 +88,10 @@ func resourceDockerSecret() *schema.Resource {
 }
 
 func findExistingDockerSecretByName(client *APIClient, endpointID int, name string) (string, error) {
-	path := fmt.Sprintf("/endpoints/%d/docker/secrets", endpointID)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("failed to list secrets: %s", string(body))
-	}
-
+	url := fmt.Sprintf("%s/endpoints/%d/docker/secrets", client.Endpoint, endpointID)
 	var secrets []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&secrets); err != nil {
-		return "", err
+	if err := doJSON(context.Background(), client, http.MethodGet, url, nil, &secrets); err != nil {
+		return "", fmt.Errorf("failed to list secrets: %w", err)
 	}
 
 	for _, s := range secrets {
@@ -190,20 +177,9 @@ func resourceDockerSecretCreate(ctx context.Context, d *schema.ResourceData, met
 
 	var response dockerSecretCreateResponse
 
-	path := fmt.Sprintf("/endpoints/%d/docker/secrets/create", endpointID)
-	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
-	if err != nil {
+	url := fmt.Sprintf("%s/endpoints/%d/docker/secrets/create", client.Endpoint, endpointID)
+	if err := doJSON(ctx, client, http.MethodPost, url, payload, &response); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to create docker secret: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create docker secret: %s", string(body)))
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return diag.FromErr(err)
 	}
 
 	// ID secretu
@@ -224,20 +200,7 @@ func resourceDockerSecretRead(ctx context.Context, d *schema.ResourceData, meta 
 	endpointID := d.Get("endpoint_id").(int)
 	id := d.Id()
 
-	path := fmt.Sprintf("/endpoints/%d/docker/secrets/%s", endpointID, id)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read docker secret: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	} else if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read docker secret: %s", string(body)))
-	}
+	url := fmt.Sprintf("%s/endpoints/%d/docker/secrets/%s", client.Endpoint, endpointID, id)
 
 	var result struct {
 		ID   string `json:"ID"`
@@ -257,8 +220,12 @@ func resourceDockerSecretRead(ctx context.Context, d *schema.ResourceData, meta 
 		} `json:"Portainer"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, &result); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read docker secret: %w", err))
 	}
 
 	if err := d.Set("name", result.Spec.Name); err != nil {
@@ -316,16 +283,9 @@ func resourceDockerSecretUpdate(ctx context.Context, d *schema.ResourceData, met
 
 	payload := buildSecretPayload(d)
 
-	path := fmt.Sprintf("/endpoints/%d/docker/secrets/%s/update", endpointID, id)
-	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
-	if err != nil {
+	url := fmt.Sprintf("%s/endpoints/%d/docker/secrets/%s/update", client.Endpoint, endpointID, id)
+	if err := doJSON(ctx, client, http.MethodPost, url, payload, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update docker secret: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update docker secret: %s", string(body)))
 	}
 
 	return resourceDockerSecretRead(ctx, d, meta)
@@ -336,16 +296,9 @@ func resourceDockerSecretDelete(ctx context.Context, d *schema.ResourceData, met
 	endpointID := d.Get("endpoint_id").(int)
 	id := d.Id()
 
-	path := fmt.Sprintf("/endpoints/%d/docker/secrets/%s", endpointID, id)
-	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
-	if err != nil {
+	url := fmt.Sprintf("%s/endpoints/%d/docker/secrets/%s", client.Endpoint, endpointID, id)
+	if err := doJSON(ctx, client, http.MethodDelete, url, nil, nil); err != nil && !isAPINotFound(err) {
 		return diag.FromErr(fmt.Errorf("failed to delete docker secret: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete docker secret: %s", string(body)))
 	}
 
 	d.SetId("")

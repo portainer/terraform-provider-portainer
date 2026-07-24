@@ -1,12 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -188,26 +184,9 @@ func createOrUpdateIngress(ctx context.Context, d *schema.ResourceData, client *
 		"Paths":       paths,
 	}
 
-	jsonBody, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s/ingresses", client.Endpoint, envID, namespace)
-	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return err
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to %s ingress: %s", strings.ToLower(method), string(data))
+	if err := doJSON(ctx, client, method, url, body, nil); err != nil {
+		return fmt.Errorf("failed to %s ingress: %w", strings.ToLower(method), err)
 	}
 
 	d.SetId(fmt.Sprintf("%d:%s:%s", envID, namespace, name))

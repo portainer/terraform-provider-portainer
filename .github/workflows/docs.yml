@@ -19,8 +19,31 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: ⚙️ Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
       - name: Markdown Link Validation
         uses: gaurav-nelson/github-action-markdown-link-check@v1
+
+      - name: Schema/docs drift check
+        run: |
+          go run ./internal/tools/docsdriftlint . | tee docs-drift.out
+          status=${PIPESTATUS[0]}
+          {
+            echo "## Schema/docs drift check"
+            echo ""
+            if [ "$status" -eq 0 ]; then
+              echo "OK — every schema field is documented."
+            else
+              echo '```'
+              cat docs-drift.out
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
 
       - name: Docs presence check
         run: |

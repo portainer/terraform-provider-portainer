@@ -1,12 +1,10 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -137,33 +135,9 @@ func resourcePortainerAlertingSilenceCreate(ctx context.Context, d *schema.Resou
 		Silence:         silence,
 	}
 
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to marshal silence payload: %w", err))
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/observability/alerting/silence", client.Endpoint), bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	setAlertingAuthHeaders(req, client)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to create alert silence: %s", string(body)))
-	}
-
-	// Parse response to get the silence ID
 	var result map[string]interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode create silence response: %w", err))
+	if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s/observability/alerting/silence", client.Endpoint), payload, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create alert silence: %w", err))
 	}
 
 	if silenceID, ok := result["silenceID"].(string); ok && silenceID != "" {
@@ -171,7 +145,7 @@ func resourcePortainerAlertingSilenceCreate(ctx context.Context, d *schema.Resou
 	} else if id, ok := result["id"].(string); ok && id != "" {
 		d.SetId(id)
 	} else {
-		return diag.FromErr(fmt.Errorf("silence created but no ID returned in response: %s", string(body)))
+		return diag.FromErr(fmt.Errorf("silence created but no ID returned in response"))
 	}
 
 	return resourcePortainerAlertingSilenceRead(ctx, d, meta)
@@ -213,27 +187,14 @@ func resourcePortainerAlertingSilenceDelete(ctx context.Context, d *schema.Resou
 
 	alertManagerURL := d.Get("alert_manager_url").(string)
 
-	deleteURL := fmt.Sprintf("%s/observability/alerting/silence/%s", client.Endpoint, d.Id())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL, nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	setAlertingAuthHeaders(req, client)
-
-	q := req.URL.Query()
+	q := url.Values{}
 	q.Set("alertManagerURL", alertManagerURL)
-	req.URL.RawQuery = q.Encode()
+	deleteURL := fmt.Sprintf("%s/observability/alerting/silence/%s?%s", client.Endpoint, d.Id(), q.Encode())
 
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete alert silence %s: %s", d.Id(), string(body)))
+	if err := doJSON(ctx, client, http.MethodDelete, deleteURL, nil, nil); err != nil {
+		if !isAPINotFound(err) {
+			return diag.FromErr(fmt.Errorf("failed to delete alert silence %s: %w", d.Id(), err))
+		}
 	}
 
 	d.SetId("")

@@ -1,9 +1,7 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -87,26 +85,9 @@ func resourceKubernetesHelmCreate(ctx context.Context, d *schema.ResourceData, m
 		"values":    d.Get("values").(string),
 	}
 
-	jsonBody, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/helm", client.Endpoint, id)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to install helm chart: %s", string(data)))
+	if err := doJSON(ctx, client, http.MethodPost, url, body, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to install helm chart: %w", err))
 	}
 
 	d.SetId(fmt.Sprintf("%d:%s:%s", id, d.Get("namespace").(string), d.Get("name").(string)))
@@ -129,27 +110,12 @@ func resourceKubernetesHelmRead(ctx context.Context, d *schema.ResourceData, met
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/helm/%s?namespace=%s", client.Endpoint, envID, release, namespace)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read helm release %s (%d): %s", release, resp.StatusCode, string(body)))
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, nil); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read helm release %s: %w", release, err))
 	}
 
 	if err := d.Set("environment_id", envID); err != nil {

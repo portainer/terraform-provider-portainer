@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -58,30 +55,15 @@ func resourceEndpointServiceUpdateExecute(ctx context.Context, d *schema.Resourc
 		"pullImage": pullImage,
 		"serviceID": serviceID,
 	}
-	jsonBody, _ := json.Marshal(payload)
 
 	url := fmt.Sprintf("%s/endpoints/%d/forceupdateservice", client.Endpoint, endpointID)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update service: %s", string(body)))
-	}
-
 	warnings := struct {
 		Warnings []string `json:"Warnings"`
 	}{}
-	_ = json.NewDecoder(resp.Body).Decode(&warnings)
+	if err := doJSON(ctx, client, http.MethodPut, url, payload, &warnings); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update service: %w", err))
+	}
+
 	if len(warnings.Warnings) > 0 {
 		fmt.Printf("[WARN] Service update warnings: %v\n", warnings.Warnings)
 	}
@@ -92,30 +74,14 @@ func resourceEndpointServiceUpdateExecute(ctx context.Context, d *schema.Resourc
 
 func resolveServiceID(ctx context.Context, client *APIClient, endpointID int, name string) (string, error) {
 	url := fmt.Sprintf("%s/endpoints/%d/docker/services", client.Endpoint, endpointID)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err := setAuthHeader(req, client); err != nil {
-		return "", err
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("failed to fetch services: %s", string(body))
-	}
-
 	var services []struct {
 		ID   string `json:"ID"`
 		Spec struct {
 			Name string `json:"Name"`
 		} `json:"Spec"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&services); err != nil {
-		return "", err
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, &services); err != nil {
+		return "", fmt.Errorf("failed to fetch services: %w", err)
 	}
 
 	for _, service := range services {

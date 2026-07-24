@@ -31,25 +31,8 @@ func resourcePortainerOpenAMTActivateCreate(ctx context.Context, d *schema.Resou
 	id := d.Get("environment_id").(int)
 
 	url := fmt.Sprintf("%s/open_amt/%d/activate", client.Endpoint, id)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to activate OpenAMT: %s", resp.Status))
+	if err := doJSON(ctx, client, http.MethodPost, url, nil, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to activate OpenAMT: %w", err))
 	}
 
 	d.SetId("openamt-" + strconv.Itoa(id))

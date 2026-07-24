@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -35,24 +33,13 @@ func dataSourceCloudCredentialsRead(ctx context.Context, d *schema.ResourceData,
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	resp, err := client.DoRequest("GET", "/cloud/credentials", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list cloud credentials: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to list cloud credentials, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var credentials []struct {
 		ID       int    `json:"id"`
 		Name     string `json:"name"`
 		Provider string `json:"provider"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&credentials); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode cloud credentials list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/cloud/credentials", nil, &credentials); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list cloud credentials: %w", err))
 	}
 
 	for _, c := range credentials {

@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -35,24 +33,13 @@ func dataSourceEdgeStackRead(ctx context.Context, d *schema.ResourceData, meta i
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	resp, err := client.DoRequest("GET", "/edge_stacks", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list edge stacks: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to list edge stacks, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var stacks []struct {
 		ID             int    `json:"Id"`
 		Name           string `json:"Name"`
 		DeploymentType int    `json:"DeploymentType"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&stacks); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode edge stack list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/edge_stacks", nil, &stacks); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list edge stacks: %w", err))
 	}
 
 	for _, s := range stacks {

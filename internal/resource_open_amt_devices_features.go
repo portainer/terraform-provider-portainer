@@ -1,9 +1,7 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -90,31 +88,10 @@ func resourcePortainerOpenAMTDevicesFeaturesCreate(ctx context.Context, d *schem
 	}
 
 	reqBody := EnableAMTFeaturesRequest{Features: features}
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return diag.FromErr(err)
-	}
 
 	url := fmt.Sprintf("%s/open_amt/%d/devices_features/%d", client.Endpoint, envID, deviceID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to enable AMT device features: %s", resp.Status))
+	if err := doJSON(ctx, client, http.MethodPost, url, reqBody, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to enable AMT device features: %w", err))
 	}
 
 	d.SetId("amt-device-features-" + strconv.Itoa(deviceID))

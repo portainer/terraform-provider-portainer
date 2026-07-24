@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -46,17 +44,6 @@ func dataSourceDockerVolumeRead(ctx context.Context, d *schema.ResourceData, met
 	name := d.Get("name").(string)
 
 	path := fmt.Sprintf("/endpoints/%d/docker/volumes", endpointID)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list docker volumes: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to list docker volumes, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var result struct {
 		Volumes []struct {
 			Name       string `json:"Name"`
@@ -64,8 +51,8 @@ func dataSourceDockerVolumeRead(ctx context.Context, d *schema.ResourceData, met
 			Mountpoint string `json:"Mountpoint"`
 		} `json:"Volumes"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode docker volume list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+path, nil, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list docker volumes: %w", err))
 	}
 
 	for _, v := range result.Volumes {

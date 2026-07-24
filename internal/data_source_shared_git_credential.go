@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -44,17 +42,6 @@ func dataSourcePortainerSharedGitCredential() *schema.Resource {
 func dataSourcePortainerSharedGitCredentialRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	resp, err := client.DoRequest("GET", "/cloud/gitcredentials", nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list shared git credentials: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to list shared git credentials, status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var credentials []struct {
 		ID                int    `json:"id"`
 		Name              string `json:"name"`
@@ -62,8 +49,8 @@ func dataSourcePortainerSharedGitCredentialRead(ctx context.Context, d *schema.R
 		AuthorizationType int    `json:"authorizationType"`
 		UserID            int    `json:"userId"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&credentials); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode shared git credentials list: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/cloud/gitcredentials", nil, &credentials); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list shared git credentials: %w", err))
 	}
 
 	name := d.Get("name").(string)

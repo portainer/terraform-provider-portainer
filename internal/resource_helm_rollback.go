@@ -3,7 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
-	"io"
+	"net/http"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -119,15 +119,9 @@ func resourceHelmRollbackCreate(ctx context.Context, d *schema.ResourceData, met
 		queryParams += separator + "timeout=" + strconv.Itoa(v.(int))
 	}
 
-	resp, err := client.DoRequest("POST", path+queryParams, nil, nil)
-	if err != nil {
+	url := client.Endpoint + path + queryParams
+	if err := doJSON(ctx, client, http.MethodPost, url, nil, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to rollback Helm release %s: %w", releaseName, err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to rollback Helm release %s (status %d): %s", releaseName, resp.StatusCode, string(data)))
 	}
 
 	d.SetId(fmt.Sprintf("helm-rollback-%d-%s-%d", endpointID, releaseName, makeTimestamp()))

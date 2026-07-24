@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -49,23 +48,13 @@ func resourceHelmUserRepositoryCreate(ctx context.Context, d *schema.ResourceDat
 	}
 
 	path := fmt.Sprintf("/users/%d/helm/repositories", userID)
-	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create helm user repository: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to create helm user repository: HTTP %d", resp.StatusCode))
-	}
-
 	var result struct {
 		ID     int    `json:"Id"`
 		URL    string `json:"URL"`
 		UserID int    `json:"UserId"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode response: %w", err))
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+path, payload, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create helm user repository: %w", err))
 	}
 
 	d.SetId(strconv.Itoa(result.ID))
@@ -83,16 +72,6 @@ func resourceHelmUserRepositoryRead(ctx context.Context, d *schema.ResourceData,
 	repoID := d.Id()
 
 	path := fmt.Sprintf("/users/%d/helm/repositories", userID)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read helm user repositories: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to read helm user repositories: HTTP %d", resp.StatusCode))
-	}
-
 	var result struct {
 		UserRepositories []struct {
 			ID     int    `json:"Id"`
@@ -100,8 +79,8 @@ func resourceHelmUserRepositoryRead(ctx context.Context, d *schema.ResourceData,
 			UserID int    `json:"UserId"`
 		} `json:"UserRepositories"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode response: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+path, nil, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to read helm user repositories: %w", err))
 	}
 
 	for _, repo := range result.UserRepositories {
@@ -128,14 +107,8 @@ func resourceHelmUserRepositoryDelete(ctx context.Context, d *schema.ResourceDat
 	repoID := d.Id()
 
 	path := fmt.Sprintf("/users/%d/helm/repositories/%s", userID, repoID)
-	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodDelete, client.Endpoint+path, nil, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to delete helm user repository: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to delete helm user repository: HTTP %d", resp.StatusCode))
 	}
 
 	d.SetId("")

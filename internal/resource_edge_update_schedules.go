@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -75,34 +72,9 @@ func resourcePortainerEdgeUpdateSchedulesCreate(ctx context.Context, d *schema.R
 		payload.GroupIDs = append(payload.GroupIDs, id.(int))
 	}
 
-	jsonBody, err := json.Marshal(payload)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/edge_update_schedules", client.Endpoint), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		msg, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create edge update schedule: %s", string(msg)))
-	}
-
 	var response EdgeUpdateScheduleResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s/edge_update_schedules", client.Endpoint), payload, &response); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create edge update schedule: %w", err))
 	}
 	d.SetId(strconv.Itoa(response.ID))
 	return nil
@@ -125,29 +97,8 @@ func resourcePortainerEdgeUpdateSchedulesUpdate(ctx context.Context, d *schema.R
 		payload.GroupIDs = append(payload.GroupIDs, gid.(int))
 	}
 
-	jsonBody, err := json.Marshal(payload)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		msg, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update edge update schedule: %s", string(msg)))
+	if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), payload, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update edge update schedule: %w", err))
 	}
 
 	return resourcePortainerEdgeUpdateSchedulesRead(ctx, d, meta)
@@ -157,27 +108,8 @@ func resourcePortainerEdgeUpdateSchedulesDelete(ctx context.Context, d *schema.R
 	client := meta.(*APIClient)
 	id := d.Id()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound {
-		return nil
-	}
-
-	if resp.StatusCode >= 400 {
-		msg, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete edge update schedule: %s", string(msg)))
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), nil, nil); err != nil && !isAPINotFound(err) {
+		return diag.FromErr(fmt.Errorf("failed to delete edge update schedule: %w", err))
 	}
 
 	return nil
@@ -187,31 +119,13 @@ func resourcePortainerEdgeUpdateSchedulesRead(ctx context.Context, d *schema.Res
 	client := meta.(*APIClient)
 	id := d.Id()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode >= 400 {
-		msg, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read edge update schedule: %s", string(msg)))
-	}
-
 	var data EdgeUpdateScheduleResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/edge_update_schedules/%s", client.Endpoint, id), nil, &data); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read edge update schedule: %w", err))
 	}
 	if err := d.Set("name", data.Name); err != nil {
 		return diag.FromErr(err)

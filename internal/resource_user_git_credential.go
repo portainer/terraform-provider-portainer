@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -93,25 +91,13 @@ func resourcePortainerUserGitCredentialCreate(ctx context.Context, d *schema.Res
 		"authorizationType": d.Get("authorization_type").(int),
 	}
 
-	path := fmt.Sprintf("/users/%d/gitcredentials", userID)
-	resp, err := client.DoRequest(http.MethodPost, path, nil, payload)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create user git credential: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create user git credential: HTTP %d - %s", resp.StatusCode, string(body)))
-	}
-
 	var result struct {
 		GitCredential struct {
 			ID int `json:"id"`
 		} `json:"gitCredential"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode user git credential response: %w", err))
+	if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s/users/%d/gitcredentials", client.Endpoint, userID), payload, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create user git credential: %w", err))
 	}
 
 	credentialID := result.GitCredential.ID
@@ -131,23 +117,6 @@ func resourcePortainerUserGitCredentialRead(ctx context.Context, d *schema.Resou
 		return diag.FromErr(err)
 	}
 
-	path := fmt.Sprintf("/users/%d/gitcredentials/%d", userID, credentialID)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read user git credential: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read user git credential: HTTP %d - %s", resp.StatusCode, string(body)))
-	}
-
 	var result struct {
 		ID                int    `json:"id"`
 		Name              string `json:"name"`
@@ -155,8 +124,12 @@ func resourcePortainerUserGitCredentialRead(ctx context.Context, d *schema.Resou
 		AuthorizationType int    `json:"authorizationType"`
 		UserID            int    `json:"userId"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode user git credential response: %w", err))
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/users/%d/gitcredentials/%d", client.Endpoint, userID, credentialID), nil, &result); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read user git credential: %w", err))
 	}
 
 	if err := setFields(d, map[string]interface{}{
@@ -187,16 +160,8 @@ func resourcePortainerUserGitCredentialUpdate(ctx context.Context, d *schema.Res
 		"authorizationType": d.Get("authorization_type").(int),
 	}
 
-	path := fmt.Sprintf("/users/%d/gitcredentials/%d", userID, credentialID)
-	resp, err := client.DoRequest(http.MethodPut, path, nil, payload)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/users/%d/gitcredentials/%d", client.Endpoint, userID, credentialID), payload, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update user git credential: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update user git credential: HTTP %d - %s", resp.StatusCode, string(body)))
 	}
 
 	return resourcePortainerUserGitCredentialRead(ctx, d, meta)
@@ -210,16 +175,10 @@ func resourcePortainerUserGitCredentialDelete(ctx context.Context, d *schema.Res
 		return diag.FromErr(err)
 	}
 
-	path := fmt.Sprintf("/users/%d/gitcredentials/%d", userID, credentialID)
-	resp, err := client.DoRequest(http.MethodDelete, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to delete user git credential: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete user git credential: HTTP %d - %s", resp.StatusCode, string(body)))
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/users/%d/gitcredentials/%d", client.Endpoint, userID, credentialID), nil, nil); err != nil {
+		if !isAPINotFound(err) {
+			return diag.FromErr(fmt.Errorf("failed to delete user git credential: %w", err))
+		}
 	}
 
 	d.SetId("")

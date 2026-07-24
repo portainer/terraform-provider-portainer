@@ -62,22 +62,8 @@ func resourceStackAssociateCreate(ctx context.Context, d *schema.ResourceData, m
 	params.Add("swarmId", swarmID)
 	params.Add("orphanedRunning", strconv.FormatBool(orphanedRunning))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, apiURL+"?"+params.Encode(), nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return diag.FromErr(fmt.Errorf("failed to associate stack %d to endpoint %d: status code %d", stackID, endpointID, resp.StatusCode))
+	if err := doJSON(ctx, client, http.MethodPut, apiURL+"?"+params.Encode(), nil, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to associate stack %d to endpoint %d: %w", stackID, endpointID, err))
 	}
 
 	d.SetId(fmt.Sprintf("%d", stackID))

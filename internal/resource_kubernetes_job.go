@@ -1,9 +1,7 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -66,31 +64,10 @@ func resourceKubernetesJobCreate(ctx context.Context, d *schema.ResourceData, me
 		return diag.FromErr(fmt.Errorf("missing metadata.name in manifest"))
 	}
 
-	jsonBody, err := json.Marshal(parsed)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to encode manifest body: %w", err))
-	}
-
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/batch/v1/namespaces/%s/jobs", client.Endpoint, endpointID, namespace)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPost, url, parsed, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to create Kubernetes Job: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create Job (%d): %s", resp.StatusCode, string(body)))
 	}
 
 	d.SetId(fmt.Sprintf("%d:%s:%s", endpointID, namespace, name))

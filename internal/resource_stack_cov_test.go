@@ -47,6 +47,7 @@ func TestStackCreate_SwarmString_FetchesSwarmID(t *testing.T) {
 	_ = d.Set("stack_file_content", "version: '3'")
 	// swarm_id intentionally left empty -> fetchSwarmID runs.
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -79,6 +80,7 @@ func TestStackCreate_SwarmRepository_HappyPath(t *testing.T) {
 	_ = d.Set("swarm_id", "swarm-x")
 	_ = d.Set("repository_url", "https://github.com/acme/swarm.git")
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -120,6 +122,7 @@ func TestStackCreate_KubernetesRepository_HappyPath(t *testing.T) {
 	_ = d.Set("repository_url", "https://github.com/acme/k8s.git")
 	_ = d.Set("file_path_in_repository", "manifest.yml")
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -164,6 +167,7 @@ func TestStackCreate_KubernetesURL_HappyPath(t *testing.T) {
 	_ = d.Set("namespace", "default")
 	_ = d.Set("manifest_url", "https://example.com/manifest.yml")
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -411,6 +415,7 @@ func TestStackCreate_WithOwnership_UpdatesAccessControl(t *testing.T) {
 	_ = d.Set("stack_file_content", "version: '3'")
 	_ = d.Set("ownership", "public")
 
+	_ = d.Set("active", true)
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}

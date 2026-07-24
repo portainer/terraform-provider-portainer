@@ -3,7 +3,6 @@ package internal
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -32,15 +31,9 @@ func resourceEndpointAssociationCreate(ctx context.Context, d *schema.ResourceDa
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 
-	resp, err := client.DoRequest("PUT", fmt.Sprintf("/endpoints/%d/association", endpointID), nil, nil)
-	if err != nil {
+	url := fmt.Sprintf("%s/endpoints/%d/association", client.Endpoint, endpointID)
+	if err := doJSON(ctx, client, http.MethodPut, url, nil, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to de-associate endpoint %d: %w", endpointID, err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to de-associate endpoint %d (status %d): %s", endpointID, resp.StatusCode, string(data)))
 	}
 
 	d.SetId(strconv.Itoa(endpointID))
@@ -53,21 +46,14 @@ func resourceEndpointAssociationRead(ctx context.Context, d *schema.ResourceData
 	endpointID := d.Id()
 
 	// Verify the endpoint still exists via GET /endpoints/{id}
-	resp, err := client.DoRequest("GET", fmt.Sprintf("/endpoints/%s", endpointID), nil, nil)
-	if err != nil {
+	url := fmt.Sprintf("%s/endpoints/%s", client.Endpoint, endpointID)
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, nil); err != nil {
+		if isAPINotFound(err) {
+			// Endpoint no longer exists, remove from state
+			d.SetId("")
+			return nil
+		}
 		return diag.FromErr(fmt.Errorf("failed to read endpoint %s: %w", endpointID, err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		// Endpoint no longer exists, remove from state
-		d.SetId("")
-		return nil
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read endpoint %s (status %d): %s", endpointID, resp.StatusCode, string(data)))
 	}
 
 	// Endpoint exists; keep in state

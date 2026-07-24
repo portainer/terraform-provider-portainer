@@ -2,9 +2,7 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -46,18 +44,6 @@ func dataSourceDockerNodeRead(ctx context.Context, d *schema.ResourceData, meta 
 	hostname := d.Get("hostname").(string)
 
 	path := fmt.Sprintf("/endpoints/%d/docker/nodes", endpointID)
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list docker nodes: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		// Nodes endpoint might fail if not in a Swarm cluster
-		return diag.FromErr(fmt.Errorf("failed to list docker nodes (is this a Swarm cluster?), status %d: %s", resp.StatusCode, string(data)))
-	}
-
 	var nodes []struct {
 		ID          string `json:"ID"`
 		Description struct {
@@ -70,8 +56,9 @@ func dataSourceDockerNodeRead(ctx context.Context, d *schema.ResourceData, meta 
 			State string `json:"State"`
 		} `json:"Status"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&nodes); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode docker node list: %w", err))
+	// Nodes endpoint might fail if not in a Swarm cluster
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+path, nil, &nodes); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list docker nodes (is this a Swarm cluster?): %w", err))
 	}
 
 	for _, n := range nodes {

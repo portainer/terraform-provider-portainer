@@ -1,11 +1,9 @@
 package internal
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -107,26 +105,9 @@ func resourceKubernetesNamespaceCreate(ctx context.Context, d *schema.ResourceDa
 		"ResourceQuota": rq,
 	}
 
-	jsonBody, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces", client.Endpoint, id)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to create namespace: %s", string(data)))
+	if err := doJSON(ctx, client, http.MethodPost, url, body, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create namespace: %w", err))
 	}
 
 	envID := strconv.Itoa(id)
@@ -148,29 +129,6 @@ func resourceKubernetesNamespaceRead(ctx context.Context, d *schema.ResourceData
 	name := idParts[1]
 
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s?withResourceQuota=true", client.Endpoint, envID, name)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	// Namespace deleted out-of-band — clear from state so the next plan recreates.
-	if resp.StatusCode == http.StatusNotFound {
-		d.SetId("")
-		return nil
-	}
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read namespace %q: %s", name, string(data)))
-	}
 
 	var ns struct {
 		Name           string `json:"Name"`
@@ -181,8 +139,13 @@ func resourceKubernetesNamespaceRead(ctx context.Context, d *schema.ResourceData
 			} `json:"spec"`
 		} `json:"ResourceQuota"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&ns); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to decode namespace response: %w", err))
+	// Namespace deleted out-of-band — clear from state so the next plan recreates.
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, &ns); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read namespace %q: %w", name, err))
 	}
 
 	if err := d.Set("environment_id", envID); err != nil {
@@ -291,26 +254,9 @@ func resourceKubernetesNamespaceUpdate(ctx context.Context, d *schema.ResourceDa
 		"ResourceQuota": rq,
 	}
 
-	jsonBody, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces/%s", client.Endpoint, envID, oldName)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to update namespace: %s", string(data)))
+	if err := doJSON(ctx, client, http.MethodPut, url, body, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update namespace: %w", err))
 	}
 
 	// If name changed, update ID
@@ -333,27 +279,10 @@ func resourceKubernetesNamespaceDelete(ctx context.Context, d *schema.ResourceDa
 	body := map[string]string{
 		"Name": name,
 	}
-	jsonBody, _ := json.Marshal(body)
 
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces", client.Endpoint, envID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		data, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to delete namespace: %s", string(data)))
+	if err := doJSON(ctx, client, http.MethodDelete, url, body, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to delete namespace: %w", err))
 	}
 
 	d.SetId("")

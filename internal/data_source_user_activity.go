@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -222,16 +221,6 @@ func dataSourceUserActivityRead(ctx context.Context, d *schema.ResourceData, met
 		path = path + "?" + strings.Join(params, "&")
 	}
 
-	resp, err := client.DoRequest(http.MethodGet, path, nil, nil)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list user activity logs: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to list user activity logs: HTTP %d", resp.StatusCode))
-	}
-
 	if logType == "activity" {
 		var result struct {
 			Logs []struct {
@@ -243,8 +232,8 @@ func dataSourceUserActivityRead(ctx context.Context, d *schema.ResourceData, met
 			} `json:"logs"`
 			TotalCount int `json:"totalCount"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return diag.FromErr(fmt.Errorf("failed to decode activity logs response: %w", err))
+		if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+path, nil, &result); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to list user activity logs: %w", err))
 		}
 
 		logs := make([]map[string]interface{}, len(result.Logs))
@@ -272,8 +261,8 @@ func dataSourceUserActivityRead(ctx context.Context, d *schema.ResourceData, met
 			Origin    string `json:"origin"`
 			Context   int    `json:"context"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return diag.FromErr(fmt.Errorf("failed to decode auth logs response: %w", err))
+		if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+path, nil, &result); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to list user activity logs: %w", err))
 		}
 
 		logs := make([]map[string]interface{}, len(result))

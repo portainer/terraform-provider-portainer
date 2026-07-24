@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -39,29 +36,8 @@ func resourcePortainerSupportDebugLogApply(ctx context.Context, d *schema.Resour
 		"debugLogEnabled": d.Get("enabled").(bool),
 	}
 
-	jsonBody, err := json.Marshal(payload)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("%s/support/debug_log", client.Endpoint), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		msg, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to set debug log: %s", string(msg)))
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/support/debug_log", client.Endpoint), payload, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to set debug log: %w", err))
 	}
 	d.SetId(strconv.FormatBool(d.Get("enabled").(bool)))
 	return nil
@@ -70,30 +46,11 @@ func resourcePortainerSupportDebugLogApply(ctx context.Context, d *schema.Resour
 func resourcePortainerSupportDebugLogRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/support/debug_log", client.Endpoint), nil)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		msg, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to read debug log status: %s", string(msg)))
-	}
-
 	var result struct {
 		DebugLogEnabled bool `json:"debugLogEnabled"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/support/debug_log", client.Endpoint), nil, &result); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to read debug log status: %w", err))
 	}
 
 	if err := d.Set("enabled", result.DebugLogEnabled); err != nil {

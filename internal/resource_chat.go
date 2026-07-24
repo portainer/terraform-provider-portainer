@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -76,34 +73,9 @@ func resourcePortainerChatSend(ctx context.Context, d *schema.ResourceData, meta
 		Model:         d.Get("model").(string),
 	}
 
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/chat", client.Endpoint), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return diag.FromErr(fmt.Errorf("failed to send chat: %s", string(body)))
-	}
-
 	var chatResp ChatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
-		return diag.FromErr(err)
+	if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s/chat", client.Endpoint), reqBody, &chatResp); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to send chat: %w", err))
 	}
 
 	if err := setFields(d, map[string]interface{}{
