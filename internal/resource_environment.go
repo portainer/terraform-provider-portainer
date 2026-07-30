@@ -219,9 +219,12 @@ func resourceEnvironmentCreate(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(err)
 	}
 
-	// For edge agents, tags must be applied via Update after creation
+	// For edge agents, tags and the public URL are not honoured by the
+	// multipart Create request and must be applied via a follow-up Update.
 	if isEdgeAgent {
-		if _, ok := d.GetOk("tag_ids"); ok {
+		_, hasTags := d.GetOk("tag_ids")
+		publicIP, hasPublicIP := d.GetOk("public_ip")
+		if hasTags || (hasPublicIP && publicIP.(string) != "") {
 			if diags := resourceEnvironmentUpdate(ctx, d, meta); diags.HasError() {
 				return diags
 			}
@@ -240,6 +243,18 @@ func resourceEnvironmentCreate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	return resourceEnvironmentRead(ctx, d, meta)
+}
+
+// trimURLScheme strips a leading http:// or https:// from an environment
+// address so values can be compared the way Portainer stores them for Edge
+// Agents (scheme-less host).
+func trimURLScheme(s string) string {
+	for _, scheme := range []string{"https://", "http://"} {
+		if trimmed, ok := strings.CutPrefix(s, scheme); ok {
+			return trimmed
+		}
+	}
+	return s
 }
 
 func findExistingEnvironmentByName(client *APIClient, name string) (int, error) {
@@ -293,7 +308,20 @@ func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta i
 	if err := d.Set("edge_key", resp.Payload.EdgeKey); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("environment_address", resp.Payload.URL); err != nil {
+	// Portainer stores the Edge Agent URL without its scheme, so a configured
+	// "https://portainer.example.com" comes back as "portainer.example.com" and
+	// would show up as perpetual drift. Keep the value already in state when it
+	// differs from the API value only by the scheme.
+	address := resp.Payload.URL
+	envType := int(resp.Payload.Type)
+	if envType == 4 || envType == 7 {
+		if prior, ok := d.GetOk("environment_address"); ok {
+			if s := prior.(string); s != address && trimURLScheme(s) == trimURLScheme(address) {
+				address = s
+			}
+		}
+	}
+	if err := d.Set("environment_address", address); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -340,12 +368,15 @@ func resourceEnvironmentUpdate(ctx context.Context, d *schema.ResourceData, meta
 		params.Body.TLS = d.Get("tls_enabled").(bool)
 		params.Body.TlsskipVerify = d.Get("tls_skip_verify").(bool)
 		params.Body.TlsskipClientVerify = d.Get("tls_skip_client_verify").(bool)
+	}
 
-		if v, ok := d.GetOk("public_ip"); ok && v.(string) != "" {
-			params.Body.PublicURL = v.(string)
-		} else {
-			params.Body.PublicURL = d.Get("environment_address").(string)
-		}
+	if v, ok := d.GetOk("public_ip"); ok && v.(string) != "" {
+		params.Body.PublicURL = v.(string)
+	} else if !isEdgeAgent {
+		// Portainer defaults the public URL to the connection URL for
+		// directly-connected environments. Edge agents connect back to
+		// Portainer, so environment_address is not a usable public URL there.
+		params.Body.PublicURL = d.Get("environment_address").(string)
 	}
 
 	if v, ok := d.GetOk("tag_ids"); ok {
