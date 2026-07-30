@@ -561,6 +561,201 @@ func TestEnvironmentUpdate_EdgeAgentSkipsConnectionFields(t *testing.T) {
 	}
 }
 
+// TestEnvironmentRead_EdgeAgentKeepsURLScheme verifies that Read does not strip
+// the scheme from environment_address for edge agents (issue #136): Portainer
+// stores the Edge Agent URL scheme-less, which produced perpetual
+// "portainer.example.com" -> "https://portainer.example.com" drift.
+func TestEnvironmentRead_EdgeAgentKeepsURLScheme(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/20", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 20, "Name": "edge-prod", "Type": 4, "GroupId": 1,
+		"URL": "portainer.example.com",
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("20")
+	_ = d.Set("type", 4)
+	_ = d.Set("environment_address", "https://portainer.example.com")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("environment_address"); got != "https://portainer.example.com" {
+		t.Errorf("environment_address: expected scheme to be kept, got %v", got)
+	}
+}
+
+// TestEnvironmentRead_EdgeAgentAdoptsChangedURL verifies the scheme-preserving
+// branch does not mask a genuine host change coming back from the API.
+func TestEnvironmentRead_EdgeAgentAdoptsChangedURL(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/21", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 21, "Name": "edge-prod", "Type": 4, "GroupId": 1,
+		"URL": "other.example.com",
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("21")
+	_ = d.Set("type", 4)
+	_ = d.Set("environment_address", "https://portainer.example.com")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("environment_address"); got != "other.example.com" {
+		t.Errorf("environment_address: expected API value, got %v", got)
+	}
+}
+
+// TestEnvironmentRead_NonEdgeUsesAPIURL verifies the scheme-preserving branch is
+// edge-agent-only: directly-connected environments keep the URL Portainer
+// reports verbatim.
+func TestEnvironmentRead_NonEdgeUsesAPIURL(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/22", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 22, "Name": "docker", "Type": 1, "GroupId": 1,
+		"URL": "docker.example.com:2375",
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("22")
+	_ = d.Set("type", 1)
+	_ = d.Set("environment_address", "https://docker.example.com:2375")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("environment_address"); got != "docker.example.com:2375" {
+		t.Errorf("environment_address: expected API value, got %v", got)
+	}
+}
+
+// TestEnvironmentUpdate_EdgeAgentSendsPublicURL verifies that public_ip is
+// pushed to Portainer for edge agents (issue #137): the field is metadata only
+// and does not trigger proxy/tunnel registration, so it must survive the
+// edge-agent branch that strips the connection fields. environment_address must
+// NOT be used as a fallback here — for edge agents it is the Portainer URL.
+func TestEnvironmentUpdate_EdgeAgentSendsPublicURL(t *testing.T) {
+	mock := NewMockServer(t)
+
+	mock.On("PUT", "/endpoints/9", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 9, "Name": "memgraph-main", "Type": 4,
+	}))
+	mock.On("GET", "/endpoints/9", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 9, "Name": "memgraph-main", "Type": 4, "GroupId": 1,
+		"PublicURL": "memgraph-main.example.com",
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("9")
+	_ = d.Set("name", "memgraph-main")
+	_ = d.Set("environment_address", "https://portainer.example.com")
+	_ = d.Set("type", 4)
+	_ = d.Set("public_ip", "memgraph-main.example.com")
+
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	put := mock.FindRequest("PUT", "/endpoints/9")
+	if put == nil {
+		t.Fatal("expected PUT /endpoints/9 to be sent")
+	}
+	var payload map[string]interface{}
+	if err := put.DecodeJSON(&payload); err != nil {
+		t.Fatalf("failed to decode PUT body: %v", err)
+	}
+	if got := payload["publicURL"]; got != "memgraph-main.example.com" {
+		t.Errorf("payload.publicURL: expected %q, got %v", "memgraph-main.example.com", got)
+	}
+	if _, present := payload["url"]; present {
+		t.Errorf("expected PUT body to OMIT 'url' for edge agent, got %v", payload["url"])
+	}
+}
+
+// TestEnvironmentUpdate_EdgeAgentWithoutPublicIPOmitsPublicURL verifies the
+// edge-agent branch does not fall back to environment_address, which would set
+// the Portainer URL itself as the environment's Public IP.
+func TestEnvironmentUpdate_EdgeAgentWithoutPublicIPOmitsPublicURL(t *testing.T) {
+	mock := NewMockServer(t)
+
+	mock.On("PUT", "/endpoints/10", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 10, "Name": "edge-nopublic", "Type": 4,
+	}))
+	mock.On("GET", "/endpoints/10", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 10, "Name": "edge-nopublic", "Type": 4, "GroupId": 1,
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("10")
+	_ = d.Set("name", "edge-nopublic")
+	_ = d.Set("environment_address", "https://portainer.example.com")
+	_ = d.Set("type", 4)
+
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	put := mock.FindRequest("PUT", "/endpoints/10")
+	var payload map[string]interface{}
+	if err := put.DecodeJSON(&payload); err != nil {
+		t.Fatalf("failed to decode PUT body: %v", err)
+	}
+	if _, present := payload["publicURL"]; present {
+		t.Errorf("expected PUT body to OMIT 'publicURL', got %v", payload["publicURL"])
+	}
+}
+
+// TestEnvironmentCreate_EdgeAgentAppliesPublicIP verifies that creating an edge
+// agent with public_ip triggers the follow-up Update — the multipart Create
+// form does not persist PublicURL for edge agents (issue #137).
+func TestEnvironmentCreate_EdgeAgentAppliesPublicIP(t *testing.T) {
+	mock := NewMockServer(t)
+
+	mock.On("GET", "/endpoints", RespondJSON(http.StatusOK, []map[string]interface{}{}))
+	mock.On("POST", "/endpoints", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 11, "Name": "memgraph-main", "Type": 4, "EdgeKey": "ek", "EdgeID": "eid",
+	}))
+	mock.On("PUT", "/endpoints/11", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 11, "Name": "memgraph-main", "Type": 4,
+	}))
+	mock.On("GET", "/endpoints/11", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 11, "Name": "memgraph-main", "Type": 4, "GroupId": 1,
+		"PublicURL": "memgraph-main.example.com",
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	_ = d.Set("name", "memgraph-main")
+	_ = d.Set("environment_address", "https://portainer.example.com")
+	_ = d.Set("type", 4)
+	_ = d.Set("public_ip", "memgraph-main.example.com")
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	put := mock.FindRequest("PUT", "/endpoints/11")
+	if put == nil {
+		t.Fatal("expected follow-up PUT /endpoints/11 to apply public_ip")
+	}
+	var payload map[string]interface{}
+	if err := put.DecodeJSON(&payload); err != nil {
+		t.Fatalf("failed to decode PUT body: %v", err)
+	}
+	if got := payload["publicURL"]; got != "memgraph-main.example.com" {
+		t.Errorf("payload.publicURL: expected %q, got %v", "memgraph-main.example.com", got)
+	}
+	if got := d.Get("public_ip"); got != "memgraph-main.example.com" {
+		t.Errorf("public_ip in state: got %v", got)
+	}
+}
+
 // TestEnvironmentCreate_Type6_RemapsToAgent verifies the EndpointCreationType
 // remap: user requests type=6 (Kubernetes via agent), but the multipart form
 // must carry EndpointCreationType=2 because Portainer's creation endpoint
