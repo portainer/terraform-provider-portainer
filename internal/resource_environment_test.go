@@ -137,6 +137,12 @@ func TestEnvironmentCreate_TypeEdgeAgent_HappyPath(t *testing.T) {
 	if !strings.Contains(body, "\r\n\r\n4\r\n") {
 		t.Errorf("expected EndpointCreationType value 4 in multipart body, body=%q", body)
 	}
+	// Issue #140: a type=4 (Docker Edge Agent) create must send
+	// ContainerEngine=docker, otherwise Portainer provisions it as a Kubernetes
+	// Edge Agent (type 7).
+	if !strings.Contains(body, "ContainerEngine") || !strings.Contains(body, "\r\n\r\ndocker\r\n") {
+		t.Errorf("expected ContainerEngine=docker in multipart body for type=4, body=%q", body)
+	}
 
 	// Computed edge fields should be populated from the create response.
 	if got := d.Get("edge_id"); got != "abc" {

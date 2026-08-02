@@ -676,6 +676,7 @@ func TestStackCreate_ExistingStackGuard(t *testing.T) {
 	_ = d.Set("name", "web")
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("stack_file_content", "version: '3'")
+	_ = d.Set("active", true)
 
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create (existing-stack guard) failed: %v", err)
@@ -846,19 +847,13 @@ func TestStackRead_Repository_PopulatesGitConfig(t *testing.T) {
 
 // =============================== UPDATE ===============================
 
-// TestStackUpdate_NoActiveChange_SkipsStartStop documents and pins the
-// start/stop behavior under unit testing. The start/stop branch in Update is
-// gated on d.HasChange("active"). Build-time TestResourceData carries no diff
-// state, so HasChange is always false (same limitation noted in
-// resource_webhook_test.go). Therefore Update must NOT issue any
-// /stacks/{id}/start or /stacks/{id}/stop request; it proceeds straight to the
-// content update PUT.
-//
-// (The wire format of the start/stop request itself — POST
-// /stacks/{id}/{action}?endpointId={n} with no body — is asserted indirectly:
-// if a future refactor stops gating on HasChange, this test will fail because
-// an unexpected start/stop request would appear.)
-func TestStackUpdate_NoActiveChange_SkipsStartStop(t *testing.T) {
+// TestStackUpdate_ActiveTrue_NoStop pins that updating a stack that stays
+// running (active = true) does NOT issue a stop: the content update PUT redeploy
+// already leaves the stack running, and enforceStackActive only stops when
+// active = false. A start is likewise unnecessary. (The complementary
+// active = false path — which MUST stop after the redeploy, issue #139 — is
+// covered by TestStackUpdate_Repository_ActiveFalse_StopsAfterRedeploy.)
+func TestStackUpdate_ActiveTrue_NoStop(t *testing.T) {
 	mock := NewMockServer(t)
 
 	// Register start/stop handlers so that, if Update wrongly fires them, the
@@ -882,22 +877,75 @@ func TestStackUpdate_NoActiveChange_SkipsStartStop(t *testing.T) {
 	_ = d.Set("name", "app")
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("stack_file_content", "version: '3'")
+	_ = d.Set("active", true)
+
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	// active = true => the (re)deploy leaves it running, no stop/start needed.
+	if mock.FindRequest("POST", "/stacks/3/stop") != nil {
+		t.Error("did not expect POST /stacks/3/stop when active = true")
+	}
+	if mock.FindRequest("POST", "/stacks/3/start") != nil {
+		t.Error("did not expect POST /stacks/3/start when active = true")
+	}
+	// The content update PUT must still be sent.
+	if mock.FindRequest("PUT", "/stacks/3") == nil {
+		t.Error("expected the content update PUT /stacks/3 to be sent")
+	}
+}
+
+// TestStackUpdate_Repository_ActiveFalse_StopsAfterRedeploy reproduces issue
+// #139: updating a repository stack with active = false must leave it stopped.
+// The git redeploy always restarts the stack, so Update has to issue the stop
+// AFTER the redeploy — this test asserts the stop request is sent and that the
+// state ends up active = false (Status 2).
+func TestStackUpdate_Repository_ActiveFalse_StopsAfterRedeploy(t *testing.T) {
+	mock := NewMockServer(t)
+
+	mock.On("POST", "/stacks/7/git", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	mock.On("PUT", "/stacks/7/git/redeploy", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	// The stop that must follow the redeploy so active = false persists.
+	mock.On("POST", "/stacks/7/stop", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	// Read reflects the stopped state (Status 2 => inactive).
+	mock.On("GET", "/stacks/7", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 7, "Name": "gitapp", "Status": 2, "Type": 2, "EndpointId": 1,
+		"gitConfig": map[string]interface{}{
+			"URL":           "https://github.com/acme/app.git",
+			"ReferenceName": "refs/heads/main",
+		},
+	}))
+
+	r := resourcePortainerStack()
+	d := r.TestResourceData()
+	d.SetId("7")
+	_ = d.Set("method", "repository")
+	_ = d.Set("name", "gitapp")
+	_ = d.Set("endpoint_id", 1)
+	_ = d.Set("repository_url", "https://github.com/acme/app.git")
+	_ = d.Set("repository_reference_name", "refs/heads/main")
 	_ = d.Set("active", false)
 
 	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
-	// HasChange("active") is false under TestResourceData => no start/stop.
-	if mock.FindRequest("POST", "/stacks/3/stop") != nil {
-		t.Error("did not expect POST /stacks/3/stop: HasChange(active) is false under TestResourceData")
+	// The redeploy must have run...
+	if mock.FindRequest("PUT", "/stacks/7/git/redeploy") == nil {
+		t.Fatal("expected PUT /stacks/7/git/redeploy to be sent")
 	}
-	if mock.FindRequest("POST", "/stacks/3/start") != nil {
-		t.Error("did not expect POST /stacks/3/start: HasChange(active) is false under TestResourceData")
+	// ...and the stop must follow it so the stack ends up stopped.
+	stop := mock.FindRequest("POST", "/stacks/7/stop")
+	if stop == nil {
+		t.Fatal("expected POST /stacks/7/stop after the git redeploy (issue #139)")
 	}
-	// The content update PUT must still be sent.
-	if mock.FindRequest("PUT", "/stacks/3") == nil {
-		t.Error("expected the content update PUT /stacks/3 to be sent")
+	if !strings.Contains(stop.Query, "endpointId=1") {
+		t.Errorf("expected stop query to carry endpointId=1, got %q", stop.Query)
+	}
+	// Read refreshes active to false from the stopped status.
+	if got := d.Get("active"); got != false {
+		t.Errorf("active: expected false (Status=2), got %v", got)
 	}
 }
 
@@ -922,6 +970,7 @@ func TestStackUpdate_NonRepositoryContent(t *testing.T) {
 	_ = d.Set("name", "app")
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("stack_file_content", "version: '3.9'")
+	_ = d.Set("active", true)
 
 	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
@@ -973,6 +1022,7 @@ func TestStackUpdate_Repository_GitRedeploy(t *testing.T) {
 	_ = d.Set("repository_reference_name", "refs/heads/main")
 	_ = d.Set("repository_username", "robot")
 	_ = d.Set("repository_password", "secret")
+	_ = d.Set("active", true)
 
 	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)

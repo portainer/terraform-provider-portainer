@@ -158,6 +158,17 @@ func resourceEnvironmentCreate(ctx context.Context, d *schema.ResourceData, meta
 	params.SetName(name)
 	params.SetEndpointCreationType(endpointCreationType)
 
+	// Edge Agent creation (type 4) is ambiguous on the Portainer side: without a
+	// container engine hint Portainer provisions the endpoint as a Kubernetes
+	// Edge Agent (type 7) instead of a Docker Edge Agent (type 4). Sending
+	// ContainerEngine=docker pins it to the Docker edge type the user asked for
+	// (issues #140 / #93). type 7 intentionally leaves it unset so Portainer
+	// keeps the Kubernetes edge type.
+	if envType == 4 {
+		containerEngine := "docker"
+		params.SetContainerEngine(&containerEngine)
+	}
+
 	url := strings.TrimSpace(d.Get("environment_address").(string))
 	params.SetURL(&url)
 
