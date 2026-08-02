@@ -95,6 +95,7 @@ func TestStackCov3_UpdateRepository_WithWebhook(t *testing.T) {
 	_ = d.Set("repository_url", "https://github.com/acme/app.git")
 	_ = d.Set("stack_webhook", true)
 	_ = d.Set("update_interval", "10m")
+	_ = d.Set("active", true)
 
 	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
@@ -137,6 +138,7 @@ func TestStackCov3_UpdateRepository_IntervalOnly(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("repository_url", "https://github.com/acme/app.git")
 	_ = d.Set("update_interval", "15m")
+	_ = d.Set("active", true)
 	// stack_webhook left false -> the else-if update_interval branch runs.
 
 	if err := rcUpdate(r, d, mock.Client()); err != nil {

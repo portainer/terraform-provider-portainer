@@ -846,18 +846,31 @@ func setStackActive(ctx context.Context, client *APIClient, stackID string, endp
 	return nil
 }
 
+// enforceStackActive applies the desired running state as the final step of an
+// update, after any (re)deploy has run. Portainer's update/redeploy endpoints
+// always bring the stack back up, so a stack configured active = false must be
+// stopped here — regardless of whether "active" itself changed, since a redeploy
+// triggered by any other attribute change would otherwise silently restart a
+// stack meant to stay stopped (issue #139). active = true needs no action: the
+// (re)deploy already left the stack running.
+func enforceStackActive(ctx context.Context, client *APIClient, d *schema.ResourceData, endpointID int) error {
+	if d.Get("active").(bool) {
+		return nil
+	}
+	return setStackActive(ctx, client, d.Id(), endpointID, false)
+}
+
 func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	stackID := d.Id()
 	endpointID := d.Get("endpoint_id").(int)
 	method := d.Get("method").(string)
 
-	// Handle start/stop
-	if d.HasChange("active") {
-		if err := setStackActive(ctx, client, stackID, endpointID, d.Get("active").(bool)); err != nil {
-			return diag.FromErr(err)
-		}
-	}
+	// NOTE: the desired running state is enforced at the END of this function
+	// (see enforceStackActive), not here. Portainer's stack update/redeploy
+	// endpoints always bring the stack back up, so stopping before the redeploy
+	// would be undone by it — that was the root cause of active=false never
+	// persisting on repository stacks (issue #139).
 
 	if method == "file" {
 		path := d.Get("stack_file_path").(string)
@@ -994,6 +1007,12 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 			return diag.FromErr(fmt.Errorf("failed to redeploy git stack: %s", string(data)))
 		}
 
+		// Apply the desired running state AFTER the git redeploy (which restarts
+		// the stack), so active = false actually persists for repository stacks.
+		if err := enforceStackActive(ctx, client, d, endpointID); err != nil {
+			return diag.FromErr(err)
+		}
+
 		return resourcePortainerStackRead(ctx, d, meta)
 	}
 
@@ -1086,6 +1105,12 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 		}); err != nil {
 			return diag.FromErr(err)
 		}
+	}
+
+	// Apply the desired running state AFTER the stack (re)deploy above, so
+	// active = false persists instead of being undone by the update.
+	if err := enforceStackActive(ctx, client, d, endpointID); err != nil {
+		return diag.FromErr(err)
 	}
 
 	return resourcePortainerStackRead(ctx, d, meta)

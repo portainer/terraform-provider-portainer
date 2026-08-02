@@ -238,6 +238,7 @@ func TestStackCov4_SwarmRepo_PruneRedeploy(t *testing.T) {
 	_ = d.Set("swarm_id", "swarm-p")
 	_ = d.Set("repository_url", "https://github.com/acme/swarm.git")
 	_ = d.Set("prune", true)
+	_ = d.Set("active", true)
 
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -350,6 +351,7 @@ func TestStackCov4_UpdateNonRepo_WithWebhook(t *testing.T) {
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("stack_file_content", "version: '3'")
 	_ = d.Set("stack_webhook", true)
+	_ = d.Set("active", true)
 
 	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
