@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strconv"
@@ -300,6 +301,35 @@ func trimURLScheme(s string) string {
 	return s
 }
 
+// edgeAddressFromKey recovers the Portainer address an Edge Agent environment
+// was created with. Portainer stores endpoint.URL for edge types as a bare host
+// (edge.ParseHostForEdge drops the scheme, the port and the path), but the edge
+// key keeps the submitted URL verbatim in its first field:
+//
+//	base64("<portainer url>|<tunnel host:port>|<tls fingerprint>|<endpoint id>")
+//
+// so the key - not endpoint.URL - is the lossless source for
+// environment_address. Returns "" when the key is absent or not in that shape,
+// which leaves the caller on its endpoint.URL fallback.
+func edgeAddressFromKey(edgeKey string) string {
+	if edgeKey == "" {
+		return ""
+	}
+	decoded, err := base64.StdEncoding.DecodeString(edgeKey)
+	if err != nil {
+		// Portainer emits the key unpadded (base64.RawStdEncoding).
+		decoded, err = base64.RawStdEncoding.DecodeString(edgeKey)
+		if err != nil {
+			return ""
+		}
+	}
+	fields := strings.Split(string(decoded), "|")
+	if len(fields) != 4 {
+		return ""
+	}
+	return strings.TrimSpace(fields[0])
+}
+
 func findExistingEnvironmentByName(client *APIClient, name string) (int, error) {
 	ctx, errBody := withErrorCapture(context.Background())
 	params := endpoints.NewEndpointListParams()
@@ -361,13 +391,19 @@ func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta i
 	if err := d.Set("edge_key", resp.Payload.EdgeKey); err != nil {
 		return diag.FromErr(err)
 	}
-	// Portainer stores the Edge Agent URL without its scheme, so a configured
+	// Portainer stores the Edge Agent URL as a bare host, so a configured
 	// "https://portainer.example.com" comes back as "portainer.example.com" and
-	// would show up as perpetual drift. Keep the value already in state when it
-	// differs from the API value only by the scheme.
+	// "http://portainer:9000" comes back as "portainer" - both show up as
+	// perpetual drift (issue #136). The edge key still carries the address
+	// verbatim, so prefer it and fall back to the endpoint URL only when the key
+	// is missing or unparsable, keeping the scheme already in state in that
+	// case. A genuine address change stays visible: it is baked into the key at
+	// create time and needs the environment to be replaced.
 	address := resp.Payload.URL
 	if envType == 4 || envType == 7 {
-		if prior, ok := d.GetOk("environment_address"); ok {
+		if fromKey := edgeAddressFromKey(resp.Payload.EdgeKey); fromKey != "" {
+			address = fromKey
+		} else if prior, ok := d.GetOk("environment_address"); ok {
 			if s := prior.(string); s != address && trimURLScheme(s) == trimURLScheme(address) {
 				address = s
 			}
@@ -460,7 +496,23 @@ func resourceEnvironmentUpdate(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(fmt.Errorf("failed to update environment: %w", decorateSDKError(err, errBody)))
 	}
 
-	return resourceEnvironmentRead(ctx, d, meta)
+	diags := resourceEnvironmentRead(ctx, d, meta)
+	if isEdgeAgent && d.HasChange("environment_address") {
+		// The address is only ever sent at create time for edge agents (see
+		// above), and Portainer generates the edge key from it right there, so
+		// an edit cannot be applied in place. Say so instead of letting the
+		// apply look successful. Values without a scheme come from Portainer's
+		// own host-only normalisation, not from an operator edit.
+		if old, _ := d.GetChange("environment_address"); strings.Contains(old.(string), "://") {
+			diags = append(diags, diag.Diagnostic{
+				Severity: diag.Warning,
+				Summary:  "environment_address was not applied to the Edge Agent environment",
+				Detail: "Portainer bakes the address into the edge key when the environment is created and never regenerates it on update, so the running agent keeps using the previous address. " +
+					"Replace the resource (terraform apply -replace=...) to get a new edge key, then redeploy the agent with it.",
+			})
+		}
+	}
+	return diags
 }
 
 func resourceEnvironmentDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {

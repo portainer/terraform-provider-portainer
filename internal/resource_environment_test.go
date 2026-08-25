@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/base64"
 	"net/http"
 	"strings"
 	"testing"
@@ -804,6 +805,138 @@ func TestEnvironmentRead_NonEdgeUsesAPIURL(t *testing.T) {
 	d.SetId("22")
 	_ = d.Set("type", 1)
 	_ = d.Set("environment_address", "https://docker.example.com:2375")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("environment_address"); got != "docker.example.com:2375" {
+		t.Errorf("environment_address: expected API value, got %v", got)
+	}
+}
+
+// TestEdgeAddressFromKey pins the edge key parsing used to recover
+// environment_address: field 0 of "url|tunnel|fingerprint|id", accepting both
+// the padded and the unpadded base64 Portainer emits.
+func TestEdgeAddressFromKey(t *testing.T) {
+	key := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	rawKey := func(s string) string { return base64.RawStdEncoding.EncodeToString([]byte(s)) }
+
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"internal address with port", key("http://portainer:9000|portainer:8000|fp|21"), "http://portainer:9000"},
+		{"public address", key("https://portainer.example.com|portainer.example.com:8000|fp|4"), "https://portainer.example.com"},
+		{"unpadded key", rawKey("http://portainer:9000|portainer:8000|fp|21"), "http://portainer:9000"},
+		{"surrounding spaces", key(" https://portainer.example.com |host:8000|fp|7"), "https://portainer.example.com"},
+		{"too few fields", key("https://portainer.example.com|host:8000"), ""},
+		{"not base64", "not-a-key", ""},
+		{"empty", "", ""},
+	}
+	for _, tc := range cases {
+		if got := edgeAddressFromKey(tc.in); got != tc.want {
+			t.Errorf("%s: edgeAddressFromKey(%q): expected %q, got %q", tc.name, tc.in, tc.want, got)
+		}
+	}
+}
+
+// TestEnvironmentRead_EdgeAgentAddressFromEdgeKey verifies that Read recovers
+// the full address from the edge key. Portainer stores the Edge Agent URL as a
+// bare host, dropping the port as well as the scheme, so an agent reaching
+// Portainer on a container-internal address such as "http://portainer:9000"
+// came back as "portainer" and drifted on every plan even after the
+// scheme-only fix for issue #136. The prior state here holds that lossy value,
+// which is exactly the state such a drifting resource is in.
+func TestEnvironmentRead_EdgeAgentAddressFromEdgeKey(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/23", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 23, "Name": "docker-node", "Type": 4, "GroupId": 1,
+		"URL":     "portainer",
+		"EdgeKey": base64.StdEncoding.EncodeToString([]byte("http://portainer:9000|portainer:8000|fp|23")),
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("23")
+	_ = d.Set("type", 4)
+	_ = d.Set("environment_address", "portainer")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("environment_address"); got != "http://portainer:9000" {
+		t.Errorf("environment_address: expected the address from the edge key, got %v", got)
+	}
+}
+
+// TestEnvironmentRead_EdgeAgentKeyOverridesState verifies the edge key wins over
+// the value in state, so an address the running agent no longer uses (Portainer
+// rewrites the key's scheme and port when an endpoint is de-associated) shows up
+// as a real diff instead of being preserved.
+func TestEnvironmentRead_EdgeAgentKeyOverridesState(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/24", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 24, "Name": "docker-node", "Type": 4, "GroupId": 1,
+		"URL":     "portainer",
+		"EdgeKey": base64.StdEncoding.EncodeToString([]byte("https://portainer:9443|portainer:8000|fp|24")),
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("24")
+	_ = d.Set("type", 4)
+	_ = d.Set("environment_address", "http://portainer:9000")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("environment_address"); got != "https://portainer:9443" {
+		t.Errorf("environment_address: expected the address from the edge key, got %v", got)
+	}
+}
+
+// TestEnvironmentRead_EdgeAgentUnparsableKeyFallsBack verifies that an edge key
+// which is not in the expected shape leaves the issue-#136 behaviour in place
+// rather than wiping the scheme out of state.
+func TestEnvironmentRead_EdgeAgentUnparsableKeyFallsBack(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/25", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 25, "Name": "edge-prod", "Type": 4, "GroupId": 1,
+		"URL":     "portainer.example.com",
+		"EdgeKey": "not-a-key",
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("25")
+	_ = d.Set("type", 4)
+	_ = d.Set("environment_address", "https://portainer.example.com")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("environment_address"); got != "https://portainer.example.com" {
+		t.Errorf("environment_address: expected scheme to be kept, got %v", got)
+	}
+}
+
+// TestEnvironmentRead_NonEdgeIgnoresEdgeKey verifies the edge key is only
+// consulted for edge agent types: a directly-connected environment keeps
+// reflecting the URL Portainer reports.
+func TestEnvironmentRead_NonEdgeIgnoresEdgeKey(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/26", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 26, "Name": "docker", "Type": 1, "GroupId": 1,
+		"URL":     "docker.example.com:2375",
+		"EdgeKey": base64.StdEncoding.EncodeToString([]byte("http://portainer:9000|portainer:8000|fp|26")),
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("26")
+	_ = d.Set("type", 1)
+	_ = d.Set("environment_address", "tcp://docker.example.com:2375")
 
 	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
