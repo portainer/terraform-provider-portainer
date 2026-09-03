@@ -157,12 +157,29 @@ jobs:
           terraform validate
           terraform apply -auto-approve
 
+      - name: 🔎 Verify edge_id survives a refresh
+        run: |
+          cd e2e-tests/edge_agent_environment
+          BEFORE=$(terraform output -raw edge_id)
+          terraform apply -refresh-only -auto-approve
+          AFTER=$(terraform output -raw edge_id)
+          if [ -z "$AFTER" ] || [ "$AFTER" != "$BEFORE" ]; then
+            echo "::error::edge_id changed on refresh: '$BEFORE' -> '$AFTER' (issue #142)"
+            exit 1
+          fi
+          # The refresh-only apply above re-evaluates the outputs, so the
+          # environment_address precondition in output.tf has just re-checked
+          # that the address survived the round trip through the API (issue
+          # #136). Read it back so a regression is visible in the log too.
+          echo "environment_address after refresh: $(terraform output -raw environment_address)"
+
       - name: 🐳 Start Edge Agent
         run: |
           docker swarm leave --force 2>/dev/null || true
           cd e2e-tests/edge_agent_environment
-          export EDGE_ID=$(terraform output -raw edge_id)
-          export EDGE_KEY=$(terraform output -raw edge_key)
+          EDGE_ID=$(terraform output -raw edge_id)
+          EDGE_KEY=$(terraform output -raw edge_key)
+          export EDGE_ID EDGE_KEY
           cd $GITHUB_WORKSPACE
           make up-edge-agent
 
