@@ -77,7 +77,7 @@ func resourceKubernetesNamespaceIngressControllersCreate(ctx context.Context, d 
 	endpointID := d.Get("environment_id").(int)
 	namespace := d.Get("namespace").(string)
 
-	controllers := make([]map[string]interface{}, 0)
+	controllers := make([]map[string]interface{}, 0, len(d.Get("controllers").([]interface{})))
 	for _, c := range d.Get("controllers").([]interface{}) {
 		cMap := c.(map[string]interface{})
 		controller := map[string]interface{}{
@@ -141,7 +141,7 @@ func resourceKubernetesNamespaceIngressControllersDelete(ctx context.Context, d 
 	namespace := d.Get("namespace").(string)
 
 	// No DELETE endpoint exists; disable all controllers via PUT to clean up.
-	controllers := make([]map[string]interface{}, 0)
+	controllers := make([]map[string]interface{}, 0, len(d.Get("controllers").([]interface{})))
 	for _, c := range d.Get("controllers").([]interface{}) {
 		cMap := c.(map[string]interface{})
 		controller := map[string]interface{}{

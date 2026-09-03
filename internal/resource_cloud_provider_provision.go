@@ -23,7 +23,7 @@ type CloudProvisionPayload struct {
 	InstanceType      string                 `json:"instanceType,omitempty"`
 	AmiType           string                 `json:"amiType,omitempty"`
 	NodeVolumeSize    int                    `json:"nodeVolumeSize,omitempty"`
-	DnsPrefix         string                 `json:"dnsPrefix,omitempty"`
+	DNSPrefix         string                 `json:"dnsPrefix,omitempty"`
 	ResourceGroup     string                 `json:"resourceGroup,omitempty"`
 	ResourceGroupName string                 `json:"resourceGroupName,omitempty"`
 	PoolName          string                 `json:"poolName,omitempty"`
@@ -76,12 +76,12 @@ func resourceCloudProvisionCreate(ctx context.Context, d *schema.ResourceData, m
 
 	url := fmt.Sprintf("%s/cloud/%s/provision", client.Endpoint, provider)
 	var result struct {
-		Id int `json:"Id"`
+		ID int `json:"Id"`
 	}
 	if err := doJSON(ctx, client, http.MethodPost, url, payload, &result); err != nil {
 		return diag.FromErr(fmt.Errorf("cloud provision failed: %w", err))
 	}
-	d.SetId(strconv.Itoa(result.Id))
+	d.SetId(strconv.Itoa(result.ID))
 	return nil
 }
 

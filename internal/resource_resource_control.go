@@ -79,17 +79,17 @@ func resourceResourceControl() *schema.Resource {
 // which is why this has to be told apart from "the resource is gone".
 var errResourceControlNotLookupable = errors.New("resource control cannot be looked up for this resource type")
 
-func lookupResourceControlID(client *APIClient, resourceType int, resourceId string) (string, map[string]interface{}, error) {
+func lookupResourceControlID(client *APIClient, resourceType int, resourceID string) (string, map[string]interface{}, error) {
 	switch resourceType {
 	case 6: // stack
 		var result struct {
 			ResourceControl map[string]interface{} `json:"ResourceControl"`
 		}
-		if err := doJSON(context.Background(), client, http.MethodGet, fmt.Sprintf("%s/stacks/%s", client.Endpoint, resourceId), nil, &result); err != nil {
+		if err := doJSON(context.Background(), client, http.MethodGet, fmt.Sprintf("%s/stacks/%s", client.Endpoint, resourceID), nil, &result); err != nil {
 			return "", nil, fmt.Errorf("failed to lookup stack: %w", err)
 		}
 		if result.ResourceControl == nil || result.ResourceControl["Id"] == nil {
-			return "", nil, fmt.Errorf("no resource control found for stack %s", resourceId)
+			return "", nil, fmt.Errorf("no resource control found for stack %s", resourceID)
 		}
 
 		id := int(result.ResourceControl["Id"].(float64))
@@ -107,10 +107,10 @@ func resourceResourceControlRead(ctx context.Context, d *schema.ResourceData, me
 	//    nevoláme žádné API, jen nastavíme ID ve state.
 	if v, ok := d.GetOk("resource_control_id"); ok && v.(int) != 0 {
 		rcInt := v.(int)
-		rcId := strconv.Itoa(rcInt)
+		rcID := strconv.Itoa(rcInt)
 
 		// Nastavíme ID resource v TF
-		d.SetId(rcId)
+		d.SetId(rcID)
 
 		// Pro jistotu uložíme zpět i resource_control_id,
 		// kdyby přišlo z importu nebo staršího state.
@@ -125,9 +125,9 @@ func resourceResourceControlRead(ctx context.Context, d *schema.ResourceData, me
 
 	// 2) Jinak starý režim: lookup podle type + resource_id (stack apod.)
 	resourceType := d.Get("type").(int)
-	resourceId := d.Get("resource_id").(string)
+	resourceID := d.Get("resource_id").(string)
 
-	rcId, rcData, err := lookupResourceControlID(client, resourceType, resourceId)
+	rcID, rcData, err := lookupResourceControlID(client, resourceType, resourceID)
 	if err != nil {
 		if errors.Is(err, errResourceControlNotLookupable) && d.Id() != "" {
 			// Created through POST /resource_controls: there is no endpoint to
@@ -139,7 +139,7 @@ func resourceResourceControlRead(ctx context.Context, d *schema.ResourceData, me
 		return nil
 	}
 
-	d.SetId(rcId)
+	d.SetId(rcID)
 
 	// Note: We intentionally do NOT set resource_control_id here.
 	// When using lookup mode (resource_id + type), the resource_control_id
@@ -196,20 +196,20 @@ func resourceResourceControlCreate(ctx context.Context, d *schema.ResourceData, 
 	}
 
 	resourceType := d.Get("type").(int)
-	resourceId := d.Get("resource_id").(string)
+	resourceID := d.Get("resource_id").(string)
 
 	// Portainer creates a resource control implicitly for objects deployed
 	// through it, so an existing one is updated rather than duplicated.
-	if _, _, err := lookupResourceControlID(client, resourceType, resourceId); err == nil {
+	if _, _, err := lookupResourceControlID(client, resourceType, resourceID); err == nil {
 		return resourceResourceControlUpdate(ctx, d, meta)
 	}
 
-	if resourceId == "" {
+	if resourceID == "" {
 		return diag.FromErr(fmt.Errorf("resource_id is required to create a resource control"))
 	}
 
 	payload := map[string]interface{}{
-		"ResourceID":         resourceId,
+		"ResourceID":         resourceID,
 		"Type":               resourceType,
 		"AdministratorsOnly": d.Get("administrators_only").(bool),
 		"Public":             d.Get("public").(bool),
@@ -241,20 +241,20 @@ func resourceResourceControlCreate(ctx context.Context, d *schema.ResourceData, 
 func resourceResourceControlUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	var rcId string
+	var rcID string
 	if v, ok := d.GetOk("resource_control_id"); ok && v.(int) != 0 {
-		rcId = strconv.Itoa(v.(int))
+		rcID = strconv.Itoa(v.(int))
 	} else {
 		resourceType := d.Get("type").(int)
-		resourceId := d.Get("resource_id").(string)
+		resourceID := d.Get("resource_id").(string)
 
 		var err error
-		rcId, _, err = lookupResourceControlID(client, resourceType, resourceId)
+		rcID, _, err = lookupResourceControlID(client, resourceType, resourceID)
 		if err != nil {
 			if !errors.Is(err, errResourceControlNotLookupable) || d.Id() == "" {
 				return diag.FromErr(err)
 			}
-			rcId = d.Id()
+			rcID = d.Id()
 		}
 	}
 
@@ -265,7 +265,7 @@ func resourceResourceControlUpdate(ctx context.Context, d *schema.ResourceData, 
 		"users":              d.Get("users"),
 	}
 
-	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/resource_controls/%s", client.Endpoint, rcId), body, nil); err != nil {
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/resource_controls/%s", client.Endpoint, rcID), body, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update resource control: %w", err))
 	}
 
@@ -275,25 +275,25 @@ func resourceResourceControlUpdate(ctx context.Context, d *schema.ResourceData, 
 func resourceResourceControlDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	var rcId string
+	var rcID string
 	if v, ok := d.GetOk("resource_control_id"); ok && v.(int) != 0 {
-		rcId = strconv.Itoa(v.(int))
+		rcID = strconv.Itoa(v.(int))
 	} else {
 		resourceType := d.Get("type").(int)
-		resourceId := d.Get("resource_id").(string)
+		resourceID := d.Get("resource_id").(string)
 
 		var err error
-		rcId, _, err = lookupResourceControlID(client, resourceType, resourceId)
+		rcID, _, err = lookupResourceControlID(client, resourceType, resourceID)
 		if err != nil {
 			if !errors.Is(err, errResourceControlNotLookupable) || d.Id() == "" {
 				d.SetId("")
 				return nil
 			}
-			rcId = d.Id()
+			rcID = d.Id()
 		}
 	}
 
-	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/resource_controls/%s", client.Endpoint, rcId), nil, nil); err != nil {
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/resource_controls/%s", client.Endpoint, rcID), nil, nil); err != nil {
 		var se *apiStatusError
 		if errors.As(err, &se) && (se.StatusCode == http.StatusNotFound || se.StatusCode == http.StatusForbidden) {
 			d.SetId("")

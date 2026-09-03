@@ -473,7 +473,7 @@ func resourceEnvironmentUpdate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	if v, ok := d.GetOk("tag_ids"); ok {
-		tagIDs := []int64{}
+		tagIDs := make([]int64, 0, len(v.([]interface{})))
 		for _, tid := range v.([]interface{}) {
 			tagIDs = append(tagIDs, int64(tid.(int)))
 		}

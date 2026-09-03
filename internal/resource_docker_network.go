@@ -118,7 +118,7 @@ type dockerNetworkCreateResponse struct {
 	Warning   string `json:"Warning"`
 	Portainer struct {
 		ResourceControl struct {
-			Id int `json:"Id"`
+			ID int `json:"Id"`
 		} `json:"ResourceControl"`
 	} `json:"Portainer"`
 }
@@ -175,7 +175,7 @@ func resourceDockerNetworkCreate(ctx context.Context, d *schema.ResourceData, me
 	}
 	if v, ok := d.GetOk("ipam_config"); ok {
 		configList := v.([]interface{})
-		var ipamConfigs []map[string]interface{}
+		ipamConfigs := make([]map[string]interface{}, 0, len(configList))
 		for _, c := range configList {
 			item := c.(map[string]interface{})
 			config := map[string]interface{}{
@@ -221,9 +221,9 @@ func resourceDockerNetworkCreate(ctx context.Context, d *schema.ResourceData, me
 
 	d.SetId(response.ID)
 
-	if response.Portainer.ResourceControl.Id != 0 {
+	if response.Portainer.ResourceControl.ID != 0 {
 		fields := map[string]interface{}{
-			"resource_control_id": response.Portainer.ResourceControl.Id,
+			"resource_control_id": response.Portainer.ResourceControl.ID,
 		}
 		if err := setFields(d, fields); err != nil {
 			return diag.FromErr(err)
@@ -342,7 +342,7 @@ func resourceDockerNetworkRead(ctx context.Context, d *schema.ResourceData, meta
 		} `json:"IPAM"`
 		Portainer struct {
 			ResourceControl struct {
-				Id int `json:"Id"`
+				ID int `json:"Id"`
 			} `json:"ResourceControl"`
 		} `json:"Portainer"`
 	}
@@ -428,8 +428,8 @@ func resourceDockerNetworkRead(ctx context.Context, d *schema.ResourceData, meta
 		fields["ipam_options"] = ipamOpts
 	}
 
-	if result.Portainer.ResourceControl.Id != 0 {
-		fields["resource_control_id"] = result.Portainer.ResourceControl.Id
+	if result.Portainer.ResourceControl.ID != 0 {
+		fields["resource_control_id"] = result.Portainer.ResourceControl.ID
 	}
 
 	if err := setFields(d, fields); err != nil {

@@ -384,7 +384,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	// the generated SDK placeholder messages.
 	transportWithErrCapture := &errorCaptureTransport{next: transportWithTagRewrite}
 
-	http_client := &http.Client{
+	httpClient := &http.Client{
 		Transport: transportWithErrCapture,
 	}
 
@@ -415,7 +415,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		APIKey:        apiKey,
 		JWTToken:      "",
 		CustomHeaders: customHeaders,
-		HTTPClient:    *http_client,
+		HTTPClient:    *httpClient,
 		Client:        portainer.New(sdkTransport, strfmt.Default),
 	}
 
@@ -432,7 +432,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		}
 		req.Header.Set("Content-Type", "application/json")
 
-		resp, err := http_client.Do(req)
+		resp, err := httpClient.Do(req)
 		if err != nil {
 			return nil, diag.FromErr(fmt.Errorf("failed to authenticate using username/password: %w", err))
 		}

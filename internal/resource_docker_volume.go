@@ -56,7 +56,7 @@ type dockerVolumeCreateResponse struct {
 	Mountpoint string            `json:"Mountpoint"`
 	Portainer  struct {
 		ResourceControl struct {
-			Id int `json:"Id"`
+			ID int `json:"Id"`
 		} `json:"ResourceControl"`
 	} `json:"Portainer"`
 }
@@ -243,8 +243,8 @@ func resourceDockerVolumeCreate(ctx context.Context, d *schema.ResourceData, met
 
 	d.SetId(fmt.Sprintf("%d-%s", endpointID, name))
 
-	if response.Portainer.ResourceControl.Id != 0 {
-		if err := d.Set("resource_control_id", response.Portainer.ResourceControl.Id); err != nil {
+	if response.Portainer.ResourceControl.ID != 0 {
+		if err := d.Set("resource_control_id", response.Portainer.ResourceControl.ID); err != nil {
 			return diag.FromErr(err)
 		}
 	}
@@ -267,7 +267,7 @@ func resourceDockerVolumeRead(ctx context.Context, d *schema.ResourceData, meta 
 		Mountpoint string            `json:"Mountpoint"`
 		Portainer  struct {
 			ResourceControl struct {
-				Id int `json:"Id"`
+				ID int `json:"Id"`
 			} `json:"ResourceControl"`
 		} `json:"Portainer"`
 	}
@@ -291,8 +291,8 @@ func resourceDockerVolumeRead(ctx context.Context, d *schema.ResourceData, meta 
 
 	d.SetId(fmt.Sprintf("%d-%s", endpointID, result.Name))
 
-	if result.Portainer.ResourceControl.Id != 0 {
-		if err := d.Set("resource_control_id", result.Portainer.ResourceControl.Id); err != nil {
+	if result.Portainer.ResourceControl.ID != 0 {
+		if err := d.Set("resource_control_id", result.Portainer.ResourceControl.ID); err != nil {
 			return diag.FromErr(err)
 		}
 	}

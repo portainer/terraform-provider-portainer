@@ -195,7 +195,7 @@ func TestStackCov2_Read_FileFetchError(t *testing.T) {
 
 // TestStackCov2_Read_RestrictedAccessControl covers the readStackAccessControl
 // restricted branch (neither Public nor AdministratorsOnly) plus the team/user
-// access flattening, exercised through Read when ResourceControl.Id is set.
+// access flattening, exercised through Read when ResourceControl.ID is set.
 func TestStackCov2_Read_RestrictedAccessControl(t *testing.T) {
 	mock := NewMockServer(t)
 

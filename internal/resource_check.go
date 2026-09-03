@@ -101,10 +101,10 @@ func resourceCheckCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	}
 
 	var out strings.Builder
-	out.WriteString(fmt.Sprintf("Starting container check for stack %q with revision %q\n", stackName, revision))
+	fmt.Fprintf(&out, "Starting container check for stack %q with revision %q\n", stackName, revision)
 
 	if wait > 0 {
-		out.WriteString(fmt.Sprintf("Waiting %d seconds before first check...\n", wait))
+		fmt.Fprintf(&out, "Waiting %d seconds before first check...\n", wait)
 		time.Sleep(time.Duration(wait) * time.Second)
 	}
 
@@ -148,7 +148,7 @@ func checkSwarmServices(client *APIClient, endpointID int, revision, desiredStat
 				return fmt.Errorf("error fetching tasks for %s: %w", service, err)
 			}
 			if code != 200 {
-				out.WriteString(fmt.Sprintf("Attempt %d/%d: failed to fetch tasks (status %d)\n", attempt, maxRetries, code))
+				fmt.Fprintf(out, "Attempt %d/%d: failed to fetch tasks (status %d)\n", attempt, maxRetries, code)
 				time.Sleep(time.Duration(waitBetween) * time.Second)
 				continue
 			}
@@ -158,7 +158,7 @@ func checkSwarmServices(client *APIClient, endpointID int, revision, desiredStat
 				return fmt.Errorf("failed to parse tasks JSON for %s: %w", service, err)
 			}
 			if len(tasks) == 0 {
-				out.WriteString(fmt.Sprintf("Attempt %d/%d: no tasks found for service %q\n", attempt, maxRetries, service))
+				fmt.Fprintf(out, "Attempt %d/%d: no tasks found for service %q\n", attempt, maxRetries, service)
 				time.Sleep(time.Duration(waitBetween) * time.Second)
 				continue
 			}
@@ -178,13 +178,13 @@ func checkSwarmServices(client *APIClient, endpointID int, revision, desiredStat
 			}
 
 			if okReplicas == len(tasks) {
-				out.WriteString(fmt.Sprintf("Service %q OK — all %d/%d tasks at revision %q and state %q\n",
-					service, okReplicas, len(tasks), revision, desiredState))
+				fmt.Fprintf(out, "Service %q OK — all %d/%d tasks at revision %q and state %q\n",
+					service, okReplicas, len(tasks), revision, desiredState)
 				success = true
 				break
 			} else {
-				out.WriteString(fmt.Sprintf("Attempt %d/%d: %d/%d tasks match revision %q and state %q\n",
-					attempt, maxRetries, okReplicas, len(tasks), revision, desiredState))
+				fmt.Fprintf(out, "Attempt %d/%d: %d/%d tasks match revision %q and state %q\n",
+					attempt, maxRetries, okReplicas, len(tasks), revision, desiredState)
 				time.Sleep(time.Duration(waitBetween) * time.Second)
 			}
 		}
@@ -220,7 +220,7 @@ func checkStandaloneContainers(client *APIClient, endpointID int, revision, desi
 				}
 				name := strings.TrimPrefix(nameList[0].(string), "/")
 
-				out.WriteString(fmt.Sprintf("DEBUG: checking container=%q (image=%q, state=%q)\n", name, image, state))
+				fmt.Fprintf(out, "DEBUG: checking container=%q (image=%q, state=%q)\n", name, image, state)
 
 				normalizedName := strings.ReplaceAll(name, "-", "_")
 				normalizedService := strings.ReplaceAll(service, "-", "_")
@@ -231,7 +231,7 @@ func checkStandaloneContainers(client *APIClient, endpointID int, revision, desi
 						cleanImage = strings.Split(image, "@")[0]
 					}
 					if strings.HasSuffix(cleanImage, ":"+revision) && state == desiredState {
-						out.WriteString(fmt.Sprintf("Container %q OK — revision %q, state %q\n", name, revision, desiredState))
+						fmt.Fprintf(out, "Container %q OK — revision %q, state %q\n", name, revision, desiredState)
 						success = true
 						break
 					}
@@ -241,7 +241,7 @@ func checkStandaloneContainers(client *APIClient, endpointID int, revision, desi
 			if success {
 				break
 			} else {
-				out.WriteString(fmt.Sprintf("Attempt %d/%d: container %q not yet matching desired revision/state\n", attempt, maxRetries, service))
+				fmt.Fprintf(out, "Attempt %d/%d: container %q not yet matching desired revision/state\n", attempt, maxRetries, service)
 				time.Sleep(time.Duration(waitBetween) * time.Second)
 			}
 		}

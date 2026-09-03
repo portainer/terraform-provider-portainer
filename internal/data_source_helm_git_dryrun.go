@@ -107,7 +107,7 @@ func dataSourceHelmGitDryRunRead(ctx context.Context, d *schema.ResourceData, me
 		payload["helmChartPath"] = v.(string)
 	}
 	if v, ok := d.GetOk("values_files"); ok {
-		files := make([]string, 0)
+		files := make([]string, 0, len(v.([]interface{})))
 		for _, f := range v.([]interface{}) {
 			files = append(files, f.(string))
 		}

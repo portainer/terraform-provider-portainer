@@ -58,7 +58,7 @@ func resourceKubernetesNamespaceAccess() *schema.Resource {
 }
 
 func toIntSlices(raw []interface{}) []int {
-	result := []int{}
+	result := make([]int, 0, len(raw))
 	for _, v := range raw {
 		result = append(result, v.(int))
 	}
@@ -73,7 +73,7 @@ func getNamespaceRPN(ctx context.Context, client *APIClient, environmentID int, 
 
 	var namespaces []struct {
 		Name string `json:"Name"`
-		Id   string `json:"Id"`
+		ID   string `json:"Id"`
 	}
 	if err := doJSON(ctx, client, http.MethodGet, url, nil, &namespaces); err != nil {
 		return "", fmt.Errorf("failed to list namespaces: %w", err)

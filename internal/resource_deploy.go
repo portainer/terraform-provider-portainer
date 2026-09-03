@@ -200,7 +200,7 @@ func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta inte
 			}
 
 			if currentTag == revision {
-				out.WriteString(fmt.Sprintf("Service %q already uses revision %q — skip.\n", svcName, revision))
+				fmt.Fprintf(&out, "Service %q already uses revision %q — skip.\n", svcName, revision)
 				continue
 			}
 
@@ -226,7 +226,7 @@ func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta inte
 				return diag.FromErr(fmt.Errorf("service %s update failed: status %d, body: %s", svcName, code, string(respBytes)))
 			}
 			updatedAny = true
-			out.WriteString(fmt.Sprintf("Service %q updated to %q\n", svcName, newImage))
+			fmt.Fprintf(&out, "Service %q updated to %q\n", svcName, newImage)
 
 			// check warnings
 			var updOut struct {
@@ -234,7 +234,7 @@ func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta inte
 			}
 			_ = json.Unmarshal(respBytes, &updOut)
 			if updOut.Warnings != nil && fmt.Sprint(updOut.Warnings) != "<nil>" && fmt.Sprint(updOut.Warnings) != "None" {
-				out.WriteString(fmt.Sprintf("WARN: service update returned warnings: %v\n", updOut.Warnings))
+				fmt.Fprintf(&out, "WARN: service update returned warnings: %v\n", updOut.Warnings)
 			}
 
 			// optional force update
@@ -250,15 +250,15 @@ func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta inte
 				body, _ := json.Marshal(forcePayload)
 				resp, code, err := apiPUTWithCodeCtx(ctx, forceURL, client.APIKey, client, body)
 				if err != nil || code != 200 {
-					out.WriteString(fmt.Sprintf("Force update of %q failed (status %d): %s\n", svcName, code, string(resp)))
+					fmt.Fprintf(&out, "Force update of %q failed (status %d): %s\n", svcName, code, string(resp))
 				} else {
-					out.WriteString(fmt.Sprintf("Force update of %q succeeded\n", svcName))
+					fmt.Fprintf(&out, "Force update of %q succeeded\n", svcName)
 				}
 			}
 		}
 
 		if !updatedAny {
-			out.WriteString(fmt.Sprintf("No update needed. All requested services already use revision %q.\n", revision))
+			fmt.Fprintf(&out, "No update needed. All requested services already use revision %q.\n", revision)
 		}
 
 		// Update stack_env_var env on stack (if requested)
@@ -315,7 +315,7 @@ func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta inte
 			if err != nil || code != 200 {
 				return diag.FromErr(fmt.Errorf("failed to update stack %s (status %d): %s", stackEnvVar, code, string(resp)))
 			}
-			out.WriteString(fmt.Sprintf("Stack %q %s updated to %q\n", stackName, stackEnvVar, revision))
+			fmt.Fprintf(&out, "Stack %q %s updated to %q\n", stackName, stackEnvVar, revision)
 		}
 
 	} else {
@@ -410,7 +410,7 @@ func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta inte
 			if err != nil || code != 200 {
 				return diag.FromErr(fmt.Errorf("failed to update stack (standalone) (status %d): %s", code, string(resp)))
 			}
-			out.WriteString(fmt.Sprintf("Standalone stack %q updated with %s=%q\n", stackName, stackEnvVar, revision))
+			fmt.Fprintf(&out, "Standalone stack %q updated with %s=%q\n", stackName, stackEnvVar, revision)
 		} else {
 			out.WriteString("Standalone mode — update_revision=false, nothing to update.\n")
 		}
