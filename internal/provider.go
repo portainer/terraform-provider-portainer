@@ -159,6 +159,8 @@ func Provider() *schema.Provider {
 			"portainer_helm_rollback":                           resourceHelmRollback(),
 			"portainer_gitops_source":                           resourceGitopsSource(),
 			"portainer_user_api_key":                            resourceUserAPIKey(),
+			"portainer_registry_configure":                      resourceRegistryConfigure(),
+			"portainer_kubernetes_persistent_volume":            resourceKubernetesPersistentVolume(),
 			"portainer_endpoint_group_membership":               resourceEndpointGroupMembership(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
@@ -206,6 +208,8 @@ func Provider() *schema.Provider {
 			"portainer_gitops_workflow":             dataSourceGitopsWorkflow(),
 			"portainer_gitops_workflows":            dataSourceGitopsWorkflows(),
 			"portainer_gitops_source_connection":    dataSourceGitopsSourceConnection(),
+			"portainer_registry_connection":         dataSourceRegistryConnection(),
+			"portainer_ldap_check":                  dataSourceLDAPCheck(),
 			"portainer_helm_release_history":        dataSourceHelmReleaseHistory(),
 		},
 		ConfigureContextFunc: configureProvider,

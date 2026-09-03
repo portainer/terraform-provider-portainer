@@ -234,6 +234,8 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_helm_rollback`                  | [helm_rollback.md](docs/resources/helm_rollback.md)                                            | [example](examples/helm_rollback/)                   | ✅     | ❌ / ❌                             | ❌        |
 | `portainer_gitops_source`                  | [gitops_source.md](docs/resources/gitops_source.md)                                            | [example](examples/gitops_source/)                   | ✅     | ✅ / ✅                             | ❌        |
 | `portainer_user_api_key`                   | [user_api_key.md](docs/resources/user_api_key.md)                                              | [example](examples/user_api_key/)                    | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_registry_configure`             | [registry_configure.md](docs/resources/registry_configure.md)                                  | [example](examples/registry_configure/)              | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_kubernetes_persistent_volume`   | [kubernetes_persistent_volume.md](docs/resources/kubernetes_persistent_volume.md)              | [example](examples/kubernetes_persistent_volume/)    | ✅     | ❌ / ✅                             | ❌        |
 | `portainer_endpoint_group_membership`      | [endpoint_group_membership.md](docs/resources/endpoint_group_membership.md)                    | [example](examples/endpoint_group_membership/)       | ✅     | ❌ / ❌                             | ❌        |
 
 
@@ -285,6 +287,8 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_gitops_workflow` | [gitops_workflow.md](docs/data-sources/gitops_workflow.md) | [example](examples/data_gitops_workflow/) | ✅     | ❌        |
 | `portainer_gitops_workflows` | [gitops_workflows.md](docs/data-sources/gitops_workflows.md) | [example](examples/data_gitops_workflows/) | ✅     | ❌        |
 | `portainer_gitops_source_connection` | [gitops_source_connection.md](docs/data-sources/gitops_source_connection.md) | [example](examples/data_gitops_source_connection/) | ✅     | ❌        |
+| `portainer_registry_connection` | [registry_connection.md](docs/data-sources/registry_connection.md) | [example](examples/data_registry_connection/) | ✅     | ❌        |
+| `portainer_ldap_check` | [ldap_check.md](docs/data-sources/ldap_check.md) | [example](examples/data_ldap_check/) | ✅     | ❌        |
 | `portainer_helm_release_history` | [helm_release_history.md](docs/data-sources/helm_release_history.md) | [helm release history docs](docs/data-sources/helm_release_history.md) | ✅ | ❌ |
 
 
