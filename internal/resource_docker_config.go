@@ -98,7 +98,7 @@ type dockerConfigCreateResponse struct {
 	ID        string `json:"ID"`
 	Portainer struct {
 		ResourceControl struct {
-			Id int `json:"Id"`
+			ID int `json:"Id"`
 		} `json:"ResourceControl"`
 	} `json:"Portainer"`
 }
@@ -137,8 +137,8 @@ func resourceDockerConfigCreate(ctx context.Context, d *schema.ResourceData, met
 
 	d.SetId(response.ID)
 
-	if response.Portainer.ResourceControl.Id != 0 {
-		if err := d.Set("resource_control_id", response.Portainer.ResourceControl.Id); err != nil {
+	if response.Portainer.ResourceControl.ID != 0 {
+		if err := d.Set("resource_control_id", response.Portainer.ResourceControl.ID); err != nil {
 			return diag.FromErr(err)
 		}
 	}
@@ -160,7 +160,7 @@ func resourceDockerConfigRead(ctx context.Context, d *schema.ResourceData, meta 
 		} `json:"Spec"`
 		Portainer struct {
 			ResourceControl struct {
-				Id int `json:"Id"`
+				ID int `json:"Id"`
 			} `json:"ResourceControl"`
 		} `json:"Portainer"`
 	}
@@ -190,8 +190,8 @@ func resourceDockerConfigRead(ctx context.Context, d *schema.ResourceData, meta 
 		"labels":     result.Spec.Labels,
 		"templating": templ,
 	}
-	if result.Portainer.ResourceControl.Id != 0 {
-		fields["resource_control_id"] = result.Portainer.ResourceControl.Id
+	if result.Portainer.ResourceControl.ID != 0 {
+		fields["resource_control_id"] = result.Portainer.ResourceControl.ID
 	}
 	if err := setFields(d, fields); err != nil {
 		return diag.FromErr(err)

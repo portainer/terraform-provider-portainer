@@ -1,50 +1,63 @@
+version: "2"
 run:
   timeout: 5m
-
 linters:
   enable:
-    - gosec
-    - errcheck
-    - govet
-    - staticcheck
-    - ineffassign
-    - unused
     - bodyclose
-    - nilerr
     - errorlint
-    - misspell
-    - unconvert
-    - nakedret
-    - wastedassign
-    - usestdlibvars
-    - prealloc
-    - gofumpt
-    - nolintlint
     - gocritic
-
-linters-settings:
-  errcheck:
-    exclude-functions:
-      - fmt.Sscanf # used in ID parse functions, safe to ignore
-  gosec:
-    excludes:
-      - G107 # URL provided by user config, not hardcoded
-      - G402 # InsecureSkipVerify is user-configurable via skip_ssl_verify
-    severity: high
-  staticcheck:
-    checks:
-      - "all"
-  gocritic:
-    disabled-checks:
-      - ifElseChain # auth-selection if/else is clearer than a switch here; stylistic only
-
-issues:
-  exclude-dirs:
-    - portainer_data
-    - e2e-tests
-    - examples
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec
-      text: "G101"
+    - gosec
+    - misspell
+    - nakedret
+    - nilerr
+    - nolintlint
+    - prealloc
+    - unconvert
+    - usestdlibvars
+    - wastedassign
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Sscanf
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+    gosec:
+      excludes:
+        - G107
+        - G402
+      severity: high
+    staticcheck:
+      checks:
+        - all
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gosec
+        path: _test\.go
+        text: G101
+    paths:
+      - portainer_data
+      - e2e-tests
+      - examples
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofumpt
+  exclusions:
+    generated: lax
+    paths:
+      - portainer_data
+      - e2e-tests
+      - examples
+      - third_party$
+      - builtin$
+      - examples$

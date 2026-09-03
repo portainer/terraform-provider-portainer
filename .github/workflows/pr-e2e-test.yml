@@ -43,8 +43,8 @@ jobs:
 
       - name: 🧪 Run Terraform E2E tests
         run: |
-          APPLY_ONLY_DIRS=("deployment" "stack_standalone_string" "webhook" "container_exec" "backup" "auth" "open_amt" "kubernetes_role" "kubernetes_delete_object" "endpoint_snapshot" "endpoint_settings" "kubernetes_namespace" "user_admin")
-          FULL_CYCLE_DIRS=("edge_string" "edge_file" "edge_repository" "kubernetes_application" "kubernetes_clusterrole" "kubernetes_clusterrolebinding" "kubernetes_configmaps" "kubernetes_cronjob" "kubernetes_helm" "kubernetes_ingress" "kubernetes_ingresscontrollers" "kubernetes_job" "kubernetes_namespace_ingresscontrollers" "kubernetes_namespace_system" "kubernetes_role" "kubernetes_rolebinding" "kubernetes_secret" "kubernetes_service" "kubernetes_serviceaccounts" "kubernetes_storage" "kubernetes_volume"
+          APPLY_ONLY_DIRS=("deployment" "stack_standalone_string" "webhook" "container_exec" "backup" "auth" "open_amt" "kubernetes_role" "kubernetes_delete_object" "endpoint_snapshot" "endpoint_settings" "kubernetes_namespace" "user_admin" "kubernetes_manifest_dry_run" "data_kubernetes_workloads")
+          FULL_CYCLE_DIRS=("edge_string" "edge_file" "edge_repository" "kubernetes_application" "kubernetes_deployment_scale" "kubernetes_clusterrole" "kubernetes_clusterrolebinding" "kubernetes_configmaps" "kubernetes_cronjob" "kubernetes_helm" "kubernetes_ingress" "kubernetes_ingresscontrollers" "kubernetes_job" "kubernetes_namespace_ingresscontrollers" "kubernetes_namespace_system" "kubernetes_role" "kubernetes_rolebinding" "kubernetes_secret" "kubernetes_service" "kubernetes_serviceaccounts" "kubernetes_storage" "kubernetes_volume"
           "custom_template_string" "custom_template_file" "custom_template_repository" "docker_image" "docker_network" "docker_plugin" "docker_volume" "stack_standalone_string" "stack_standalone_file" "stack_standalone_repository" "endpoint_group" "tag" "user-team-teammembership" "registry" "environment_tags")
 
           for dir in "${FULL_CYCLE_DIRS[@]}"; do
@@ -129,12 +129,29 @@ jobs:
           terraform validate
           terraform apply -auto-approve
 
+      - name: 🔎 Verify edge_id survives a refresh
+        run: |
+          cd e2e-tests/edge_agent_environment
+          BEFORE=$(terraform output -raw edge_id)
+          terraform apply -refresh-only -auto-approve
+          AFTER=$(terraform output -raw edge_id)
+          if [ -z "$AFTER" ] || [ "$AFTER" != "$BEFORE" ]; then
+            echo "::error::edge_id changed on refresh: '$BEFORE' -> '$AFTER' (issue #142)"
+            exit 1
+          fi
+          # The refresh-only apply above re-evaluates the outputs, so the
+          # environment_address precondition in output.tf has just re-checked
+          # that the address survived the round trip through the API (issue
+          # #136). Read it back so a regression is visible in the log too.
+          echo "environment_address after refresh: $(terraform output -raw environment_address)"
+
       - name: 🐳 Start Edge Agent
         run: |
           docker swarm leave --force 2>/dev/null || true
           cd e2e-tests/edge_agent_environment
-          export EDGE_ID=$(terraform output -raw edge_id)
-          export EDGE_KEY=$(terraform output -raw edge_key)
+          EDGE_ID=$(terraform output -raw edge_id)
+          EDGE_KEY=$(terraform output -raw edge_key)
+          export EDGE_ID EDGE_KEY
           cd $GITHUB_WORKSPACE
           make up-edge-agent
 

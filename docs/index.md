@@ -150,6 +150,9 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 | `portainer_kubernetes_service_account`         | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_storage`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_volume`                  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_kubernetes_node_drain`                          | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_kubernetes_deployment_scale`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_kubernetes_deployment_rollback`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_licenses`                           | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_open_amt`                           | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_open_amt_activate`                  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
@@ -184,6 +187,15 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 | `portainer_user_git_credential`                | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_ldap_settings`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_helm_rollback`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_gitops_source`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_user_api_key`                       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_registry_configure`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_endpoint_relations`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_restore`                            | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_stack_delete_by_name`               | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_edge_job_task_logs`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_kubernetes_persistent_volume`       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_endpoint_group_membership`          | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 
 ## 📊 Supported Data Sources
 | Data Source                   | Status                                                        |
@@ -209,6 +221,13 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 | `portainer_docker_image`      | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_docker_node`       | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_crd`    | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_manifest_dry_run`   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_ingress_classes`    | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_resource_quotas`    | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_replicasets`        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_deployments`        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_pods`               | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_pod_logs`           | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_policy`            | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_policy_template`   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_role`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
@@ -217,6 +236,39 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 | `portainer_helm_git_dryrun`   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_gitops_repo_refs`  | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_gitops_repo_file`  | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_gitops_source`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_gitops_sources`                | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_gitops_workflow`               | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_gitops_workflows`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_gitops_source_connection`      | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_registry_connection` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_ldap_check`        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_system`                        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_settings_public`               | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_motd`                          | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_user_access`                   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_cluster`            | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_nodes`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_events`             | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_describe`           | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_persistent_volumes` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_config`             | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_docker_dashboard`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_docker_images`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_docker_container_gpus`         | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_app_templates`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_helm_chart`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_custom_template_file`          | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_edge_stack_file`               | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_edge_job_file`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_edge_job_tasks`                | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_edge_job_task_logs`            | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_endpoints_summary`             | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_endpoint_registries`           | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_team_memberships`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_pod_metrics`        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_node_metrics`       | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_application_resources` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_helm_release_history` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 
 

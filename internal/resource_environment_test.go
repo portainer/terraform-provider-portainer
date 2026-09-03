@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/base64"
 	"net/http"
 	"strings"
 	"testing"
@@ -72,6 +73,11 @@ func TestEnvironmentCreate_TypeDocker_HappyPath(t *testing.T) {
 	}
 	if got := d.Get("type"); got != 1 {
 		t.Errorf("type: expected 1, got %v", got)
+	}
+	// The issue #142 Edge ID fallback must stay scoped to Edge Agent types:
+	// a Docker environment keeps an empty edge_id.
+	if got := d.Get("edge_id"); got != "" {
+		t.Errorf("edge_id: expected empty for a non-edge environment, got %v", got)
 	}
 }
 
@@ -150,6 +156,175 @@ func TestEnvironmentCreate_TypeEdgeAgent_HappyPath(t *testing.T) {
 	}
 	if got := d.Get("edge_key"); got != "edge-key-xyz" {
 		t.Errorf("edge_key: expected %q, got %v", "edge-key-xyz", got)
+	}
+}
+
+// TestEnvironmentCreate_TypeEdgeAgent_GeneratesEdgeID is the regression test
+// for issue #142: Portainer only generates an Edge ID at creation when the
+// EnforceEdgeID setting is enabled, so both the create response and the
+// follow-up inspect return an empty EdgeID until an agent associates. The
+// provider must fill the gap by generating a UUID client-side (the same thing
+// the Portainer UI does for its deployment script) so edge_id is usable as
+// PORTAINER_EDGE_ID right after apply — and the chained Read must not wipe it
+// back to "".
+func TestEnvironmentCreate_TypeEdgeAgent_GeneratesEdgeID(t *testing.T) {
+	mock := NewMockServer(t)
+
+	mock.On("GET", "/endpoints", RespondJSON(http.StatusOK, []map[string]interface{}{}))
+	mock.On("POST", "/endpoints", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id":      13,
+		"Name":    "edge-no-enforce",
+		"Type":    4,
+		"EdgeKey": "edge-key-xyz",
+		// EdgeID intentionally absent: EnforceEdgeID is off.
+	}))
+	mock.On("GET", "/endpoints/13", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id":      13,
+		"Name":    "edge-no-enforce",
+		"Type":    4,
+		"GroupId": 1,
+		"URL":     "",
+		"EdgeKey": "edge-key-xyz",
+		"EdgeID":  "",
+		"TagIds":  []int{},
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	_ = d.Set("name", "edge-no-enforce")
+	_ = d.Set("environment_address", "")
+	_ = d.Set("type", 4)
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	edgeID := d.Get("edge_id").(string)
+	if edgeID == "" {
+		t.Fatal("edge_id: expected a provider-generated UUID when Portainer returns an empty EdgeID, got \"\"")
+	}
+	// Coarse UUID shape check (8-4-4-4-12).
+	if len(edgeID) != 36 || strings.Count(edgeID, "-") != 4 {
+		t.Errorf("edge_id: expected UUID format, got %q", edgeID)
+	}
+
+	// A later Read while the agent is still unassociated (server EdgeID still
+	// empty) must keep the generated value instead of wiping it.
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("edge_id"); got != edgeID {
+		t.Errorf("edge_id: expected Read to preserve %q while server EdgeID is empty, got %v", edgeID, got)
+	}
+}
+
+// TestEnvironmentCreate_ExistingEdgeAgent_GeneratesEdgeID covers the second
+// producer of edge_id: when an environment with the requested name already
+// exists, Create short-circuits into Update (see
+// TestEnvironmentCreate_ExistingName_DelegatesToUpdate) and never sends a POST.
+// Adopting an existing Edge Agent environment that way must still yield a
+// usable edge_id (issue #142).
+func TestEnvironmentCreate_ExistingEdgeAgent_GeneratesEdgeID(t *testing.T) {
+	mock := NewMockServer(t)
+
+	mock.On("GET", "/endpoints", RespondJSON(http.StatusOK, []map[string]interface{}{
+		{"Id": 21, "Name": "edge-existing", "Type": 4},
+	}))
+	mock.On("PUT", "/endpoints/21", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 21, "Name": "edge-existing", "Type": 4,
+	}))
+	mock.On("GET", "/endpoints/21", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id":      21,
+		"Name":    "edge-existing",
+		"Type":    4,
+		"GroupId": 1,
+		"URL":     "",
+		"EdgeKey": "edge-key-xyz",
+		"EdgeID":  "",
+		"TagIds":  []int{},
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	_ = d.Set("name", "edge-existing")
+	_ = d.Set("environment_address", "")
+	_ = d.Set("type", 4)
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create (existing-name path) failed: %v", err)
+	}
+	if mock.FindRequest("POST", "/endpoints") != nil {
+		t.Error("expected NO POST /endpoints when name already exists")
+	}
+	if got := d.Get("edge_id").(string); got == "" {
+		t.Error("edge_id: expected a generated UUID when adopting an existing edge environment, got \"\"")
+	}
+}
+
+// TestEnvironmentCreate_Type7_ServerReturnsDocker guards the scope of the
+// generated Edge ID. Portainer's endpointCreationType enum only defines 1..5,
+// so an unrecognised creation type falls through to the plain Docker branch and
+// the created environment comes back as type 1 with no edge key. edge_id is
+// keyed off the type Portainer reports, not the requested one, so no Edge ID is
+// fabricated for what is actually a Docker environment.
+func TestEnvironmentCreate_Type7_ServerReturnsDocker(t *testing.T) {
+	mock := NewMockServer(t)
+
+	mock.On("GET", "/endpoints", RespondJSON(http.StatusOK, []map[string]interface{}{}))
+	mock.On("POST", "/endpoints", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 31, "Name": "edge-k8s-req", "Type": 1,
+	}))
+	mock.On("GET", "/endpoints/31", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id":      31,
+		"Name":    "edge-k8s-req",
+		"Type":    1,
+		"GroupId": 1,
+		"URL":     "https://portainer.example.com",
+		"TagIds":  []int{},
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	_ = d.Set("name", "edge-k8s-req")
+	_ = d.Set("environment_address", "https://portainer.example.com")
+	_ = d.Set("type", 7)
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	if got := d.Get("edge_id"); got != "" {
+		t.Errorf("edge_id: expected empty when Portainer reports a non-edge type, got %v", got)
+	}
+}
+
+// TestEnvironmentRead_EdgeAgent_ServerEdgeIDWins verifies the counterpart of
+// the issue #142 fix: once the agent associates and Portainer reports a real
+// EdgeID, Read must overwrite whatever the provider generated at create time.
+func TestEnvironmentRead_EdgeAgent_ServerEdgeIDWins(t *testing.T) {
+	mock := NewMockServer(t)
+
+	mock.On("GET", "/endpoints/14", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id":      14,
+		"Name":    "edge-associated",
+		"Type":    4,
+		"GroupId": 1,
+		"URL":     "",
+		"EdgeKey": "edge-key-xyz",
+		"EdgeID":  "server-edge-id",
+		"TagIds":  []int{},
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	_ = d.Set("type", 4)
+	_ = d.Set("edge_id", "provider-generated-id")
+	d.SetId("14")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("edge_id"); got != "server-edge-id" {
+		t.Errorf("edge_id: expected server-reported %q to win, got %v", "server-edge-id", got)
 	}
 }
 
@@ -639,6 +814,138 @@ func TestEnvironmentRead_NonEdgeUsesAPIURL(t *testing.T) {
 	}
 }
 
+// TestEdgeAddressFromKey pins the edge key parsing used to recover
+// environment_address: field 0 of "url|tunnel|fingerprint|id", accepting both
+// the padded and the unpadded base64 Portainer emits.
+func TestEdgeAddressFromKey(t *testing.T) {
+	key := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	rawKey := func(s string) string { return base64.RawStdEncoding.EncodeToString([]byte(s)) }
+
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"internal address with port", key("http://portainer:9000|portainer:8000|fp|21"), "http://portainer:9000"},
+		{"public address", key("https://portainer.example.com|portainer.example.com:8000|fp|4"), "https://portainer.example.com"},
+		{"unpadded key", rawKey("http://portainer:9000|portainer:8000|fp|21"), "http://portainer:9000"},
+		{"surrounding spaces", key(" https://portainer.example.com |host:8000|fp|7"), "https://portainer.example.com"},
+		{"too few fields", key("https://portainer.example.com|host:8000"), ""},
+		{"not base64", "not-a-key", ""},
+		{"empty", "", ""},
+	}
+	for _, tc := range cases {
+		if got := edgeAddressFromKey(tc.in); got != tc.want {
+			t.Errorf("%s: edgeAddressFromKey(%q): expected %q, got %q", tc.name, tc.in, tc.want, got)
+		}
+	}
+}
+
+// TestEnvironmentRead_EdgeAgentAddressFromEdgeKey verifies that Read recovers
+// the full address from the edge key. Portainer stores the Edge Agent URL as a
+// bare host, dropping the port as well as the scheme, so an agent reaching
+// Portainer on a container-internal address such as "http://portainer:9000"
+// came back as "portainer" and drifted on every plan even after the
+// scheme-only fix for issue #136. The prior state here holds that lossy value,
+// which is exactly the state such a drifting resource is in.
+func TestEnvironmentRead_EdgeAgentAddressFromEdgeKey(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/23", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 23, "Name": "docker-node", "Type": 4, "GroupId": 1,
+		"URL":     "portainer",
+		"EdgeKey": base64.StdEncoding.EncodeToString([]byte("http://portainer:9000|portainer:8000|fp|23")),
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("23")
+	_ = d.Set("type", 4)
+	_ = d.Set("environment_address", "portainer")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("environment_address"); got != "http://portainer:9000" {
+		t.Errorf("environment_address: expected the address from the edge key, got %v", got)
+	}
+}
+
+// TestEnvironmentRead_EdgeAgentKeyOverridesState verifies the edge key wins over
+// the value in state, so an address the running agent no longer uses (Portainer
+// rewrites the key's scheme and port when an endpoint is de-associated) shows up
+// as a real diff instead of being preserved.
+func TestEnvironmentRead_EdgeAgentKeyOverridesState(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/24", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 24, "Name": "docker-node", "Type": 4, "GroupId": 1,
+		"URL":     "portainer",
+		"EdgeKey": base64.StdEncoding.EncodeToString([]byte("https://portainer:9443|portainer:8000|fp|24")),
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("24")
+	_ = d.Set("type", 4)
+	_ = d.Set("environment_address", "http://portainer:9000")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("environment_address"); got != "https://portainer:9443" {
+		t.Errorf("environment_address: expected the address from the edge key, got %v", got)
+	}
+}
+
+// TestEnvironmentRead_EdgeAgentUnparsableKeyFallsBack verifies that an edge key
+// which is not in the expected shape leaves the issue-#136 behaviour in place
+// rather than wiping the scheme out of state.
+func TestEnvironmentRead_EdgeAgentUnparsableKeyFallsBack(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/25", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 25, "Name": "edge-prod", "Type": 4, "GroupId": 1,
+		"URL":     "portainer.example.com",
+		"EdgeKey": "not-a-key",
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("25")
+	_ = d.Set("type", 4)
+	_ = d.Set("environment_address", "https://portainer.example.com")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("environment_address"); got != "https://portainer.example.com" {
+		t.Errorf("environment_address: expected scheme to be kept, got %v", got)
+	}
+}
+
+// TestEnvironmentRead_NonEdgeIgnoresEdgeKey verifies the edge key is only
+// consulted for edge agent types: a directly-connected environment keeps
+// reflecting the URL Portainer reports.
+func TestEnvironmentRead_NonEdgeIgnoresEdgeKey(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/26", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 26, "Name": "docker", "Type": 1, "GroupId": 1,
+		"URL":     "docker.example.com:2375",
+		"EdgeKey": base64.StdEncoding.EncodeToString([]byte("http://portainer:9000|portainer:8000|fp|26")),
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("26")
+	_ = d.Set("type", 1)
+	_ = d.Set("environment_address", "tcp://docker.example.com:2375")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("environment_address"); got != "docker.example.com:2375" {
+		t.Errorf("environment_address: expected API value, got %v", got)
+	}
+}
+
 // TestEnvironmentUpdate_EdgeAgentSendsPublicURL verifies that public_ip is
 // pushed to Portainer for edge agents (issue #137): the field is metadata only
 // and does not trigger proxy/tunnel registration, so it must survive the
@@ -759,6 +1066,11 @@ func TestEnvironmentCreate_EdgeAgentAppliesPublicIP(t *testing.T) {
 	}
 	if got := d.Get("public_ip"); got != "memgraph-main.example.com" {
 		t.Errorf("public_ip in state: got %v", got)
+	}
+	// The Edge ID from the create response must survive the follow-up Update
+	// and the Read it chains into, which reports an empty EdgeID (issue #142).
+	if got := d.Get("edge_id"); got != "eid" {
+		t.Errorf("edge_id: expected %q to survive the follow-up Update and Read, got %v", "eid", got)
 	}
 }
 

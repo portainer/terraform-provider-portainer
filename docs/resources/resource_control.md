@@ -128,6 +128,7 @@ This forces recreation of the Terraform resource.
 | `public`              | bool         | optional | Make the resource public. Default: `false`                              |
 | `teams`               | list(number) | optional | List of team IDs allowed to access this resource                        |
 | `users`               | list(number) | optional | List of user IDs allowed to access this resource                        |
+| `sub_resource_ids`    | list(string) | optional | IDs of sub-resources covered by the same control, such as the services and volumes of a stack. Only used when this resource creates the control. Changing it forces a new resource. |
 
 > When `resource_control_id` is provided, the resource is controlled *directly*, without relying on lookup via `type` + `resource_id`.
 
@@ -156,6 +157,17 @@ Portainer uses these numeric identifiers for ResourceControl types:
 - **19** – Kubernetes Application  
 
 ---
+
+
+## How the control is resolved
+
+Portainer creates a resource control implicitly for objects deployed through it, so this resource adopts an existing control whenever it can find one:
+
+1. `resource_control_id` set — that control is managed directly.
+2. Otherwise the control is looked up from the resource. Portainer only exposes this for stacks (`type = 6`).
+3. If neither yields a control, one is created through `POST /resource_controls`. This is what makes types other than stacks — containers, services, volumes, networks, secrets, configs, custom templates — usable at all.
+
+Portainer has no `GET /resource_controls/{id}`, so a control created by step 3 cannot be read back. For those types the attributes in state stay as configured and drift is not detected; a control that Portainer resolves (step 2) is refreshed normally.
 
 # 📥 Attributes Reference
 

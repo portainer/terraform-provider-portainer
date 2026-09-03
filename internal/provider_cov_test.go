@@ -318,7 +318,7 @@ func TestDoMultipartRequest_HappyPath_Cov(t *testing.T) {
 	client := mock.Client()
 	body := bytes.NewBufferString("--boundary--")
 	var out struct {
-		Id   int    `json:"Id"`
+		ID   int    `json:"Id"`
 		Name string `json:"Name"`
 	}
 	err := client.DoMultipartRequest("POST", mock.URL+"/api/upload",
@@ -326,7 +326,7 @@ func TestDoMultipartRequest_HappyPath_Cov(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DoMultipartRequest failed: %v", err)
 	}
-	if out.Id != 7 || out.Name != "f" {
+	if out.ID != 7 || out.Name != "f" {
 		t.Errorf("unexpected decoded output: %+v", out)
 	}
 

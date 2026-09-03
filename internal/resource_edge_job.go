@@ -122,12 +122,12 @@ func resourceEdgeJobCreate(ctx context.Context, d *schema.ResourceData, meta int
 		}
 
 		var result struct {
-			Id int `json:"Id"`
+			ID int `json:"Id"`
 		}
 		if err := doJSON(ctx, client, http.MethodPost, fmt.Sprintf("%s/edge_jobs/create/string", client.Endpoint), body, &result); err != nil {
 			return diag.FromErr(fmt.Errorf("failed to create edge job: %w", err))
 		}
-		d.SetId(strconv.Itoa(result.Id))
+		d.SetId(strconv.Itoa(result.ID))
 		return nil
 	} else if v, ok := d.GetOk("file_path"); ok {
 		path := v.(string)
@@ -176,12 +176,12 @@ func resourceEdgeJobCreate(ctx context.Context, d *schema.ResourceData, meta int
 		}
 
 		var result struct {
-			Id int `json:"Id"`
+			ID int `json:"Id"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 			return diag.FromErr(err)
 		}
-		d.SetId(strconv.Itoa(result.Id))
+		d.SetId(strconv.Itoa(result.ID))
 		return nil
 	}
 

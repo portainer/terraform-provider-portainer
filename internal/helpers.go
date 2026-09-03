@@ -93,6 +93,26 @@ func isAPINotFound(err error) bool {
 // unmarshaled into it. A status >= 400 is returned as an error that includes
 // the method, URL and raw response body.
 func doJSON(ctx context.Context, client *APIClient, method, urlStr string, body, out interface{}) error {
+	return doJSONWithHeaders(ctx, client, method, urlStr, body, out, nil)
+}
+
+// authHeaders are the headers that carry the client's credentials. A caller of
+// doJSONWithHeaders may not set them: setAuthHeader picks one of the two
+// depending on how the provider is configured, so ordering alone would not stop
+// a caller-supplied value from surviving in the other one.
+var authHeaders = map[string]bool{
+	http.CanonicalHeaderKey("X-API-Key"):     true,
+	http.CanonicalHeaderKey("Authorization"): true,
+}
+
+// doJSONWithHeaders is doJSON plus request headers the Portainer API expects
+// outside the body — currently only X-Setup-Token, which POST /restore requires
+// on an uninitialised instance.
+//
+// Authentication is not negotiable here: headers naming a credential are
+// dropped from the caller's map, so no call site can weaken or replace the
+// authentication the provider is configured with, whether by accident or not.
+func doJSONWithHeaders(ctx context.Context, client *APIClient, method, urlStr string, body, out interface{}, headers map[string]string) error {
 	var reader io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
@@ -105,6 +125,12 @@ func doJSON(ctx context.Context, client *APIClient, method, urlStr string, body,
 	req, err := http.NewRequestWithContext(ctx, method, urlStr, reader)
 	if err != nil {
 		return fmt.Errorf("failed to build %s %s request: %w", method, urlStr, err)
+	}
+	for k, v := range headers {
+		if authHeaders[http.CanonicalHeaderKey(k)] {
+			continue
+		}
+		req.Header.Set(k, v)
 	}
 	if err := setAuthHeader(req, client); err != nil {
 		return err

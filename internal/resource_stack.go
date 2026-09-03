@@ -588,7 +588,7 @@ func resourcePortainerStackRead(ctx context.Context, d *schema.ResourceData, met
 
 		Portainer struct {
 			ResourceControl struct {
-				Id int `json:"Id"`
+				ID int `json:"Id"`
 			} `json:"ResourceControl"`
 		} `json:"Portainer"`
 	}
@@ -720,16 +720,16 @@ func resourcePortainerStackRead(ctx context.Context, d *schema.ResourceData, met
 		fields["pull_image"] = stack.AutoUpdate.ForcePullImage
 		fields["update_interval"] = stack.AutoUpdate.Interval
 	}
-	if stack.Portainer.ResourceControl.Id != 0 {
-		fields["resource_control_id"] = stack.Portainer.ResourceControl.Id
+	if stack.Portainer.ResourceControl.ID != 0 {
+		fields["resource_control_id"] = stack.Portainer.ResourceControl.ID
 	}
 	if err := setFields(d, fields); err != nil {
 		return diag.FromErr(err)
 	}
 
-	if stack.Portainer.ResourceControl.Id != 0 {
+	if stack.Portainer.ResourceControl.ID != 0 {
 		// Read Access Control
-		rcID := strconv.Itoa(stack.Portainer.ResourceControl.Id)
+		rcID := strconv.Itoa(stack.Portainer.ResourceControl.ID)
 		if err := readStackAccessControl(d, client, rcID); err != nil {
 			return diag.FromErr(fmt.Errorf("failed to read stack access control: %w", err))
 		}
@@ -1714,8 +1714,9 @@ func readStackAccessControl(d *schema.ResourceData, client *APIClient, rcID stri
 }
 
 func expandIntSet(set *schema.Set) []int {
-	result := []int{}
-	for _, v := range set.List() {
+	list := set.List()
+	result := make([]int, 0, len(list))
+	for _, v := range list {
 		result = append(result, v.(int))
 	}
 	return result

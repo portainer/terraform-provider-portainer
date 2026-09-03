@@ -38,7 +38,7 @@ It supports provisioning and configuration of Portainer users and will be extend
 ## Requirements
 - Terraform v0.13+
 - Portainer 2.x with admin API key support enabled
-- Go 1.26+ (if building from source)
+- Go 1.27+ (if building from source)
 
 ## Building and Installing
 ```hcl
@@ -218,6 +218,9 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_kubernetes_application`         | [kubernetes_application.md](docs/resources/kubernetes_application.md)                          | [example](examples/kubernetes_application/)          | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_kubernetes_ingresses`           | [kubernetes_ingresses.md](docs/resources/kubernetes_ingresses.md)                              | [example](examples/kubernetes_ingresses/)            | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_kubernetes_volume`              | [kubernetes_volume.md](docs/resources/kubernetes_volume.md)                                    | [example](examples/kubernetes_volume/)               | ✅     | ❌ / ❌                             | ✅        |
+| `portainer_kubernetes_node_drain`          | [kubernetes_node_drain.md](docs/resources/kubernetes_node_drain.md)                            | [example](examples/kubernetes_node_drain/)           | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_kubernetes_deployment_scale`    | [kubernetes_deployment_scale.md](docs/resources/kubernetes_deployment_scale.md)                | [example](examples/kubernetes_deployment_scale/)     | ✅     | ❌ / ✅                             | ✅        |
+| `portainer_kubernetes_deployment_rollback` | [kubernetes_deployment_rollback.md](docs/resources/kubernetes_deployment_rollback.md)          | [example](examples/kubernetes_deployment_rollback/)  | ✅     | ❌ / ❌                             | ❌        |
 | `portainer_kubernetes_storage`             | [kubernetes_storage.md](docs/resources/kubernetes_storage.md)                                  | [example](examples/kubernetes_storage/)              | ✅     | ❌ / ❌                             | ✅        |
 | `portainer_alerting_rule`                  | [alerting_rule.md](docs/resources/alerting_rule.md)                                            | [example](examples/alerting_rule/)                   | ✅     | ❌ / ✅                             | ❌        |
 | `portainer_alerting_settings`              | [alerting_settings.md](docs/resources/alerting_settings.md)                                    | [example](examples/alerting_settings/)               | ✅     | ❌ / ✅                             | ❌        |
@@ -229,6 +232,15 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_user_git_credential`            | [user_git_credential.md](docs/resources/user_git_credential.md)                                | [example](examples/user_git_credential/)             | ✅     | ✅ / ✅                             | ❌        |
 | `portainer_ldap_settings`                  | [ldap_settings.md](docs/resources/ldap_settings.md)                                            | [example](examples/ldap_settings/)                   | ✅     | ❌ / ✅                             | ❌        |
 | `portainer_helm_rollback`                  | [helm_rollback.md](docs/resources/helm_rollback.md)                                            | [example](examples/helm_rollback/)                   | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_gitops_source`                  | [gitops_source.md](docs/resources/gitops_source.md)                                            | [example](examples/gitops_source/)                   | ✅     | ✅ / ✅                             | ❌        |
+| `portainer_user_api_key`                   | [user_api_key.md](docs/resources/user_api_key.md)                                              | [example](examples/user_api_key/)                    | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_registry_configure`             | [registry_configure.md](docs/resources/registry_configure.md)                                  | [example](examples/registry_configure/)              | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_endpoint_relations`             | [endpoint_relations.md](docs/resources/endpoint_relations.md)                                  | [example](examples/endpoint_relations/)              | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_restore`                        | [restore.md](docs/resources/restore.md)                                                        | [example](examples/restore/)                         | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_stack_delete_by_name`           | [stack_delete_by_name.md](docs/resources/stack_delete_by_name.md)                              | [example](examples/stack_delete_by_name/)            | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_edge_job_task_logs`             | [edge_job_task_logs.md](docs/resources/edge_job_task_logs.md)                                  | [example](examples/edge_job_task_logs/)              | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_kubernetes_persistent_volume`   | [kubernetes_persistent_volume.md](docs/resources/kubernetes_persistent_volume.md)              | [example](examples/kubernetes_persistent_volume/)    | ✅     | ❌ / ✅                             | ❌        |
+| `portainer_endpoint_group_membership`      | [endpoint_group_membership.md](docs/resources/endpoint_group_membership.md)                    | [example](examples/endpoint_group_membership/)       | ✅     | ❌ / ❌                             | ❌        |
 
 
 
@@ -259,6 +271,13 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_endpoint_group_access` | [endpoint_group_access.md](docs/data-sources/endpoint_group_access.md) | [endpoint group access docs](docs/data-sources/endpoint_group_access.md) | ✅ | ❌        |
 | `portainer_registry_access`   | [registry_access.md](docs/data-sources/registry_access.md)       | [registry access docs](docs/data-sources/registry_access.md)| ✅     | ❌        |
 | `portainer_kubernetes_crd`    | [kubernetes_crd.md](docs/data-sources/kubernetes_crd.md)         | [kubernetes crd docs](docs/data-sources/kubernetes_crd.md)   | ✅     | ❌        |
+| `portainer_kubernetes_manifest_dry_run` | [kubernetes_manifest_dry_run.md](docs/data-sources/kubernetes_manifest_dry_run.md) | [example](examples/data_kubernetes_manifest_dry_run/) | ✅     | ✅        |
+| `portainer_kubernetes_ingress_classes` | [kubernetes_ingress_classes.md](docs/data-sources/kubernetes_ingress_classes.md) | [example](examples/data_kubernetes_ingress_classes/) | ✅     | ✅        |
+| `portainer_kubernetes_resource_quotas` | [kubernetes_resource_quotas.md](docs/data-sources/kubernetes_resource_quotas.md) | [example](examples/data_kubernetes_resource_quotas/) | ✅     | ✅        |
+| `portainer_kubernetes_replicasets` | [kubernetes_replicasets.md](docs/data-sources/kubernetes_replicasets.md) | [example](examples/data_kubernetes_replicasets/) | ✅     | ✅        |
+| `portainer_kubernetes_deployments` | [kubernetes_deployments.md](docs/data-sources/kubernetes_deployments.md) | [example](examples/data_kubernetes_deployments/) | ✅     | ✅        |
+| `portainer_kubernetes_pods` | [kubernetes_pods.md](docs/data-sources/kubernetes_pods.md) | [example](examples/data_kubernetes_pods/) | ✅     | ✅        |
+| `portainer_kubernetes_pod_logs` | [kubernetes_pod_logs.md](docs/data-sources/kubernetes_pod_logs.md) | [example](examples/data_kubernetes_pod_logs/) | ✅     | ❌        |
 | `portainer_policy`            | [policy.md](docs/data-sources/policy.md)                         | [policy docs](docs/data-sources/policy.md)                   | ✅     | ❌        |
 | `portainer_policy_template`   | [policy_template.md](docs/data-sources/policy_template.md)       | [policy template docs](docs/data-sources/policy_template.md) | ✅     | ❌        |
 | `portainer_role`              | [role.md](docs/data-sources/role.md)                             | [role docs](docs/data-sources/role.md)                       | ✅     | ❌        |
@@ -267,6 +286,39 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_helm_git_dryrun`   | [helm_git_dryrun.md](docs/data-sources/helm_git_dryrun.md)      | [helm git dryrun docs](docs/data-sources/helm_git_dryrun.md) | ✅     | ❌        |
 | `portainer_gitops_repo_refs`  | [gitops_repo_refs.md](docs/data-sources/gitops_repo_refs.md)    | [gitops repo refs docs](docs/data-sources/gitops_repo_refs.md) | ✅   | ❌        |
 | `portainer_gitops_repo_file`  | [gitops_repo_file.md](docs/data-sources/gitops_repo_file.md)    | [gitops repo file docs](docs/data-sources/gitops_repo_file.md) | ✅   | ❌        |
+| `portainer_gitops_source` | [gitops_source.md](docs/data-sources/gitops_source.md) | [example](examples/data_gitops_source/) | ✅     | ❌        |
+| `portainer_gitops_sources` | [gitops_sources.md](docs/data-sources/gitops_sources.md) | [example](examples/data_gitops_sources/) | ✅     | ❌        |
+| `portainer_gitops_workflow` | [gitops_workflow.md](docs/data-sources/gitops_workflow.md) | [example](examples/data_gitops_workflow/) | ✅     | ❌        |
+| `portainer_gitops_workflows` | [gitops_workflows.md](docs/data-sources/gitops_workflows.md) | [example](examples/data_gitops_workflows/) | ✅     | ❌        |
+| `portainer_gitops_source_connection` | [gitops_source_connection.md](docs/data-sources/gitops_source_connection.md) | [example](examples/data_gitops_source_connection/) | ✅     | ❌        |
+| `portainer_registry_connection` | [registry_connection.md](docs/data-sources/registry_connection.md) | [example](examples/data_registry_connection/) | ✅     | ❌        |
+| `portainer_ldap_check` | [ldap_check.md](docs/data-sources/ldap_check.md) | [example](examples/data_ldap_check/) | ✅     | ❌        |
+| `portainer_system` | [system.md](docs/data-sources/system.md) | [example](examples/data_system/) | ✅     | ❌        |
+| `portainer_settings_public` | [settings_public.md](docs/data-sources/settings_public.md) | [example](examples/data_settings_public/) | ✅     | ❌        |
+| `portainer_motd` | [motd.md](docs/data-sources/motd.md) | [example](examples/data_motd/) | ✅     | ❌        |
+| `portainer_user_access` | [user_access.md](docs/data-sources/user_access.md) | [example](examples/data_user_access/) | ✅     | ❌        |
+| `portainer_kubernetes_cluster` | [kubernetes_cluster.md](docs/data-sources/kubernetes_cluster.md) | [example](examples/data_kubernetes_cluster/) | ✅     | ❌        |
+| `portainer_kubernetes_nodes` | [kubernetes_nodes.md](docs/data-sources/kubernetes_nodes.md) | [example](examples/data_kubernetes_nodes/) | ✅     | ❌        |
+| `portainer_kubernetes_events` | [kubernetes_events.md](docs/data-sources/kubernetes_events.md) | [example](examples/data_kubernetes_events/) | ✅     | ❌        |
+| `portainer_kubernetes_describe` | [kubernetes_describe.md](docs/data-sources/kubernetes_describe.md) | [example](examples/data_kubernetes_describe/) | ✅     | ❌        |
+| `portainer_kubernetes_persistent_volumes` | [kubernetes_persistent_volumes.md](docs/data-sources/kubernetes_persistent_volumes.md) | [example](examples/data_kubernetes_persistent_volumes/) | ✅     | ❌        |
+| `portainer_kubernetes_config` | [kubernetes_config.md](docs/data-sources/kubernetes_config.md) | [example](examples/data_kubernetes_config/) | ✅     | ❌        |
+| `portainer_docker_dashboard` | [docker_dashboard.md](docs/data-sources/docker_dashboard.md) | [example](examples/data_docker_dashboard/) | ✅     | ❌        |
+| `portainer_docker_images` | [docker_images.md](docs/data-sources/docker_images.md) | [example](examples/data_docker_images/) | ✅     | ❌        |
+| `portainer_docker_container_gpus` | [docker_container_gpus.md](docs/data-sources/docker_container_gpus.md) | [example](examples/data_docker_container_gpus/) | ✅     | ❌        |
+| `portainer_app_templates` | [app_templates.md](docs/data-sources/app_templates.md) | [example](examples/data_app_templates/) | ✅     | ❌        |
+| `portainer_helm_chart` | [helm_chart.md](docs/data-sources/helm_chart.md) | [example](examples/data_helm_chart/) | ✅     | ❌        |
+| `portainer_custom_template_file` | [custom_template_file.md](docs/data-sources/custom_template_file.md) | [example](examples/data_custom_template_file/) | ✅     | ❌        |
+| `portainer_edge_stack_file` | [edge_stack_file.md](docs/data-sources/edge_stack_file.md) | [example](examples/data_edge_stack_file/) | ✅     | ❌        |
+| `portainer_edge_job_file` | [edge_job_file.md](docs/data-sources/edge_job_file.md) | [example](examples/data_edge_job_file/) | ✅     | ❌        |
+| `portainer_edge_job_tasks` | [edge_job_tasks.md](docs/data-sources/edge_job_tasks.md) | [example](examples/data_edge_job_tasks/) | ✅     | ❌        |
+| `portainer_edge_job_task_logs` | [edge_job_task_logs.md](docs/data-sources/edge_job_task_logs.md) | [example](examples/data_edge_job_task_logs/) | ✅     | ❌        |
+| `portainer_endpoints_summary` | [endpoints_summary.md](docs/data-sources/endpoints_summary.md) | [example](examples/data_endpoints_summary/) | ✅     | ❌        |
+| `portainer_endpoint_registries` | [endpoint_registries.md](docs/data-sources/endpoint_registries.md) | [example](examples/data_endpoint_registries/) | ✅     | ❌        |
+| `portainer_team_memberships` | [team_memberships.md](docs/data-sources/team_memberships.md) | [example](examples/data_team_memberships/) | ✅     | ❌        |
+| `portainer_kubernetes_pod_metrics` | [kubernetes_pod_metrics.md](docs/data-sources/kubernetes_pod_metrics.md) | [example](examples/data_kubernetes_pod_metrics/) | ✅     | ❌        |
+| `portainer_kubernetes_node_metrics` | [kubernetes_node_metrics.md](docs/data-sources/kubernetes_node_metrics.md) | [example](examples/data_kubernetes_node_metrics/) | ✅     | ❌        |
+| `portainer_kubernetes_application_resources` | [kubernetes_application_resources.md](docs/data-sources/kubernetes_application_resources.md) | [example](examples/data_kubernetes_application_resources/) | ✅     | ❌        |
 | `portainer_helm_release_history` | [helm_release_history.md](docs/data-sources/helm_release_history.md) | [helm release history docs](docs/data-sources/helm_release_history.md) | ✅ | ❌ |
 
 

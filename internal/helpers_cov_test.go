@@ -386,3 +386,42 @@ func TestApiPUTWithCodeCtx_NoAuth_Cov(t *testing.T) {
 		t.Fatal("expected error when no auth method provided")
 	}
 }
+
+// TestDoJSONWithHeaders_AuthWinsOverCallerHeaders pins the authentication
+// invariant of doJSONWithHeaders: a caller's header map cannot weaken or
+// replace the credential the provider is configured with. Ordering alone is not
+// enough — setAuthHeader sets X-API-Key or Authorization depending on the
+// configuration, so a caller value in the branch it does not take would
+// otherwise survive. Both are dropped from the caller's map instead.
+func TestDoJSONWithHeaders_AuthWinsOverCallerHeaders(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("POST", "/thing", RespondString(http.StatusNoContent, "", ""))
+
+	client := mock.Client()
+	headers := map[string]string{
+		"X-Setup-Token": "token-123",
+		"X-API-Key":     "", // a caller trying to blank the credential
+		"Authorization": "Bearer attacker",
+	}
+	if err := doJSONWithHeaders(context.Background(), client, http.MethodPost,
+		client.Endpoint+"/thing", map[string]string{"a": "b"}, nil, headers); err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+
+	req := mock.FindRequest("POST", "/thing")
+	if req == nil {
+		t.Fatal("expected the request to reach the server")
+	}
+	if got := req.Headers.Get("X-API-Key"); got != client.APIKey || got == "" {
+		t.Errorf("X-API-Key must survive a colliding caller header, got %q", got)
+	}
+	if got := req.Headers.Get("Authorization"); got != "" {
+		t.Errorf("a caller must not be able to inject an Authorization header, got %q", got)
+	}
+	if got := req.Headers.Get("X-Setup-Token"); got != "token-123" {
+		t.Errorf("a non-auth caller header must still be sent, got %q", got)
+	}
+	if got := req.Headers.Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type: got %q", got)
+	}
+}

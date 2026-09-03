@@ -156,7 +156,7 @@ type dockerSecretCreateResponse struct {
 	ID        string `json:"ID"`
 	Portainer struct {
 		ResourceControl struct {
-			Id int `json:"Id"`
+			ID int `json:"Id"`
 		} `json:"ResourceControl"`
 	} `json:"Portainer"`
 }
@@ -186,8 +186,8 @@ func resourceDockerSecretCreate(ctx context.Context, d *schema.ResourceData, met
 	d.SetId(response.ID)
 
 	// ID resource controlu
-	if response.Portainer.ResourceControl.Id != 0 {
-		if err := d.Set("resource_control_id", response.Portainer.ResourceControl.Id); err != nil {
+	if response.Portainer.ResourceControl.ID != 0 {
+		if err := d.Set("resource_control_id", response.Portainer.ResourceControl.ID); err != nil {
 			return diag.FromErr(err)
 		}
 	}
@@ -215,7 +215,7 @@ func resourceDockerSecretRead(ctx context.Context, d *schema.ResourceData, meta 
 		} `json:"Version"`
 		Portainer struct {
 			ResourceControl struct {
-				Id int `json:"Id"`
+				ID int `json:"Id"`
 			} `json:"ResourceControl"`
 		} `json:"Portainer"`
 	}
@@ -267,8 +267,8 @@ func resourceDockerSecretRead(ctx context.Context, d *schema.ResourceData, meta 
 		return diag.FromErr(err)
 	}
 
-	if result.Portainer.ResourceControl.Id != 0 {
-		if err := d.Set("resource_control_id", result.Portainer.ResourceControl.Id); err != nil {
+	if result.Portainer.ResourceControl.ID != 0 {
+		if err := d.Set("resource_control_id", result.Portainer.ResourceControl.ID); err != nil {
 			return diag.FromErr(err)
 		}
 	}

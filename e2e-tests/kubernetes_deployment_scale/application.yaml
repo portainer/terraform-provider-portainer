@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-scale-test
+spec:
+  selector:
+    matchLabels:
+      app: nginx-scale-test
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: nginx-scale-test
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
