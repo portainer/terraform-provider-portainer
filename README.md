@@ -238,6 +238,7 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_endpoint_relations`             | [endpoint_relations.md](docs/resources/endpoint_relations.md)                                  | [example](examples/endpoint_relations/)              | ✅     | ❌ / ❌                             | ❌        |
 | `portainer_restore`                        | [restore.md](docs/resources/restore.md)                                                        | [example](examples/restore/)                         | ✅     | ❌ / ❌                             | ❌        |
 | `portainer_stack_delete_by_name`           | [stack_delete_by_name.md](docs/resources/stack_delete_by_name.md)                              | [example](examples/stack_delete_by_name/)            | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_edge_job_task_logs`             | [edge_job_task_logs.md](docs/resources/edge_job_task_logs.md)                                  | [example](examples/edge_job_task_logs/)              | ✅     | ❌ / ❌                             | ❌        |
 | `portainer_kubernetes_persistent_volume`   | [kubernetes_persistent_volume.md](docs/resources/kubernetes_persistent_volume.md)              | [example](examples/kubernetes_persistent_volume/)    | ✅     | ❌ / ✅                             | ❌        |
 | `portainer_endpoint_group_membership`      | [endpoint_group_membership.md](docs/resources/endpoint_group_membership.md)                    | [example](examples/endpoint_group_membership/)       | ✅     | ❌ / ❌                             | ❌        |
 
@@ -302,6 +303,19 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_kubernetes_describe` | [kubernetes_describe.md](docs/data-sources/kubernetes_describe.md) | [example](examples/data_kubernetes_describe/) | ✅     | ❌        |
 | `portainer_kubernetes_persistent_volumes` | [kubernetes_persistent_volumes.md](docs/data-sources/kubernetes_persistent_volumes.md) | [example](examples/data_kubernetes_persistent_volumes/) | ✅     | ❌        |
 | `portainer_kubernetes_config` | [kubernetes_config.md](docs/data-sources/kubernetes_config.md) | [example](examples/data_kubernetes_config/) | ✅     | ❌        |
+| `portainer_docker_dashboard` | [docker_dashboard.md](docs/data-sources/docker_dashboard.md) | [example](examples/data_docker_dashboard/) | ✅     | ❌        |
+| `portainer_docker_images` | [docker_images.md](docs/data-sources/docker_images.md) | [example](examples/data_docker_images/) | ✅     | ❌        |
+| `portainer_docker_container_gpus` | [docker_container_gpus.md](docs/data-sources/docker_container_gpus.md) | [example](examples/data_docker_container_gpus/) | ✅     | ❌        |
+| `portainer_app_templates` | [app_templates.md](docs/data-sources/app_templates.md) | [example](examples/data_app_templates/) | ✅     | ❌        |
+| `portainer_helm_chart` | [helm_chart.md](docs/data-sources/helm_chart.md) | [example](examples/data_helm_chart/) | ✅     | ❌        |
+| `portainer_custom_template_file` | [custom_template_file.md](docs/data-sources/custom_template_file.md) | [example](examples/data_custom_template_file/) | ✅     | ❌        |
+| `portainer_edge_stack_file` | [edge_stack_file.md](docs/data-sources/edge_stack_file.md) | [example](examples/data_edge_stack_file/) | ✅     | ❌        |
+| `portainer_edge_job_file` | [edge_job_file.md](docs/data-sources/edge_job_file.md) | [example](examples/data_edge_job_file/) | ✅     | ❌        |
+| `portainer_edge_job_tasks` | [edge_job_tasks.md](docs/data-sources/edge_job_tasks.md) | [example](examples/data_edge_job_tasks/) | ✅     | ❌        |
+| `portainer_edge_job_task_logs` | [edge_job_task_logs.md](docs/data-sources/edge_job_task_logs.md) | [example](examples/data_edge_job_task_logs/) | ✅     | ❌        |
+| `portainer_endpoints_summary` | [endpoints_summary.md](docs/data-sources/endpoints_summary.md) | [example](examples/data_endpoints_summary/) | ✅     | ❌        |
+| `portainer_endpoint_registries` | [endpoint_registries.md](docs/data-sources/endpoint_registries.md) | [example](examples/data_endpoint_registries/) | ✅     | ❌        |
+| `portainer_team_memberships` | [team_memberships.md](docs/data-sources/team_memberships.md) | [example](examples/data_team_memberships/) | ✅     | ❌        |
 | `portainer_helm_release_history` | [helm_release_history.md](docs/data-sources/helm_release_history.md) | [helm release history docs](docs/data-sources/helm_release_history.md) | ✅ | ❌ |
 
 
