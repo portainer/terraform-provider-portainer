@@ -316,6 +316,9 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_endpoints_summary` | [endpoints_summary.md](docs/data-sources/endpoints_summary.md) | [example](examples/data_endpoints_summary/) | ✅     | ❌        |
 | `portainer_endpoint_registries` | [endpoint_registries.md](docs/data-sources/endpoint_registries.md) | [example](examples/data_endpoint_registries/) | ✅     | ❌        |
 | `portainer_team_memberships` | [team_memberships.md](docs/data-sources/team_memberships.md) | [example](examples/data_team_memberships/) | ✅     | ❌        |
+| `portainer_kubernetes_pod_metrics` | [kubernetes_pod_metrics.md](docs/data-sources/kubernetes_pod_metrics.md) | [example](examples/data_kubernetes_pod_metrics/) | ✅     | ❌        |
+| `portainer_kubernetes_node_metrics` | [kubernetes_node_metrics.md](docs/data-sources/kubernetes_node_metrics.md) | [example](examples/data_kubernetes_node_metrics/) | ✅     | ❌        |
+| `portainer_kubernetes_application_resources` | [kubernetes_application_resources.md](docs/data-sources/kubernetes_application_resources.md) | [example](examples/data_kubernetes_application_resources/) | ✅     | ❌        |
 | `portainer_helm_release_history` | [helm_release_history.md](docs/data-sources/helm_release_history.md) | [helm release history docs](docs/data-sources/helm_release_history.md) | ✅ | ❌ |
 
 

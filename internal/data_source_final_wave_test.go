@@ -416,3 +416,97 @@ func TestDataSourceTeamMemberships_Leaders(t *testing.T) {
 		t.Errorf("leader_user_ids: expected [5 7], got %v", leaders)
 	}
 }
+
+// TestDataSourceKubernetesPodMetrics_NamespaceAndSinglePod verifies both
+// endpoints: the namespace one returns a list, the single-pod one a bare object.
+func TestDataSourceKubernetesPodMetrics_NamespaceAndSinglePod(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/kubernetes/1/metrics/pods/namespace/prod", RespondJSON(http.StatusOK, map[string]interface{}{
+		"items": []map[string]interface{}{
+			{
+				"metadata": map[string]interface{}{"name": "web-1"}, "timestamp": "2026-09-03T10:00:00Z", "window": "30s",
+				"containers": []map[string]interface{}{{"name": "web", "usage": map[string]string{"cpu": "250m", "memory": "1Gi"}}},
+			},
+		},
+	}))
+	mock.On("GET", "/kubernetes/1/metrics/pods/prod/web-1", RespondJSON(http.StatusOK, map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "web-1"}, "window": "30s",
+		"containers": []map[string]interface{}{{"name": "web", "usage": map[string]string{"cpu": "300m", "memory": "2Gi"}}},
+	}))
+
+	ns := dataSourceKubernetesPodMetrics()
+	dn := ns.TestResourceData()
+	_ = dn.Set("environment_id", 1)
+	_ = dn.Set("namespace", "prod")
+	if err := rcRead(ns, dn, mock.Client()); err != nil {
+		t.Fatalf("Read (namespace) failed: %v", err)
+	}
+	pod := dn.Get("pods").([]interface{})[0].(map[string]interface{})
+	c := pod["containers"].([]interface{})[0].(map[string]interface{})
+	if pod["name"] != "web-1" || c["cpu"] != "250m" || c["memory"] != "1Gi" {
+		t.Errorf("namespace metrics mismatch: %v", pod)
+	}
+
+	one := dataSourceKubernetesPodMetrics()
+	do := one.TestResourceData()
+	_ = do.Set("environment_id", 1)
+	_ = do.Set("namespace", "prod")
+	_ = do.Set("pod", "web-1")
+	if err := rcRead(one, do, mock.Client()); err != nil {
+		t.Fatalf("Read (single pod) failed: %v", err)
+	}
+	pods := do.Get("pods").([]interface{})
+	if len(pods) != 1 {
+		t.Fatalf("a single pod must still be reported as a one-element list, got %d", len(pods))
+	}
+	c2 := pods[0].(map[string]interface{})["containers"].([]interface{})[0].(map[string]interface{})
+	if c2["cpu"] != "300m" {
+		t.Errorf("single pod metrics: got %v", c2)
+	}
+}
+
+// TestDataSourceKubernetesNodeMetrics_HappyPath covers the per-node endpoint.
+func TestDataSourceKubernetesNodeMetrics_HappyPath(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/kubernetes/1/metrics/nodes/worker-1", RespondJSON(http.StatusOK, map[string]interface{}{
+		"timestamp": "2026-09-03T10:00:00Z", "window": "30s",
+		"usage": map[string]string{"cpu": "1200m", "memory": "3Gi"},
+	}))
+
+	ds := dataSourceKubernetesNodeMetrics()
+	d := ds.TestResourceData()
+	_ = d.Set("environment_id", 1)
+	_ = d.Set("node", "worker-1")
+
+	if err := rcRead(ds, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if d.Get("cpu") != "1200m" || d.Get("memory") != "3Gi" || d.Get("window") != "30s" {
+		t.Errorf("node metrics mismatch: cpu=%v memory=%v window=%v", d.Get("cpu"), d.Get("memory"), d.Get("window"))
+	}
+}
+
+// TestDataSourceKubernetesApplicationResources_HappyPath covers the cluster-wide
+// request/limit totals, whose JSON keys are PascalCase unlike the rest of the
+// Kubernetes metrics endpoints.
+func TestDataSourceKubernetesApplicationResources_HappyPath(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/kubernetes/1/metrics/applications_resources", RespondJSON(http.StatusOK, map[string]interface{}{
+		"CpuRequest": 2.5, "CpuLimit": 4.0,
+		"MemoryRequest": 2147483648, "MemoryLimit": 4294967296,
+	}))
+
+	ds := dataSourceKubernetesApplicationResources()
+	d := ds.TestResourceData()
+	_ = d.Set("environment_id", 1)
+
+	if err := rcRead(ds, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if d.Get("cpu_request") != 2.5 || d.Get("cpu_limit") != 4.0 {
+		t.Errorf("cpu totals mismatch: %v / %v", d.Get("cpu_request"), d.Get("cpu_limit"))
+	}
+	if d.Get("memory_limit") != 4294967296 {
+		t.Errorf("memory_limit: got %v", d.Get("memory_limit"))
+	}
+}

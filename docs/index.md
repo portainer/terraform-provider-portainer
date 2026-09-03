@@ -266,6 +266,9 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 | `portainer_endpoints_summary`             | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_endpoint_registries`           | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_team_memberships`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_pod_metrics`        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_node_metrics`       | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_application_resources` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_helm_release_history` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 
 
