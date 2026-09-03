@@ -93,6 +93,14 @@ func isAPINotFound(err error) bool {
 // unmarshaled into it. A status >= 400 is returned as an error that includes
 // the method, URL and raw response body.
 func doJSON(ctx context.Context, client *APIClient, method, urlStr string, body, out interface{}) error {
+	return doJSONWithHeaders(ctx, client, method, urlStr, body, out, nil)
+}
+
+// doJSONWithHeaders is doJSON plus request headers the Portainer API expects
+// outside the body — currently only X-Setup-Token, which POST /restore requires
+// on an uninitialised instance. The headers are applied after authentication,
+// so they cannot silently drop the API key.
+func doJSONWithHeaders(ctx context.Context, client *APIClient, method, urlStr string, body, out interface{}, headers map[string]string) error {
 	var reader io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
@@ -111,6 +119,9 @@ func doJSON(ctx context.Context, client *APIClient, method, urlStr string, body,
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 
 	resp, err := client.HTTPClient.Do(req)

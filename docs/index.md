@@ -190,6 +190,9 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 | `portainer_gitops_source`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_user_api_key`                       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_registry_configure`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_endpoint_relations`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_restore`                            | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_stack_delete_by_name`               | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_persistent_volume`       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_endpoint_group_membership`          | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 
