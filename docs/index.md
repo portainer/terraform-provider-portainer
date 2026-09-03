@@ -187,6 +187,7 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 | `portainer_user_git_credential`                | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_ldap_settings`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_helm_rollback`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_gitops_source`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 
 ## 📊 Supported Data Sources
 | Data Source                   | Status                                                        |
@@ -227,6 +228,11 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 | `portainer_helm_git_dryrun`   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_gitops_repo_refs`  | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_gitops_repo_file`  | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_gitops_source`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_gitops_sources`                | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_gitops_workflow`               | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_gitops_workflows`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_gitops_source_connection`      | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_helm_release_history` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 
 

@@ -232,6 +232,7 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_user_git_credential`            | [user_git_credential.md](docs/resources/user_git_credential.md)                                | [example](examples/user_git_credential/)             | ✅     | ✅ / ✅                             | ❌        |
 | `portainer_ldap_settings`                  | [ldap_settings.md](docs/resources/ldap_settings.md)                                            | [example](examples/ldap_settings/)                   | ✅     | ❌ / ✅                             | ❌        |
 | `portainer_helm_rollback`                  | [helm_rollback.md](docs/resources/helm_rollback.md)                                            | [example](examples/helm_rollback/)                   | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_gitops_source`                  | [gitops_source.md](docs/resources/gitops_source.md)                                            | [example](examples/gitops_source/)                   | ✅     | ✅ / ✅                             | ❌        |
 
 
 
@@ -277,6 +278,11 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_helm_git_dryrun`   | [helm_git_dryrun.md](docs/data-sources/helm_git_dryrun.md)      | [helm git dryrun docs](docs/data-sources/helm_git_dryrun.md) | ✅     | ❌        |
 | `portainer_gitops_repo_refs`  | [gitops_repo_refs.md](docs/data-sources/gitops_repo_refs.md)    | [gitops repo refs docs](docs/data-sources/gitops_repo_refs.md) | ✅   | ❌        |
 | `portainer_gitops_repo_file`  | [gitops_repo_file.md](docs/data-sources/gitops_repo_file.md)    | [gitops repo file docs](docs/data-sources/gitops_repo_file.md) | ✅   | ❌        |
+| `portainer_gitops_source` | [gitops_source.md](docs/data-sources/gitops_source.md) | [example](examples/data_gitops_source/) | ✅     | ❌        |
+| `portainer_gitops_sources` | [gitops_sources.md](docs/data-sources/gitops_sources.md) | [example](examples/data_gitops_sources/) | ✅     | ❌        |
+| `portainer_gitops_workflow` | [gitops_workflow.md](docs/data-sources/gitops_workflow.md) | [example](examples/data_gitops_workflow/) | ✅     | ❌        |
+| `portainer_gitops_workflows` | [gitops_workflows.md](docs/data-sources/gitops_workflows.md) | [example](examples/data_gitops_workflows/) | ✅     | ❌        |
+| `portainer_gitops_source_connection` | [gitops_source_connection.md](docs/data-sources/gitops_source_connection.md) | [example](examples/data_gitops_source_connection/) | ✅     | ❌        |
 | `portainer_helm_release_history` | [helm_release_history.md](docs/data-sources/helm_release_history.md) | [helm release history docs](docs/data-sources/helm_release_history.md) | ✅ | ❌ |
 
 
