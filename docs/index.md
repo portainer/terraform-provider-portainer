@@ -188,6 +188,8 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 | `portainer_ldap_settings`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_helm_rollback`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_gitops_source`                      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_user_api_key`                       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_endpoint_group_membership`          | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 
 ## 📊 Supported Data Sources
 | Data Source                   | Status                                                        |

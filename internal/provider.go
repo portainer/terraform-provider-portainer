@@ -158,6 +158,8 @@ func Provider() *schema.Provider {
 			"portainer_ldap_settings":                           resourceLDAPSettings(),
 			"portainer_helm_rollback":                           resourceHelmRollback(),
 			"portainer_gitops_source":                           resourceGitopsSource(),
+			"portainer_user_api_key":                            resourceUserAPIKey(),
+			"portainer_endpoint_group_membership":               resourceEndpointGroupMembership(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"portainer_user":                        dataSourceUser(),
