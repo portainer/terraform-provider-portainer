@@ -50,11 +50,13 @@ var secretPatterns = []string{
 // sensitive values. Each entry should be obviously non-secret (a toggle, a
 // reference name, a description, a public key).
 var allowlist = map[string]bool{
-	"generate_api_key":    true, // bool toggle, not a key
-	"api_key_description": true, // human label for an API key
-	"secret_name":         true, // reference to a Docker secret, not its value
-	"secret_names":        true,
-	"token_name":          true,
+	"generate_api_key":     true, // bool toggle, not a key
+	"api_key_description":  true, // human label for an API key
+	"requires_setup_token": true, // bool toggle: whether a token is demanded, not the token
+	"setup_token_required": true,
+	"secret_name":          true, // reference to a Docker secret, not its value
+	"secret_names":         true,
+	"token_name":           true,
 	// docker_volume CSI cluster-volume secrets: these are references to Docker
 	// Swarm secrets by NAME, never the secret value itself.
 	"secrets": true, // TypeList of {key, secret-name} references

@@ -242,6 +242,10 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 | `portainer_gitops_source_connection`      | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_registry_connection` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_ldap_check`        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_system`                        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_settings_public`               | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_motd`                          | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_user_access`                   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_helm_release_history` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 
 

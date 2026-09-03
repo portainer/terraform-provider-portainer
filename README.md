@@ -292,6 +292,10 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_gitops_source_connection` | [gitops_source_connection.md](docs/data-sources/gitops_source_connection.md) | [example](examples/data_gitops_source_connection/) | ✅     | ❌        |
 | `portainer_registry_connection` | [registry_connection.md](docs/data-sources/registry_connection.md) | [example](examples/data_registry_connection/) | ✅     | ❌        |
 | `portainer_ldap_check` | [ldap_check.md](docs/data-sources/ldap_check.md) | [example](examples/data_ldap_check/) | ✅     | ❌        |
+| `portainer_system` | [system.md](docs/data-sources/system.md) | [example](examples/data_system/) | ✅     | ❌        |
+| `portainer_settings_public` | [settings_public.md](docs/data-sources/settings_public.md) | [example](examples/data_settings_public/) | ✅     | ❌        |
+| `portainer_motd` | [motd.md](docs/data-sources/motd.md) | [example](examples/data_motd/) | ✅     | ❌        |
+| `portainer_user_access` | [user_access.md](docs/data-sources/user_access.md) | [example](examples/data_user_access/) | ✅     | ❌        |
 | `portainer_helm_release_history` | [helm_release_history.md](docs/data-sources/helm_release_history.md) | [helm release history docs](docs/data-sources/helm_release_history.md) | ✅ | ❌ |
 
 
