@@ -296,6 +296,12 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_settings_public` | [settings_public.md](docs/data-sources/settings_public.md) | [example](examples/data_settings_public/) | ✅     | ❌        |
 | `portainer_motd` | [motd.md](docs/data-sources/motd.md) | [example](examples/data_motd/) | ✅     | ❌        |
 | `portainer_user_access` | [user_access.md](docs/data-sources/user_access.md) | [example](examples/data_user_access/) | ✅     | ❌        |
+| `portainer_kubernetes_cluster` | [kubernetes_cluster.md](docs/data-sources/kubernetes_cluster.md) | [example](examples/data_kubernetes_cluster/) | ✅     | ❌        |
+| `portainer_kubernetes_nodes` | [kubernetes_nodes.md](docs/data-sources/kubernetes_nodes.md) | [example](examples/data_kubernetes_nodes/) | ✅     | ❌        |
+| `portainer_kubernetes_events` | [kubernetes_events.md](docs/data-sources/kubernetes_events.md) | [example](examples/data_kubernetes_events/) | ✅     | ❌        |
+| `portainer_kubernetes_describe` | [kubernetes_describe.md](docs/data-sources/kubernetes_describe.md) | [example](examples/data_kubernetes_describe/) | ✅     | ❌        |
+| `portainer_kubernetes_persistent_volumes` | [kubernetes_persistent_volumes.md](docs/data-sources/kubernetes_persistent_volumes.md) | [example](examples/data_kubernetes_persistent_volumes/) | ✅     | ❌        |
+| `portainer_kubernetes_config` | [kubernetes_config.md](docs/data-sources/kubernetes_config.md) | [example](examples/data_kubernetes_config/) | ✅     | ❌        |
 | `portainer_helm_release_history` | [helm_release_history.md](docs/data-sources/helm_release_history.md) | [helm release history docs](docs/data-sources/helm_release_history.md) | ✅ | ❌ |
 
 

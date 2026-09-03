@@ -246,6 +246,12 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 | `portainer_settings_public`               | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_motd`                          | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_user_access`                   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_cluster`            | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_nodes`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_events`             | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_describe`           | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_persistent_volumes` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_config`             | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_helm_release_history` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 
 
