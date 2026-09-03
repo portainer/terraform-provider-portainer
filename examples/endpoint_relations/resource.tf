@@ -6,7 +6,9 @@ resource "portainer_endpoint_relations" "fleet" {
     group_id       = 5
   }
 
-  # group_id left at 0 keeps the environment in whatever group it is already in.
+  # Only the edge groups are managed here. tag_ids and group_id are omitted on
+  # purpose: an empty list would tell Portainer to CLEAR that environment's
+  # tags, and omitting the attribute is the only way to leave them alone.
   relation {
     endpoint_id    = 10
     edge_group_ids = [1]

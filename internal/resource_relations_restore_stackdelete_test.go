@@ -226,3 +226,86 @@ func TestResourceControlRead_KeepsNonLookupableInState(t *testing.T) {
 		t.Errorf("expected the resource to stay in state, got id %q", d.Id())
 	}
 }
+
+// TestEndpointRelations_OmitsUntouchedFields is the regression test for a
+// destructive bug: Portainer's updateRelations acts on Tags and EdgeGroups only
+// when they are non-nil, and on Group only when non-zero. Sending an empty
+// array therefore does not mean "leave this alone" — it CLEARS that
+// environment's tags or edge groups. The SDK fills an omitted nested list with
+// an empty slice, so a relation block that configures only one field must send
+// only that field.
+func TestEndpointRelations_OmitsUntouchedFields(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("PUT", "/endpoints/relations", RespondString(http.StatusNoContent, "", ""))
+
+	r := resourceEndpointRelations()
+	d := r.TestResourceData()
+	_ = d.Set("relation", []interface{}{
+		// Only edge groups: tags and group must not appear at all.
+		map[string]interface{}{"endpoint_id": 9, "edge_group_ids": []interface{}{1}},
+		// Only a group move.
+		map[string]interface{}{"endpoint_id": 10, "group_id": 5},
+	})
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	put := mock.FindRequest("PUT", "/endpoints/relations")
+	var payload struct {
+		Relations map[string]map[string]interface{} `json:"Relations"`
+	}
+	if err := put.DecodeJSON(&payload); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+
+	nine := payload.Relations["9"]
+	if _, present := nine["Tags"]; present {
+		t.Error("Tags must be omitted when not configured — an empty array clears the environment's tags")
+	}
+	if _, present := nine["Group"]; present {
+		t.Error("Group must be omitted when zero")
+	}
+	if groups, ok := nine["EdgeGroups"].([]interface{}); !ok || len(groups) != 1 {
+		t.Errorf("EdgeGroups should carry the configured value, got %v", nine["EdgeGroups"])
+	}
+
+	ten := payload.Relations["10"]
+	if _, present := ten["EdgeGroups"]; present {
+		t.Error("EdgeGroups must be omitted when not configured — an empty array clears the environment's edge groups")
+	}
+	if _, present := ten["Tags"]; present {
+		t.Error("Tags must be omitted when not configured")
+	}
+	if ten["Group"] != float64(5) {
+		t.Errorf("Group: expected 5, got %v", ten["Group"])
+	}
+}
+
+// TestEndpointRelations_OmittedOptionalListsDoNotPanic pins that reading a
+// relation block which omits both optional lists is safe: the SDK hands back an
+// empty slice rather than nil, so the type assertions hold.
+func TestEndpointRelations_OmittedOptionalListsDoNotPanic(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("PUT", "/endpoints/relations", RespondString(http.StatusNoContent, "", ""))
+
+	r := resourceEndpointRelations()
+	d := r.TestResourceData()
+	_ = d.Set("relation", []interface{}{map[string]interface{}{"endpoint_id": 9}})
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	put := mock.FindRequest("PUT", "/endpoints/relations")
+	var payload struct {
+		Relations map[string]map[string]interface{} `json:"Relations"`
+	}
+	if err := put.DecodeJSON(&payload); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	// A block that configures nothing is a no-op on the Portainer side.
+	if len(payload.Relations["9"]) != 0 {
+		t.Errorf("a relation configuring nothing must send an empty object, got %v", payload.Relations["9"])
+	}
+}

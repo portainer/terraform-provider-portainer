@@ -34,8 +34,8 @@ Each `relation` block accepts:
 | Name             | Type   | Required | Default | Description                                                                       |
 |------------------|--------|----------|---------|-----------------------------------------------------------------------------------|
 | `endpoint_id`    | number | ✅ yes   | –       | Identifier of the environment.                                                     |
-| `edge_group_ids` | list   | ❌ no    | –       | Edge groups the environment belongs to. An empty list leaves them untouched.        |
-| `tag_ids`        | list   | ❌ no    | –       | Tags assigned to the environment. An empty list leaves them untouched.              |
+| `edge_group_ids` | list   | ❌ no    | –       | Edge groups the environment belongs to, replacing whatever it had. Omit to leave them alone. |
+| `tag_ids`        | list   | ❌ no    | –       | Tags assigned to the environment, replacing whatever it had. Omit to leave them alone.       |
 | `group_id`       | number | ❌ no    | `0`     | Environment group to move the environment to. Zero leaves its group untouched.      |
 
 ## Attributes Reference
@@ -44,4 +44,8 @@ Each `relation` block accepts:
 |------|------------------------------------------|
 | `id` | Synthetic identifier for the apply.       |
 
-Portainer offers no endpoint to read relations back as a set or to clear them, so this resource cannot detect drift, and destroying it only stops managing the relations — the environments keep what they were given.
+Each field is sent only when it is configured, because that is how Portainer reads the payload: it acts on tags and edge groups only when they are present, and on the group only when non-zero. An **empty list is not a no-op on the Portainer side — it clears** that environment's tags or edge groups, so this resource omits the field instead.
+
+The consequence is that clearing tags or edge groups cannot be expressed here: Portainer cannot tell an intentional "none" from "do not touch". Use `tag_ids` on `portainer_environment` when you need to empty them.
+
+Portainer offers no endpoint to read relations back as a set, so this resource cannot detect drift, and destroying it only stops managing the relations — the environments keep what they were given.
