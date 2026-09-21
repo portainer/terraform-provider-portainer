@@ -15,13 +15,16 @@ resource "portainer_environment" "test_env" {
 
 # 2. Define the registry
 #
-# The name is derived rather than var.custom_name itself: custom.tf already
-# creates a registry under that name, and Portainer rejects a second one with
-# "Another registry with the same name already exists". This registry only
-# exists to have something for the access resource below to point at.
+# Both the name and the URL are derived rather than reused: custom.tf already
+# creates an unauthenticated registry at var.custom_url under var.custom_name,
+# and Portainer enforces uniqueness twice over - once on the name ("Another
+# registry with the same name already exists") and once on the combination of
+# URL and credentials ("Another registry with the same URL and credentials
+# already exists"). This registry only exists to have something for the access
+# resource below to point at.
 resource "portainer_registry" "test_registry" {
   name           = "${var.custom_name} Access"
-  url            = var.custom_url
+  url            = "access.${var.custom_url}"
   type           = 3 # Custom
   authentication = var.custom_authentication
 }
