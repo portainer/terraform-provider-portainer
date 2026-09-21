@@ -25,6 +25,7 @@ func resourceEnvironment() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
+		CustomizeDiff: resourceEnvironmentCustomizeDiff,
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:        schema.TypeString,
@@ -139,6 +140,40 @@ func resourceEnvironment() *schema.Resource {
 	}
 }
 
+// resourceEnvironmentCustomizeDiff forces replacement when an Edge Agent
+// environment's address really changes.
+//
+// Portainer bakes the address into the edge key when the environment is created
+// and never regenerates it, and the update endpoint does not accept a URL for
+// edge types at all. Moving such an environment therefore requires a new
+// environment with a new edge key and a redeployed agent — an in-place update
+// cannot express it. Without this, the address written back from the edge key
+// on every read left the plan showing the same change forever.
+//
+// A difference in the scheme alone is not a move: it comes from Portainer's own
+// host-only normalisation of endpoint.URL (issue #136) for state written by
+// older provider versions, and replacing a live environment over that would be
+// destructive for no reason.
+func resourceEnvironmentCustomizeDiff(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	if d.Id() == "" {
+		// Creation: there is nothing to replace.
+		return nil
+	}
+	if envType := d.Get("type").(int); envType != 4 && envType != 7 {
+		return nil
+	}
+	if !d.HasChange("environment_address") {
+		return nil
+	}
+
+	old, new := d.GetChange("environment_address")
+	if trimURLScheme(old.(string)) == trimURLScheme(new.(string)) {
+		return nil
+	}
+
+	return d.ForceNew("environment_address")
+}
+
 // ensureEdgeID gives Edge Agent environments a usable edge_id when Portainer
 // does not supply one. The server only assigns an Edge ID at creation while the
 // EnforceEdgeID setting is enabled; otherwise the endpoint's EdgeID stays empty
@@ -226,22 +261,32 @@ func resourceEnvironmentCreate(ctx context.Context, d *schema.ResourceData, meta
 		params.SetTagIds(tagIDs)
 	}
 
-	tlsEnabled := d.Get("tls_enabled").(bool)
-	params.SetTLS(&tlsEnabled)
-	tlsSkipVerify := d.Get("tls_skip_verify").(bool)
-	params.SetTLSSkipVerify(&tlsSkipVerify)
-	tlsSkipClientVerify := d.Get("tls_skip_client_verify").(bool)
-	params.SetTLSSkipClientVerify(&tlsSkipClientVerify)
+	// Portainer refuses TLS outright for Edge Agent environments — since 2.43,
+	// endpoint_create.go rejects the request with "TLS is not supported for Edge
+	// Agent environments" as soon as payload.TLS is true. tls_enabled defaults to
+	// true in this schema, so sending the TLS fields unconditionally made every
+	// Edge Agent creation fail against a current Portainer. The agent reaches
+	// Portainer through the edge tunnel and never presents these certificates
+	// anyway, so they are simply not sent — the same exclusion Update already
+	// applies for edge types.
+	if !isEdgeAgent {
+		tlsEnabled := d.Get("tls_enabled").(bool)
+		params.SetTLS(&tlsEnabled)
+		tlsSkipVerify := d.Get("tls_skip_verify").(bool)
+		params.SetTLSSkipVerify(&tlsSkipVerify)
+		tlsSkipClientVerify := d.Get("tls_skip_client_verify").(bool)
+		params.SetTLSSkipClientVerify(&tlsSkipClientVerify)
 
-	if tlsEnabled && !tlsSkipVerify {
-		if v, ok := d.GetOk("tls_ca_cert"); ok && v.(string) != "" {
-			params.SetTLSCACertFile(runtime.NamedReader("ca.pem", strings.NewReader(v.(string))))
-		}
-		if v, ok := d.GetOk("tls_cert"); ok && v.(string) != "" {
-			params.SetTLSCertFile(runtime.NamedReader("cert.pem", strings.NewReader(v.(string))))
-		}
-		if v, ok := d.GetOk("tls_key"); ok && v.(string) != "" {
-			params.SetTLSKeyFile(runtime.NamedReader("key.pem", strings.NewReader(v.(string))))
+		if tlsEnabled && !tlsSkipVerify {
+			if v, ok := d.GetOk("tls_ca_cert"); ok && v.(string) != "" {
+				params.SetTLSCACertFile(runtime.NamedReader("ca.pem", strings.NewReader(v.(string))))
+			}
+			if v, ok := d.GetOk("tls_cert"); ok && v.(string) != "" {
+				params.SetTLSCertFile(runtime.NamedReader("cert.pem", strings.NewReader(v.(string))))
+			}
+			if v, ok := d.GetOk("tls_key"); ok && v.(string) != "" {
+				params.SetTLSKeyFile(runtime.NamedReader("key.pem", strings.NewReader(v.(string))))
+			}
 		}
 	}
 
@@ -501,29 +546,12 @@ func resourceEnvironmentUpdate(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(fmt.Errorf("failed to update environment: %w", decorateSDKError(err, errBody)))
 	}
 
-	diags := resourceEnvironmentRead(ctx, d, meta)
-	if isEdgeAgent && d.HasChange("environment_address") {
-		// The address is only ever sent at create time for edge agents (see
-		// above), and Portainer generates the edge key from it right there, so
-		// an edit cannot be applied in place. Say so instead of letting the
-		// apply look successful.
-		//
-		// Only a change of host is worth warning about: a difference in the
-		// scheme alone comes from Portainer's own host-only normalisation of
-		// endpoint.URL (issue #136), not from an operator edit, and would
-		// otherwise warn on every apply for environments still holding a
-		// scheme-less address in state.
-		old, new := d.GetChange("environment_address")
-		if trimURLScheme(old.(string)) != trimURLScheme(new.(string)) {
-			diags = append(diags, diag.Diagnostic{
-				Severity: diag.Warning,
-				Summary:  "environment_address was not applied to the Edge Agent environment",
-				Detail: "Portainer bakes the address into the edge key when the environment is created and never regenerates it on update, so the running agent keeps using the previous address. " +
-					"Replace the resource (terraform apply -replace=...) to get a new edge key, then redeploy the agent with it.",
-			})
-		}
-	}
-	return diags
+	// A real address change on an edge environment never reaches Update:
+	// resourceEnvironmentCustomizeDiff forces replacement for it, because
+	// Portainer cannot apply one in place. What can still arrive here is a
+	// scheme-only difference against state written by an older provider version,
+	// which is not a move and needs no special handling.
+	return resourceEnvironmentRead(ctx, d, meta)
 }
 
 func resourceEnvironmentDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {

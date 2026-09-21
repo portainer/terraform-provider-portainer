@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -66,8 +67,44 @@ type apiStatusError struct {
 	Body       string
 }
 
+// sensitiveQueryParams are query parameter names whose value must never reach
+// an error message. Some Portainer endpoints take a credential in the query
+// string, and an error carrying the full URL would put it into Terraform
+// diagnostics and, for any caller that stores the message, into state.
+var sensitiveQueryParams = map[string]bool{
+	"serviceaccountkey": true,
+	"apikey":            true,
+	"api_key":           true,
+	"password":          true,
+	"token":             true,
+	"secret":            true,
+	"key":               true,
+}
+
+// redactURL replaces the value of any sensitive query parameter with REDACTED,
+// leaving the rest of the URL readable so the error still says what failed.
+func redactURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.RawQuery == "" {
+		return raw
+	}
+	query := parsed.Query()
+	redacted := false
+	for name := range query {
+		if sensitiveQueryParams[strings.ToLower(name)] {
+			query.Set(name, "REDACTED")
+			redacted = true
+		}
+	}
+	if !redacted {
+		return raw
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
 func (e *apiStatusError) Error() string {
-	return fmt.Sprintf("%s %s failed with status %d: %s", e.Method, e.URL, e.StatusCode, e.Body)
+	return fmt.Sprintf("%s %s failed with status %d: %s", e.Method, redactURL(e.URL), e.StatusCode, e.Body)
 }
 
 // isAPINotFound reports whether err is (or wraps) an apiStatusError with a 404
@@ -266,6 +303,39 @@ func apiGETCtx(ctx context.Context, url string, apiKey string, client *APIClient
 	}
 	defer resp.Body.Close()
 	return io.ReadAll(resp.Body)
+}
+
+// apiGETRaw fetches a response body and, unlike apiGETCtx, fails on a non-2xx
+// status instead of handing the error body back as if it were data. It returns
+// the same *apiStatusError doJSON does, so isAPINotFound works on its result.
+//
+// Use this for endpoints that answer with something other than a JSON document
+// the caller can decode into a struct - raw text, or a payload whose shape is
+// not fixed - where a silently returned error page would otherwise be stored
+// in state.
+func apiGETRaw(ctx context.Context, client *APIClient, urlStr string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := setAuthHeader(req, client); err != nil {
+		return nil, err
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, &apiStatusError{StatusCode: resp.StatusCode, Body: string(body)}
+	}
+	return body, nil
 }
 
 func apiGETWithCodeCtx(ctx context.Context, url string, apiKey string, client *APIClient) ([]byte, int, error) {

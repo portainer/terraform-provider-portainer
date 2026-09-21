@@ -489,24 +489,40 @@ func resourcePortainerStackCreate(ctx context.Context, d *schema.ResourceData, m
 		}
 
 		url := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, d.Id(), endpointID)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to build stack update (create) request: %w", err))
-		}
 
-		if err := setAuthHeader(req, client); err != nil {
-			return diag.FromErr(err)
-		}
-		req.Header.Set("Content-Type", "application/json")
+		// Portainer deploys the stack asynchronously from 2.45 and holds it in
+		// status Deploying meanwhile, rejecting this call with 409 until the
+		// deploy finishes (issue #145). Wait for it to settle, and retry a
+		// bounded number of times in case another client starts a deploy in the
+		// window between the poll and this request.
+		for attempt := 0; ; attempt++ {
+			if err := waitForStackSettled(ctx, client, d.Id()); err != nil {
+				return diag.FromErr(err)
+			}
 
-		resp, err := client.HTTPClient.Do(req)
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to perform stack update (create) request: %w", err))
-		}
-		defer resp.Body.Close()
+			req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
+			if err != nil {
+				return diag.FromErr(fmt.Errorf("failed to build stack update (create) request: %w", err))
+			}
 
-		if resp.StatusCode != http.StatusOK {
+			if err := setAuthHeader(req, client); err != nil {
+				return diag.FromErr(err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := client.HTTPClient.Do(req)
+			if err != nil {
+				return diag.FromErr(fmt.Errorf("failed to perform stack update (create) request: %w", err))
+			}
 			data, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			if resp.StatusCode == http.StatusOK {
+				break
+			}
+			if isStackDeploymentConflict(resp.StatusCode, string(data)) && attempt < maxStackConflictRetries {
+				continue
+			}
 			return diag.FromErr(fmt.Errorf("failed to finalize stack creation (prune/webhook), status %d: %s", resp.StatusCode, string(data)))
 		}
 
@@ -815,6 +831,92 @@ func resourcePortainerStackDelete(ctx context.Context, d *schema.ResourceData, m
 	}
 }
 
+// Portainer stack status values. Deploying and Error only exist from 2.45,
+// where stack deployment became asynchronous; older versions never report
+// anything but Active or Inactive.
+const (
+	stackStatusDeploying = 3
+	stackStatusError     = 4
+)
+
+// stackSettlePollInterval is how often waitForStackSettled asks Portainer
+// whether the deployment has finished. It is a variable so tests do not have to
+// wait in real time.
+var stackSettlePollInterval = 2 * time.Second
+
+// maxStackConflictRetries bounds how many times a mutating stack call is
+// retried after Portainer reports a deployment conflict. One retry covers the
+// window between the readiness poll and the call itself; a handful also covers
+// a second client starting a deploy inside that window.
+const maxStackConflictRetries = 3
+
+// waitForStackSettled blocks until Portainer reports that the stack is no
+// longer being deployed.
+//
+// Portainer 2.45 made stack deployment asynchronous: POST /stacks/create/...
+// returns as soon as the deploy job is queued, while the stack stays in status
+// 3 (Deploying) until docker compose up actually finishes. Every mutating call
+// in that window is rejected with 409 "Stack deployment is already in
+// progress", which is why creating a standalone or swarm stack failed on every
+// apply even though the deployment itself succeeded (issue #145). On 2.39 both
+// create and update were synchronous and no lock existed, which is why the same
+// configuration worked there.
+//
+// Waiting on the stack's status rather than simply retrying the mutation
+// matters for a reason beyond politeness: a deployment that FAILS also releases
+// the lock, so a blind retry would eventually succeed and report a healthy
+// apply for a broken stack. Status 4 (Error) is surfaced as an error instead.
+//
+// Portainer versions older than 2.45 never report status 3, so this returns
+// after the first poll and behaves exactly as before.
+func waitForStackSettled(ctx context.Context, client *APIClient, stackID string) error {
+	url := fmt.Sprintf("%s/stacks/%s", client.Endpoint, stackID)
+	timedOut := func(cause error) error {
+		return fmt.Errorf("gave up waiting for stack %s to finish deploying (raise the resource's create/update timeout if the deployment is simply slow): %w", stackID, cause)
+	}
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return timedOut(err)
+		}
+
+		var stack struct {
+			Status int `json:"Status"`
+		}
+		if err := doJSON(ctx, client, http.MethodGet, url, nil, &stack); err != nil {
+			// The deadline can expire during the request as easily as between
+			// two polls; either way it is a timeout, not a broken stack.
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return timedOut(ctxErr)
+			}
+			return fmt.Errorf("failed to read stack %s while waiting for its deployment to settle: %w", stackID, err)
+		}
+
+		switch stack.Status {
+		case stackStatusDeploying:
+			// Still deploying — fall through to the wait below.
+		case stackStatusError:
+			return fmt.Errorf("stack %s was deployed but Portainer reports its deployment failed (status %d); check the stack's logs in Portainer", stackID, stack.Status)
+		default:
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return timedOut(ctx.Err())
+		case <-time.After(stackSettlePollInterval):
+		}
+	}
+}
+
+// isStackDeploymentConflict reports whether a Portainer response is the
+// deployment lock rejecting a mutating call. The status code alone is not
+// enough: 409 is how Portainer answers other conflicts too, and retrying those
+// would just loop until the timeout.
+func isStackDeploymentConflict(statusCode int, body string) bool {
+	return statusCode == http.StatusConflict && strings.Contains(body, "already in progress")
+}
+
 // setStackActive starts or stops a stack via the Portainer stack start/stop
 // endpoints. The Portainer API has no way to create a stack in the stopped
 // state, so callers that want active = false must deploy the stack first and
@@ -824,6 +926,14 @@ func setStackActive(ctx context.Context, client *APIClient, stackID string, endp
 	if active {
 		action = "start"
 	}
+
+	// Stopping a stack Portainer is still deploying is rejected by the same
+	// deployment lock as any other mutation (issue #145), and this runs right
+	// after a create or a redeploy — exactly when the lock is held.
+	if err := waitForStackSettled(ctx, client, stackID); err != nil {
+		return err
+	}
+
 	actionURL := fmt.Sprintf("%s/stacks/%s/%s?endpointId=%d", client.Endpoint, stackID, action, endpointID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, actionURL, nil)
 	if err != nil {
@@ -986,6 +1096,12 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 			return diag.FromErr(fmt.Errorf("failed to marshal git redeploy payload: %w", err))
 		}
 
+		// Portainer rejects this while an earlier deployment is still running
+		// (issue #145) — a webhook or another apply can leave one in flight.
+		if err := waitForStackSettled(ctx, client, stackID); err != nil {
+			return diag.FromErr(err)
+		}
+
 		redeployURL := fmt.Sprintf("%s/stacks/%s/git/redeploy?endpointId=%d", client.Endpoint, stackID, endpointID)
 		reqRedeploy, err := http.NewRequestWithContext(ctx, http.MethodPut, redeployURL, bytes.NewBuffer(redeployBody))
 		if err != nil {
@@ -1034,6 +1150,12 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 			return diag.FromErr(fmt.Errorf("failed to marshal standard update payload: %w", err))
 		}
 
+		// Portainer rejects this while an earlier deployment is still running
+		// (issue #145) — a webhook or another apply can leave one in flight.
+		if err := waitForStackSettled(ctx, client, stackID); err != nil {
+			return diag.FromErr(err)
+		}
+
 		url := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, stackID, endpointID)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
 		if err != nil {
@@ -1074,6 +1196,12 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 		jsonBody, err := json.Marshal(payload)
 		if err != nil {
 			return diag.FromErr(fmt.Errorf("failed to marshal webhook update payload: %w", err))
+		}
+
+		// Portainer rejects this while an earlier deployment is still running
+		// (issue #145) — a webhook or another apply can leave one in flight.
+		if err := waitForStackSettled(ctx, client, d.Id()); err != nil {
+			return diag.FromErr(err)
 		}
 
 		url := fmt.Sprintf("%s/stacks/%s?endpointId=%d", client.Endpoint, d.Id(), endpointID)

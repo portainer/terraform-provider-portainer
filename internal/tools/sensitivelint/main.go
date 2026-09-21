@@ -57,6 +57,10 @@ var allowlist = map[string]bool{
 	"secret_name":          true, // reference to a Docker secret, not its value
 	"secret_names":         true,
 	"token_name":           true,
+	"restrict_secrets":     true, // bool toggle: whether access to secrets is restricted, not a secret
+	// Kubernetes service accounts: a toggle, and a list of secret NAMES.
+	"automount_service_account_token": true, // bool toggle: whether the token is mounted, not the token
+	"image_pull_secrets":              true, // references to secrets by name, never their values
 	// docker_volume CSI cluster-volume secrets: these are references to Docker
 	// Swarm secrets by NAME, never the secret value itself.
 	"secrets": true, // TypeList of {key, secret-name} references

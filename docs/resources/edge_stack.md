@@ -66,6 +66,31 @@ resource "portainer_edge_stack" "example_git" {
 }
 ```
 
+### From a Helm chart repository (Business Edition)
+
+```hcl
+resource "portainer_edge_stack" "monitoring" {
+  name            = "monitoring"
+  deployment_type = 1 # Helm charts deploy to Kubernetes
+  edge_groups     = [portainer_edge_group.k8s.id]
+
+  helm_config {
+    chart_url     = "https://prometheus-community.github.io/helm-charts"
+    chart_name    = "kube-prometheus-stack"
+    chart_version = "51.2.0"
+    namespace     = "monitoring"
+    atomic        = true
+    timeout       = "5m0s"
+
+    values_inline = yamlencode({
+      grafana = {
+        enabled = true
+      }
+    })
+  }
+}
+```
+
 ---
 
 ## Lifecycle & Behavior
@@ -128,6 +153,30 @@ terraform apply
 | `relative_path`             | string | 🚫 optional | Enables relative path volumes (from Compose) and sets the `filesystemPath` |
 | `repository_git_credential_id` | int | 🚫 optional | ID of the Git credentials to use (replaces username/password) |
 | `always_clone`              | bool   | 🚫 optional | Always clone the git repository for relative path. Only valid when `relative_path` is set (default: `false`) |
+| `helm_config`               | block  | 🚫 optional | Deploy from a Helm chart repository instead of a compose file or a git repository. Business Edition only ([nested block](#helm_config-block)) |
+
+### `helm_config` Block
+
+> **Business Edition only.** The Helm repository endpoints do not exist in Portainer CE.
+
+Setting this block selects the Helm repository deployment source, the same way `stack_file_content` selects the inline one. It is mutually exclusive with `stack_file_content`, `stack_file_path` and `repository_url`.
+
+A Helm chart deploys to Kubernetes, so `deployment_type` has to be `1`.
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `chart_url` | string | ✅ yes | URL of the Helm chart repository |
+| `chart_name` | string | ✅ yes | Name of the chart within the repository |
+| `chart_version` | string | 🚫 optional | Version of the chart to deploy. Leave unset for the latest published version |
+| `namespace` | string | 🚫 optional | Kubernetes namespace to deploy the chart into |
+| `values_inline` | string | 🚫 optional | Helm values as an inline YAML string |
+| `atomic` | bool | 🚫 optional | Roll a failed deployment back automatically, the equivalent of `helm --atomic` |
+| `timeout` | string | 🚫 optional | Deadline for Helm operations, the equivalent of `helm --timeout` (e.g. `5m0s`) |
+
+Leaving `chart_version` unset means Portainer resolves the latest published version at apply time, so a later apply can move the stack to a newer chart without the configuration changing. Pin it where that matters.
+
+The optional fields are left out of the request when empty, so an update never clears a chart setting that was configured outside Terraform.
+
 
 ## 🧮 Computed Outputs
 | Name          | Description                     |

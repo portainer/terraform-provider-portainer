@@ -1,6 +1,7 @@
 resource "portainer_alerting_silence" "test" {
   alert_manager_url = var.alert_manager_url
   comment           = var.silence_comment
+  created_by        = var.silence_created_by
   starts_at         = var.silence_starts_at
   ends_at           = var.silence_ends_at
 

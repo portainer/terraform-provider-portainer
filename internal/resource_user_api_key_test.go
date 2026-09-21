@@ -2,8 +2,19 @@ package internal
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 )
+
+// sessionClient is a client authenticated the way Portainer requires for the
+// token endpoint: with a session rather than an API key. mock.Client() uses an
+// API key, which this resource now refuses up front.
+func sessionClient(mock *MockServer) *APIClient {
+	client := mock.Client()
+	client.APIKey = ""
+	client.JWTToken = "test-jwt"
+	return client
+}
 
 // TestUserAPIKeyCreate_HappyPath verifies the key is created against the user's
 // token endpoint and that the raw key — returned exactly once — is stored.
@@ -24,7 +35,7 @@ func TestUserAPIKeyCreate_HappyPath(t *testing.T) {
 	_ = d.Set("description", "terraform")
 	_ = d.Set("password", "hunter2")
 
-	if err := rcCreate(r, d, mock.Client()); err != nil {
+	if err := rcCreate(r, d, sessionClient(mock)); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	if d.Id() != "11" {
@@ -61,7 +72,7 @@ func TestUserAPIKeyCreate_NoIDReturned(t *testing.T) {
 	_ = d.Set("description", "terraform")
 	_ = d.Set("password", "hunter2")
 
-	if err := rcCreate(r, d, mock.Client()); err == nil {
+	if err := rcCreate(r, d, sessionClient(mock)); err == nil {
 		t.Fatal("expected Create to fail when Portainer returns no key ID")
 	}
 }
@@ -147,5 +158,31 @@ func TestUserAPIKeyDelete_404IsSuccess(t *testing.T) {
 
 	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete should treat a missing key as success: %v", err)
+	}
+}
+
+// TestUserAPIKeyCreate_RejectsAPIKeyAuth guards the failure an e2e run turned
+// up. Portainer accepts POST /users/{id}/tokens only from a session - with an
+// API key it answers 401 "Auth not supported", which says nothing about what
+// to do. The provider now refuses before sending and explains the constraint.
+func TestUserAPIKeyCreate_RejectsAPIKeyAuth(t *testing.T) {
+	mock := NewMockServer(t)
+
+	r := resourceUserAPIKey()
+	d := r.TestResourceData()
+	_ = d.Set("user_id", 2)
+	_ = d.Set("description", "e2e")
+	_ = d.Set("password", "secret")
+
+	// mock.Client() authenticates with an API key, which is the case at issue.
+	err := rcCreate(r, d, mock.Client())
+	if err == nil {
+		t.Fatal("creating a key while authenticated with an API key must be refused")
+	}
+	if !strings.Contains(err.Error(), "api_user") {
+		t.Errorf("the error should name the arguments to use instead, got: %v", err)
+	}
+	if len(mock.Requests()) != 0 {
+		t.Errorf("nothing should be sent to Portainer, got %d request(s)", len(mock.Requests()))
 	}
 }

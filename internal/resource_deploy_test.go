@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -264,17 +265,15 @@ func TestDeployCreate_StackNotFound(t *testing.T) {
 }
 
 // TestDeployCreate_StackListHTTPError verifies a failed stack listing
-// propagates an error. The GET /stacks helper (apiGETCtx) does not check the
-// status code, so to force a failure we point the swarm detection at a closed
-// route; here we instead omit the /stacks route which yields a 404 body that
-// fails JSON unmarshaling.
+// propagates an error. The listing now goes through apiGETRaw, which fails on
+// the 404 itself rather than letting the error body through to the unmarshal -
+// so the failure is reported as what it is instead of as malformed JSON.
 func TestDeployCreate_StackListHTTPError(t *testing.T) {
 	mock := NewMockServer(t)
 
 	mock.On("GET", "/endpoints/1/docker/swarm", RespondString(
 		http.StatusNotFound, "application/json", `{}`))
-	// No /stacks route registered: the mock returns a plain-text 404 body
-	// which is not valid JSON, so the unmarshal in the resource fails.
+	// No /stacks route registered, so the mock answers 404.
 
 	r := resourceDeploy()
 	d := r.TestResourceData()
@@ -357,5 +356,37 @@ func TestDeployDelete_ClearsState(t *testing.T) {
 	}
 	if len(mock.Requests()) != 0 {
 		t.Errorf("expected no API calls on Delete, got %d", len(mock.Requests()))
+	}
+}
+
+// TestDeployCreate_StackListForbidden is the regression this switch guards.
+// With the old unchecked helper a 403 body reached the JSON unmarshal and the
+// apply failed complaining about malformed JSON, which pointed the operator at
+// the wrong problem entirely.
+func TestDeployCreate_StackListForbidden(t *testing.T) {
+	mock := NewMockServer(t)
+
+	mock.On("GET", "/endpoints/1/docker/swarm", RespondString(
+		http.StatusNotFound, "application/json", `{}`))
+	mock.On("GET", "/stacks", RespondString(http.StatusForbidden,
+		"application/json", `{"message":"access denied"}`))
+
+	r := resourceDeploy()
+	d := r.TestResourceData()
+	_ = d.Set("endpoint_id", 1)
+	_ = d.Set("stack_name", "myapp")
+	_ = d.Set("stack_env_var", "APP_VERSION")
+	_ = d.Set("revision", "2.0.0")
+	_ = d.Set("services_list", "svc")
+
+	err := rcCreate(r, d, mock.Client())
+	if err == nil {
+		t.Fatal("a forbidden stack listing must fail the apply")
+	}
+	if strings.Contains(err.Error(), "parse") {
+		t.Errorf("the error should report the refusal, not a parse failure: %v", err)
+	}
+	if !strings.Contains(err.Error(), "access denied") {
+		t.Errorf("the error should carry what Portainer said, got: %v", err)
 	}
 }

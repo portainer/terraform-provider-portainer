@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -121,8 +122,11 @@ func dataSourceKubernetesClusterRead(ctx context.Context, d *schema.ResourceData
 		return diag.FromErr(fmt.Errorf("failed to read the RBAC status of environment %d: %w", envID, err))
 	}
 
-	// The dashboard endpoint returns a single-element list of counters.
-	var dashboard []struct {
+	// Portainer's API specification types this response as a list, but the
+	// server answers with a single object. Both shapes are accepted rather
+	// than trusting either one: a decode failure here used to take the whole
+	// data source down over a handful of counters.
+	type dashboardCounters struct {
 		ApplicationsCount int `json:"applicationsCount"`
 		NamespacesCount   int `json:"namespacesCount"`
 		ServicesCount     int `json:"servicesCount"`
@@ -131,8 +135,19 @@ func dataSourceKubernetesClusterRead(ctx context.Context, d *schema.ResourceData
 		SecretsCount      int `json:"secretsCount"`
 		VolumesCount      int `json:"volumesCount"`
 	}
-	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/kubernetes/%d/dashboard", client.Endpoint, envID), nil, &dashboard); err != nil {
+
+	dashboardURL := fmt.Sprintf("%s/kubernetes/%d/dashboard", client.Endpoint, envID)
+	body, err := apiGETRaw(ctx, client, dashboardURL)
+	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to read the Kubernetes dashboard of environment %d: %w", envID, err))
+	}
+
+	var dashboard []dashboardCounters
+	var single dashboardCounters
+	if err := json.Unmarshal(body, &single); err == nil {
+		dashboard = []dashboardCounters{single}
+	} else if err := json.Unmarshal(body, &dashboard); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to parse the Kubernetes dashboard of environment %d: %w", envID, err))
 	}
 
 	var maxLimits struct {

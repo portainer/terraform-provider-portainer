@@ -46,12 +46,9 @@ resource "portainer_environment" "your-host" {
 
 ```hcl
 resource "portainer_environment" "edge_env" {
-  name                   = "Edge Device"
-  environment_address    = "https://portainer.example.com:9443"
-  type                   = 4
-  tls_enabled            = true
-  tls_skip_verify        = true
-  tls_skip_client_verify = true
+  name                = "Edge Device"
+  environment_address = "https://portainer.example.com:9443"
+  type                = 4
 }
 
 output "edge_key" {
@@ -66,6 +63,10 @@ output "edge_id" {
 Pass `edge_key` and `edge_id` to the Edge Agent as `PORTAINER_EDGE_KEY` and `PORTAINER_EDGE_ID`. Portainer assigns the Edge ID itself only while `enforce_edge_id` is enabled on `portainer_settings`; otherwise the provider generates one at create time and Portainer adopts it when the agent first checks in.
 
 Because the value is produced at create time, `terraform import` and Edge Agent environments already in state from an earlier provider version keep an empty `edge_id` until an agent associates — after that a refresh picks up the ID reported by the agent.
+
+**Do not set the `tls_*` attributes on an Edge Agent environment.** Portainer rejects TLS for edge types outright — `POST /endpoints` answers `400 TLS is not supported for Edge Agent environments` — because the agent dials out through the edge tunnel and never presents a certificate. Since `tls_enabled` defaults to `true`, the provider drops all TLS fields for types `4` and `7` rather than letting the default fail the create.
+
+**Changing `environment_address` replaces the environment.** Portainer bakes the address into the edge key when the environment is created and never regenerates it, and its update endpoint does not accept a URL for edge types at all — so moving an edge environment means a new environment, a new edge key and a redeployed agent. Terraform reports this as a forced replacement. A difference in the scheme alone does not trigger it: that is Portainer's own host-only normalisation of `endpoint.URL` showing through for state written by older provider versions.
 
 ### Register Docker host secured via TLS (certs example from Vault/TLS)
 
@@ -103,7 +104,7 @@ resource "meu_portainer_environment" "docker_tls" {
 | `type`                   | int                           | ✅ yes                       | Environment type: `1` = Docker, `2` = Agent, `3` = Azure, `4` = Edge Agent, `5` = Kubernetes, `6` = Kubernetes via Agent, `7` = Kubernetes Edge Agent. Note: when using type `4` for Kubernetes Edge Agent, Portainer may automatically change the type to `7` after the agent connects. This is expected behavior and will not cause Terraform drift. |
 | `group_id`               | int                           | 🚫 optional (default `1`)    | ID of the Portainer endpoint group. Default is `1` (Unassigned).                                                        |
 | `tag_ids`                | list(int)                     | 🚫 optional                  | List of Portainer tag IDs to assign to the environment. Only used during creation.                                      |
-| `tls_enabled`            | bool                          | 🚫 optional (default `true`) | Enable TLS for connection to the agent. Must be `true` for agent-based environments.                                    |
+| `tls_enabled`            | bool                          | 🚫 optional (default `true`) | Enable TLS for connection to the agent. Must be `true` for agent-based environments. **Ignored for Edge Agent types (`4`, `7`)** — Portainer rejects TLS for them, so the provider does not send it. |
 | `tls_skip_verify`        | bool                          | 🚫 optional (default `true`) | Skip server certificate verification. Useful for self-signed certificates.                                              |
 | `tls_skip_client_verify` | bool                          | 🚫 optional (default `true`) | Skip client certificate verification. Used when mutual TLS is not required.                                             |
 | `tls_ca_cert`            | string                        | 🚫 optional (sensitive)      | PEM-encoded CA certificate. Uploaded as `TLSCACertFile` when `tls_enabled = true` and `tls_skip_verify = false`.        |

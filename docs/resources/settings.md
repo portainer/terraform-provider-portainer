@@ -46,6 +46,7 @@ terraform apply
 | `kubeconfig_expiry`            | string   | 🚫 no    | Expiration time for downloaded Kubeconfigs                                   |
 | `kubectl_shell_image`          | string   | 🚫 no    | Image to be used for the kubectl shell UI                                    |
 | `helm_repository_url`          | string   | 🚫 no    | Default Helm repository URL                                                  |
+| `addons_catalog_url`           | string   | 🚫 no    | URL the add-on catalog is fetched from (Business Edition only)               |
 | `enable_edge_compute_features` | bool     | 🚫 no    | Enable Edge compute management support                                       |
 | `enforce_edge_id`              | bool     | 🚫 no    | Enforce the use of Portainer Edge ID                                         |
 | `trust_on_first_connect`       | bool     | 🚫 no    | Automatically trust TLS fingerprint on first connection                      |

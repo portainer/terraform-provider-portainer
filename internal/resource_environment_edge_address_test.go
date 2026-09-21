@@ -6,160 +6,188 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
 // =========================================================================
-// Coverage for the warning resourceEnvironmentUpdate raises when an Edge Agent
-// environment's address is edited. The branch is gated on
-// d.HasChange("environment_address"), and a plain TestResourceData carries no
-// diff, so HasChange is always false there. These tests build a ResourceData
-// with a real InstanceState + InstanceDiff via the SDK's InternalMap, the same
-// approach as resource_webhook_cov3_test.go.
+// Coverage for the two Edge Agent behaviours that Portainer's own API forces
+// on this resource:
 //
-// The warning is also dropped by the rcUpdate adapter (which folds only
-// Error-severity diagnostics into an error), so these call UpdateContext
-// directly and inspect the diagnostics.
+//   - TLS must not be sent when creating an edge environment. Since 2.43
+//     Portainer rejects the request outright, and tls_enabled defaults to true
+//     here, so sending it unconditionally broke every edge creation.
+//   - A real address change cannot be applied in place, because Portainer bakes
+//     the address into the edge key at creation. CustomizeDiff forces
+//     replacement so the plan converges instead of repeating forever.
 // =========================================================================
 
-// edgeEnvDataWithAddressChange returns a *schema.ResourceData for an Edge Agent
-// environment whose environment_address differs between state (old) and diff
-// (new), so HasChange("environment_address") reports true.
-func edgeEnvDataWithAddressChange(t *testing.T, id, oldAddr, newAddr string) *schema.ResourceData {
+// edgeEnvDiff runs the resource's diff for an existing environment, so the
+// CustomizeDiff hook is exercised the way Terraform exercises it during a plan.
+func edgeEnvDiff(t *testing.T, envType string, stateAddr, configAddr string) *terraform.InstanceDiff {
 	t.Helper()
 	r := resourceEnvironment()
+
 	state := &terraform.InstanceState{
-		ID: id,
+		ID: "30",
 		Attributes: map[string]string{
-			"id":                  id,
+			"id":                  "30",
 			"name":                "edge-prod",
-			"type":                "4",
+			"type":                envType,
 			"group_id":            "1",
-			"environment_address": oldAddr,
+			"environment_address": stateAddr,
 		},
 	}
-	diff := &terraform.InstanceDiff{
-		Attributes: map[string]*terraform.ResourceAttrDiff{
-			"environment_address": {Old: oldAddr, New: newAddr},
-		},
-	}
-	d, err := schema.InternalMap(r.Schema).Data(state, diff)
+	config := terraform.NewResourceConfigRaw(map[string]interface{}{
+		"name":                "edge-prod",
+		"type":                envType,
+		"environment_address": configAddr,
+	})
+
+	diff, err := r.Diff(context.Background(), state, config, nil)
 	if err != nil {
-		t.Fatalf("failed to build diffed ResourceData: %v", err)
+		t.Fatalf("Diff failed: %v", err)
 	}
-	return d
+	return diff
 }
 
-// mockEdgeEnvUpdate registers the PUT + follow-up GET an Update performs, with
-// the API reporting the host-only URL Portainer stores for edge environments.
-func mockEdgeEnvUpdate(t *testing.T, id string, apiURL, edgeKey string) *MockServer {
-	t.Helper()
+// TestEnvironmentDiff_EdgeAgentAddressChangeForcesReplacement is the reason
+// CustomizeDiff exists: Portainer cannot move an edge environment in place, so
+// a genuine address change has to replace it. Without this the plan showed the
+// same change on every run, because Read writes the address back from the edge
+// key.
+func TestEnvironmentDiff_EdgeAgentAddressChangeForcesReplacement(t *testing.T) {
+	diff := edgeEnvDiff(t, "4", "https://portainer.example.com", "https://other.example.com")
+
+	if diff == nil {
+		t.Fatal("expected a diff for a changed address")
+	}
+	if !diff.RequiresNew() {
+		t.Error("a real address change on an Edge Agent environment must force replacement")
+	}
+}
+
+// TestEnvironmentDiff_EdgeAgentSchemeOnlyDoesNotReplace guards the heuristic.
+// State written by an older provider version holds Portainer's host-only
+// normalisation, so it differs from the configured address by the scheme alone.
+// Replacing a live environment — and forcing an agent redeploy — over that would
+// be destructive for no reason.
+func TestEnvironmentDiff_EdgeAgentSchemeOnlyDoesNotReplace(t *testing.T) {
+	diff := edgeEnvDiff(t, "4", "portainer.example.com", "https://portainer.example.com")
+
+	if diff != nil && diff.RequiresNew() {
+		t.Error("a scheme-only difference must not replace the environment")
+	}
+}
+
+// TestEnvironmentDiff_NonEdgeAddressChangeDoesNotReplace verifies the hook is
+// edge-specific: a directly-connected environment really does accept a new URL
+// on update, so it must keep updating in place.
+func TestEnvironmentDiff_NonEdgeAddressChangeDoesNotReplace(t *testing.T) {
+	diff := edgeEnvDiff(t, "1", "tcp://docker.example.com:2375", "tcp://other.example.com:2375")
+
+	if diff == nil {
+		t.Fatal("expected a diff for a changed address")
+	}
+	if diff.RequiresNew() {
+		t.Error("a non-edge environment must be updated in place, not replaced")
+	}
+}
+
+// TestEnvironmentDiff_CreationDoesNotForceNew covers the guard for a resource
+// that does not exist yet: there is nothing to replace, and reporting a forced
+// replacement on creation would be nonsense.
+func TestEnvironmentDiff_CreationDoesNotForceNew(t *testing.T) {
+	r := resourceEnvironment()
+	config := terraform.NewResourceConfigRaw(map[string]interface{}{
+		"name":                "edge-prod",
+		"type":                "4",
+		"environment_address": "https://portainer.example.com",
+	})
+
+	diff, err := r.Diff(context.Background(), nil, config, nil)
+	if err != nil {
+		t.Fatalf("Diff failed: %v", err)
+	}
+	if diff != nil && diff.RequiresNew() {
+		t.Error("creation must not be reported as a replacement")
+	}
+}
+
+// TestEnvironmentCreate_EdgeAgentOmitsTLS is the regression test for the
+// creation failure: Portainer answers 400 "TLS is not supported for Edge Agent
+// environments" as soon as the payload carries TLS, and tls_enabled defaults to
+// true, so the fields must not be sent for edge types at all.
+func TestEnvironmentCreate_EdgeAgentOmitsTLS(t *testing.T) {
 	mock := NewMockServer(t)
-	mock.On("PUT", "/endpoints/"+id, RespondJSON(http.StatusOK, map[string]interface{}{
-		"Id": 30, "Name": "edge-prod", "Type": 4,
-	}))
-	mock.On("GET", "/endpoints/"+id, RespondJSON(http.StatusOK, map[string]interface{}{
-		"Id": 30, "Name": "edge-prod", "Type": 4, "GroupId": 1,
-		"URL": apiURL, "EdgeKey": edgeKey, "TagIds": []int{},
-	}))
-	return mock
-}
 
-func warningsIn(diags diag.Diagnostics) []diag.Diagnostic {
-	var out []diag.Diagnostic
-	for _, d := range diags {
-		if d.Severity == diag.Warning {
-			out = append(out, d)
+	mock.On("GET", "/endpoints", RespondJSON(http.StatusOK, []map[string]interface{}{}))
+	mock.On("POST", "/endpoints", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 40, "Name": "edge-prod", "Type": 4, "EdgeKey": "k",
+	}))
+	mock.On("GET", "/endpoints/40", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 40, "Name": "edge-prod", "Type": 4, "GroupId": 1,
+		"EdgeKey": "k", "TagIds": []int{},
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	_ = d.Set("name", "edge-prod")
+	_ = d.Set("environment_address", "https://portainer.example.com")
+	_ = d.Set("type", 4)
+	// The values a user would most plausibly write, and the schema defaults.
+	_ = d.Set("tls_enabled", true)
+	_ = d.Set("tls_skip_verify", true)
+	_ = d.Set("tls_skip_client_verify", true)
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	post := mock.FindRequest("POST", "/endpoints")
+	if post == nil {
+		t.Fatal("expected POST /endpoints")
+	}
+	body := string(post.Body)
+	for _, field := range []string{"TLS", "TLSSkipVerify", "TLSSkipClientVerify"} {
+		if strings.Contains(body, `name="`+field+`"`) {
+			t.Errorf("multipart body must not carry %q for an Edge Agent environment", field)
 		}
 	}
-	return out
-}
-
-// TestEnvironmentUpdate_EdgeAgentAddressChangeWarns verifies that editing an
-// Edge Agent address produces a warning rather than a silently successful
-// apply: Portainer bakes the address into the edge key at create time and never
-// regenerates it, so the running agent keeps using the old address.
-func TestEnvironmentUpdate_EdgeAgentAddressChangeWarns(t *testing.T) {
-	mock := mockEdgeEnvUpdate(t, "30", "portainer.example.com", "")
-
-	r := resourceEnvironment()
-	d := edgeEnvDataWithAddressChange(t, "30", "https://portainer.example.com", "https://other.example.com")
-
-	diags := r.UpdateContext(context.Background(), d, mock.Client())
-	if diags.HasError() {
-		t.Fatalf("Update failed: %v", diags)
-	}
-
-	warnings := warningsIn(diags)
-	if len(warnings) != 1 {
-		t.Fatalf("expected exactly one warning about the unapplied address, got %d: %v", len(warnings), diags)
-	}
-	if !strings.Contains(warnings[0].Summary, "environment_address") {
-		t.Errorf("warning should name the attribute, got %q", warnings[0].Summary)
-	}
-	if !strings.Contains(warnings[0].Detail, "-replace") {
-		t.Errorf("warning should tell the operator how to fix it, got %q", warnings[0].Detail)
+	// The rest of the payload must still be there.
+	if !strings.Contains(body, `name="EndpointCreationType"`) {
+		t.Error("expected the creation type to still be sent")
 	}
 }
 
-// TestEnvironmentUpdate_EdgeAgentSchemeOnlyChangeDoesNotWarn guards the
-// heuristic that decides what counts as a real edit. An environment whose state
-// still holds Portainer's host-only normalisation (issue #136) differs from the
-// configured address by the scheme alone; warning there would fire on every
-// apply and train operators to ignore the warning that matters.
-func TestEnvironmentUpdate_EdgeAgentSchemeOnlyChangeDoesNotWarn(t *testing.T) {
-	mock := mockEdgeEnvUpdate(t, "31", "portainer.example.com", "")
-
-	r := resourceEnvironment()
-	d := edgeEnvDataWithAddressChange(t, "31", "portainer.example.com", "https://portainer.example.com")
-
-	diags := r.UpdateContext(context.Background(), d, mock.Client())
-	if diags.HasError() {
-		t.Fatalf("Update failed: %v", diags)
-	}
-	if warnings := warningsIn(diags); len(warnings) != 0 {
-		t.Errorf("a scheme-only difference must not warn, got: %v", warnings)
-	}
-}
-
-// TestEnvironmentUpdate_NonEdgeAddressChangeDoesNotWarn verifies the warning is
-// edge-specific: for a directly-connected environment the address really is
-// sent on update, so there is nothing to warn about.
-func TestEnvironmentUpdate_NonEdgeAddressChangeDoesNotWarn(t *testing.T) {
+// TestEnvironmentCreate_NonEdgeStillSendsTLS is the counterpart: dropping TLS
+// must stay scoped to edge types, since it is exactly how a directly-connected
+// environment is secured.
+func TestEnvironmentCreate_NonEdgeStillSendsTLS(t *testing.T) {
 	mock := NewMockServer(t)
-	mock.On("PUT", "/endpoints/32", RespondJSON(http.StatusOK, map[string]interface{}{
-		"Id": 32, "Name": "docker", "Type": 1,
+
+	mock.On("GET", "/endpoints", RespondJSON(http.StatusOK, []map[string]interface{}{}))
+	mock.On("POST", "/endpoints", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 41, "Name": "docker", "Type": 1,
 	}))
-	mock.On("GET", "/endpoints/32", RespondJSON(http.StatusOK, map[string]interface{}{
-		"Id": 32, "Name": "docker", "Type": 1, "GroupId": 1,
-		"URL": "tcp://other.example.com:2375", "TagIds": []int{},
+	mock.On("GET", "/endpoints/41", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 41, "Name": "docker", "Type": 1, "GroupId": 1,
+		"URL": "tcp://docker.example.com:2375", "TagIds": []int{},
 	}))
 
 	r := resourceEnvironment()
-	state := &terraform.InstanceState{
-		ID: "32",
-		Attributes: map[string]string{
-			"id": "32", "name": "docker", "type": "1", "group_id": "1",
-			"environment_address": "tcp://docker.example.com:2375",
-		},
-	}
-	diff := &terraform.InstanceDiff{
-		Attributes: map[string]*terraform.ResourceAttrDiff{
-			"environment_address": {Old: "tcp://docker.example.com:2375", New: "tcp://other.example.com:2375"},
-		},
-	}
-	d, err := schema.InternalMap(r.Schema).Data(state, diff)
-	if err != nil {
-		t.Fatalf("failed to build diffed ResourceData: %v", err)
+	d := r.TestResourceData()
+	_ = d.Set("name", "docker")
+	_ = d.Set("environment_address", "tcp://docker.example.com:2375")
+	_ = d.Set("type", 1)
+	_ = d.Set("tls_enabled", true)
+	_ = d.Set("tls_skip_verify", true)
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
 	}
 
-	diags := r.UpdateContext(context.Background(), d, mock.Client())
-	if diags.HasError() {
-		t.Fatalf("Update failed: %v", diags)
-	}
-	if warnings := warningsIn(diags); len(warnings) != 0 {
-		t.Errorf("a non-edge environment must not warn, got: %v", warnings)
+	body := string(mock.FindRequest("POST", "/endpoints").Body)
+	if !strings.Contains(body, `name="TLS"`) {
+		t.Error("a directly-connected environment must still send TLS")
 	}
 }

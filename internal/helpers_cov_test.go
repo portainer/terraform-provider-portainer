@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -423,5 +424,43 @@ func TestDoJSONWithHeaders_AuthWinsOverCallerHeaders(t *testing.T) {
 	}
 	if got := req.Headers.Get("Content-Type"); got != "application/json" {
 		t.Errorf("Content-Type: got %q", got)
+	}
+}
+
+// TestRedactURL_HidesCredentialsInQuery covers the second layer of the fix:
+// even a caller that does report an *apiStatusError verbatim must not spill a
+// credential that travelled in the query string.
+func TestRedactURL_HidesCredentialsInQuery(t *testing.T) {
+	err := &apiStatusError{
+		Method:     "GET",
+		URL:        "https://portainer.example.com/api/omni/serviceaccount/validate?endpoint=https%3A%2F%2Fomni.example.com&serviceAccountKey=super-secret",
+		StatusCode: 401,
+		Body:       `{"message":"invalid service account key"}`,
+	}
+
+	got := err.Error()
+	if strings.Contains(got, "super-secret") {
+		t.Errorf("the credential must be redacted, got %q", got)
+	}
+	if !strings.Contains(got, "REDACTED") {
+		t.Errorf("the parameter should still be visible as redacted, got %q", got)
+	}
+	// The rest of the message has to stay useful.
+	for _, want := range []string{"omni/serviceaccount/validate", "401", "invalid service account key"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q to survive redaction, got %q", want, got)
+		}
+	}
+}
+
+// TestRedactURL_LeavesOrdinaryURLsAlone keeps the redaction from mangling the
+// errors that carry no secret at all.
+func TestRedactURL_LeavesOrdinaryURLsAlone(t *testing.T) {
+	raw := "https://portainer.example.com/api/stacks/5?endpointId=1"
+	if got := redactURL(raw); got != raw {
+		t.Errorf("a URL with no sensitive parameter must be untouched, got %q", got)
+	}
+	if got := redactURL("://not a url"); got != "://not a url" {
+		t.Errorf("an unparsable URL must be returned as-is, got %q", got)
 	}
 }

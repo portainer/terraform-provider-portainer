@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -17,6 +18,7 @@ func resourceWebhook() *schema.Resource {
 		ReadContext:   resourceWebhookRead,
 		DeleteContext: resourceWebhookDelete,
 		UpdateContext: resourceWebhookUpdate,
+		CustomizeDiff: resourceWebhookCustomizeDiff,
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -30,16 +32,28 @@ func resourceWebhook() *schema.Resource {
 				Description: "Identifier of the Portainer registry associated with this webhook. Used when the webhook triggers actions on images from that registry.",
 			},
 			"resource_id": {
-				Type:        schema.TypeString,
-				Required:    true,
-				ForceNew:    true,
-				Description: "Identifier of the target resource (e.g. service ID) the webhook will act upon. Changing this value forces resource recreation.",
+				Type:     schema.TypeString,
+				Required: true,
+				// Deliberately not ForceNew in the schema: whether a change
+				// replaces the webhook or reassigns it is decided in
+				// CustomizeDiff, because only Business Edition has the
+				// reassign endpoint.
+				Description: "Identifier of the target resource (e.g. service ID) the webhook will act upon. Changing this value replaces the webhook unless `reassign_on_change` is set.",
 			},
 			"webhook_type": {
 				Type:        schema.TypeInt,
 				Required:    true,
-				ForceNew:    true,
-				Description: "Type of webhook in Portainer (e.g. 1 = service webhook, 2 = container webhook). Changing this value forces resource recreation.",
+				Description: "Type of webhook in Portainer (e.g. 1 = service webhook, 2 = container webhook). Changing this value replaces the webhook unless `reassign_on_change` is set.",
+			},
+			"reassign_on_change": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+				// Defaults to false so the long-standing behaviour - replace
+				// the webhook - is what happens unless it is asked for. The
+				// reassign endpoint does not exist in Portainer CE, so turning
+				// this on there makes the apply fail.
+				Description: "Whether changing `resource_id` or `webhook_type` reassigns the existing webhook instead of replacing it, keeping its token and every URL already handed out. **Business Edition only**; leave it off on CE, which has no reassign endpoint. Defaults to `false`.",
 			},
 			"token": {
 				Type:        schema.TypeString,
@@ -85,6 +99,21 @@ func resourceWebhookUpdate(ctx context.Context, d *schema.ResourceData, meta int
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
+	// Pointing a webhook at a different resource has its own endpoint, which
+	// keeps the webhook's token and therefore every URL already handed out.
+	// Without reassign_on_change the diff above has already forced a
+	// replacement, so this branch is only reached when it was asked for.
+	if d.Get("reassign_on_change").(bool) && (d.HasChange("resource_id") || d.HasChange("webhook_type")) {
+		payload := map[string]interface{}{
+			"ResourceID":  d.Get("resource_id").(string),
+			"WebhookType": d.Get("webhook_type").(int),
+		}
+		reassignURL := fmt.Sprintf("%s/webhooks/%d/reassign", client.Endpoint, id)
+		if err := doJSON(ctx, client, http.MethodPut, reassignURL, payload, nil); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to reassign webhook %d: %w", id, err))
+		}
+	}
+
 	if d.HasChange("registry_id") {
 		ctx, errBody := withErrorCapture(ctx)
 		params := webhooks.NewPutWebhooksIDParams()
@@ -118,5 +147,26 @@ func resourceWebhookDelete(ctx context.Context, d *schema.ResourceData, meta int
 	}
 
 	d.SetId("")
+	return nil
+}
+
+// resourceWebhookCustomizeDiff keeps the webhook's long-standing behaviour:
+// repointing it at another resource replaces it. Business Edition can move a
+// webhook in place instead, which keeps its token, but that endpoint does not
+// exist in Portainer CE - so it is opt-in rather than the default.
+func resourceWebhookCustomizeDiff(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	if d.Id() == "" {
+		return nil
+	}
+	if d.Get("reassign_on_change").(bool) {
+		return nil
+	}
+	for _, field := range []string{"resource_id", "webhook_type"} {
+		if d.HasChange(field) {
+			if err := d.ForceNew(field); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
