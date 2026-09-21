@@ -60,6 +60,16 @@ func resourceBackupS3() *schema.Resource {
 				ForceNew:    true,
 				Description: "Optional cron expression that schedules recurring S3 backups in Portainer.",
 			},
+			"last_run_failed": {
+				Type:        schema.TypeBool,
+				Computed:    true,
+				Description: "Whether the most recent scheduled S3 backup failed.",
+			},
+			"last_run_timestamp": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "UTC timestamp of the most recent scheduled S3 backup, empty when none has run.",
+			},
 		},
 	}
 }
@@ -125,6 +135,21 @@ func resourceBackupS3Read(ctx context.Context, d *schema.ResourceData, meta inte
 	}
 	if err := d.Set("cron_rule", result.CronRule); err != nil {
 		return diag.FromErr(err)
+	}
+
+	// Informational only: an instance that has never run a scheduled backup
+	// should not fail the read.
+	var status struct {
+		Failed       bool   `json:"Failed"`
+		TimestampUTC string `json:"TimestampUTC"`
+	}
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/backup/s3/status", nil, &status); err == nil {
+		if err := setFields(d, map[string]interface{}{
+			"last_run_failed":    status.Failed,
+			"last_run_timestamp": status.TimestampUTC,
+		}); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	d.SetId("portainer_backup_s3")

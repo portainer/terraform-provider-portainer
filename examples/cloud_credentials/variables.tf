@@ -24,11 +24,13 @@ variable "cloud_credentials_provider" {
 }
 
 variable "cloud_credentials_data" {
-  description = "JSON-encoded credentials block for the cloud provider"
-  type        = string
-  default = jsonencode({
+  description = "Credentials for the cloud provider. The resource takes a map, not a JSON string."
+  type        = map(string)
+  sensitive   = true
+
+  default = {
     accessKeyId     = "your-access-key"
     secretAccessKey = "your-secret-key"
     region          = "eu-central-1"
-  })
+  }
 }

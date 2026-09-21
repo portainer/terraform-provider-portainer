@@ -186,8 +186,98 @@ func resourceEdgeStack() *schema.Resource {
 				Default:     false,
 				Description: "Whether the agent must always clone the git repository for relative path. Only valid when relative_path is set.",
 			},
+			"helm_config": {
+				Type:     schema.TypeList,
+				Optional: true,
+				MaxItems: 1,
+				// Business Edition only. Setting this block is what selects the
+				// Helm repository deployment path, the same way stack_file_content
+				// selects the string one.
+				Description: "Deploy the stack from a Helm chart repository instead of a compose file or a git repository. Business Edition only.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"chart_url": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: "URL of the Helm chart repository.",
+						},
+						"chart_name": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: "Name of the Helm chart within the repository.",
+						},
+						"chart_version": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Version of the chart to deploy. Leave unset to deploy the latest published version - note that Portainer then picks the version, so a re-apply can move the stack.",
+						},
+						"namespace": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Kubernetes namespace to deploy the chart into.",
+						},
+						"values_inline": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Helm values as an inline YAML string, the equivalent of a values file passed to `helm install`.",
+						},
+						"atomic": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Description: "Whether a failed deployment is rolled back automatically, the equivalent of `helm --atomic`.",
+						},
+						"timeout": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Deadline for Helm operations, the equivalent of `helm --timeout` (for example `5m0s`).",
+						},
+					},
+				},
+			},
 		},
 	}
+}
+
+// edgeStackHelmConfig turns the helm_config block into the payload Portainer
+// expects, or returns false when the stack is not a Helm repository one.
+//
+// The keys are PascalCase where the other edge stack payloads are camelCase.
+// That is what the Helm endpoints accept, so the inconsistency is Portainer's
+// rather than something to normalise away here.
+func edgeStackHelmConfig(d *schema.ResourceData) (map[string]interface{}, bool) {
+	raw, ok := d.GetOk("helm_config")
+	if !ok {
+		return nil, false
+	}
+	list, ok := raw.([]interface{})
+	if !ok || len(list) == 0 {
+		return nil, false
+	}
+	block, ok := list[0].(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+
+	config := map[string]interface{}{
+		"ChartURL":  block["chart_url"],
+		"ChartName": block["chart_name"],
+	}
+	// The optional fields are omitted when empty so an update never clears a
+	// value that was set outside Terraform.
+	for field, key := range map[string]string{
+		"chart_version": "ChartVersion",
+		"namespace":     "Namespace",
+		"values_inline": "ValuesInline",
+		"timeout":       "Timeout",
+	} {
+		if v, ok := block[field].(string); ok && v != "" {
+			config[key] = v
+		}
+	}
+	if v, ok := block["atomic"].(bool); ok && v {
+		config["Atomic"] = v
+	}
+	return config, true
 }
 
 func buildEnvVars(d *schema.ResourceData) []map[string]string {
@@ -236,6 +326,17 @@ func resourceEdgeStackCreate(ctx context.Context, d *schema.ResourceData, meta i
 	} else if existingID != 0 {
 		d.SetId(strconv.Itoa(existingID))
 		return resourceEdgeStackUpdate(ctx, d, meta)
+	}
+
+	// Method: Helm repository. Checked first because a Helm stack carries none
+	// of the fields the other branches dispatch on.
+	if helmConfig, ok := edgeStackHelmConfig(d); ok {
+		payload := map[string]interface{}{
+			"Name":       name,
+			"EdgeGroups": edgeGroups,
+			"HelmConfig": helmConfig,
+		}
+		return diag.FromErr(createEdgeStackFromJSON(ctx, client, d, payload, "/edge_stacks/create/helmRepo"))
 	}
 
 	// Method: stackFileContent (string)
@@ -385,7 +486,7 @@ func resourceEdgeStackCreate(ctx context.Context, d *schema.ResourceData, meta i
 		return diag.FromErr(createEdgeStackFromJSON(ctx, client, d, payload, "/edge_stacks/create/repository"))
 	}
 
-	return diag.FromErr(fmt.Errorf("one of 'stack_file_content', 'stack_file_path', or 'repository_url' must be provided"))
+	return diag.FromErr(fmt.Errorf("one of 'stack_file_content', 'stack_file_path', 'repository_url', or 'helm_config' must be provided"))
 }
 
 func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -395,6 +496,20 @@ func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta i
 
 	client := meta.(*APIClient)
 	deploymentType := d.Get("deployment_type").(int)
+
+	// A Helm stack is updated through its own endpoint, which takes the chart
+	// configuration rather than a stack file.
+	if helmConfig, ok := edgeStackHelmConfig(d); ok {
+		payload := map[string]interface{}{
+			"EdgeGroups": toIntSlice(d.Get("edge_groups").([]interface{})),
+			"HelmConfig": helmConfig,
+		}
+		url := fmt.Sprintf("%s/edge_stacks/%s/helmRepo", client.Endpoint, d.Id())
+		if err := doJSON(ctx, client, http.MethodPut, url, payload, nil); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to update edge stack %s from its Helm repository: %w", d.Id(), err))
+		}
+		return resourceEdgeStackRead(ctx, d, meta)
+	}
 
 	if _, hasFile := d.GetOk("stack_file_content"); hasFile || d.Get("stack_file_path").(string) != "" {
 		payload := map[string]interface{}{
@@ -485,7 +600,7 @@ func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta i
 		return resourceEdgeStackRead(ctx, d, meta)
 	}
 
-	return diag.FromErr(fmt.Errorf("one of 'stack_file_content', 'stack_file_path', or 'repository_url' must be provided for update"))
+	return diag.FromErr(fmt.Errorf("one of 'stack_file_content', 'stack_file_path', 'repository_url', or 'helm_config' must be provided for update"))
 }
 
 func createEdgeStackFromJSON(ctx context.Context, client *APIClient, d *schema.ResourceData, payload map[string]interface{}, endpoint string) error {
@@ -541,6 +656,15 @@ func resourceEdgeStackRead(ctx context.Context, d *schema.ResourceData, meta int
 			ForcePullImage bool   `json:"ForcePullImage"`
 			ForceUpdate    bool   `json:"ForceUpdate"`
 		} `json:"AutoUpdate,omitempty"`
+		HelmConfig *struct {
+			ChartURL     string `json:"ChartURL"`
+			ChartName    string `json:"ChartName"`
+			ChartVersion string `json:"ChartVersion"`
+			Namespace    string `json:"Namespace"`
+			ValuesInline string `json:"ValuesInline"`
+			Atomic       bool   `json:"Atomic"`
+			Timeout      string `json:"Timeout"`
+		} `json:"HelmConfig"`
 	}
 
 	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), nil, &stack); err != nil {
@@ -592,6 +716,24 @@ func resourceEdgeStackRead(ctx context.Context, d *schema.ResourceData, meta int
 
 	if stack.SupportRelativePath {
 		if err := d.Set("relative_path", stack.FilesystemPath); err != nil {
+			return diag.FromErr(err)
+		}
+	}
+
+	// Portainer also fills HelmConfig for a git-backed stack that deploys a
+	// chart from the cloned repository. ChartURL is what distinguishes a Helm
+	// repository stack, so reading the block back is gated on it - otherwise a
+	// git stack would grow a helm_config it never declared.
+	if stack.HelmConfig != nil && stack.HelmConfig.ChartURL != "" {
+		if err := d.Set("helm_config", []interface{}{map[string]interface{}{
+			"chart_url":     stack.HelmConfig.ChartURL,
+			"chart_name":    stack.HelmConfig.ChartName,
+			"chart_version": stack.HelmConfig.ChartVersion,
+			"namespace":     stack.HelmConfig.Namespace,
+			"values_inline": stack.HelmConfig.ValuesInline,
+			"atomic":        stack.HelmConfig.Atomic,
+			"timeout":       stack.HelmConfig.Timeout,
+		}}); err != nil {
 			return diag.FromErr(err)
 		}
 	}

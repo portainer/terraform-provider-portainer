@@ -131,7 +131,7 @@ func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta inte
 
 		// Get stacks with SwarmID filter and find our stack
 		stacksURL := fmt.Sprintf("%s/stacks?filters=%s", client.Endpoint, url.QueryEscape(fmt.Sprintf(`{"SwarmID": "%s"}`, swarm.ID)))
-		stacksBytes, err := apiGETCtx(ctx, stacksURL, client.APIKey, client)
+		stacksBytes, err := apiGETRaw(ctx, client, stacksURL)
 		if err != nil {
 			return diag.FromErr(fmt.Errorf("failed to query stacks: %w", err))
 		}
@@ -167,7 +167,7 @@ func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta inte
 		// Query services by stack prefix
 		servicesURL := fmt.Sprintf("%s/endpoints/%d/docker/services?filters=%s",
 			client.Endpoint, endpointID, url.QueryEscape(fmt.Sprintf(`{"name":{"%s":true}}`, stackName)))
-		servicesBytes, err := apiGETCtx(ctx, servicesURL, client.APIKey, client)
+		servicesBytes, err := apiGETRaw(ctx, client, servicesURL)
 		if err != nil {
 			return diag.FromErr(fmt.Errorf("failed to query services: %w", err))
 		}
@@ -324,7 +324,7 @@ func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta inte
 
 		// list stacks and find by name
 		stacksURL := fmt.Sprintf("%s/stacks", client.Endpoint)
-		stacksBytes, err := apiGETCtx(ctx, stacksURL, client.APIKey, client)
+		stacksBytes, err := apiGETRaw(ctx, client, stacksURL)
 		if err != nil {
 			return diag.FromErr(fmt.Errorf("failed to list stacks: %w", err))
 		}

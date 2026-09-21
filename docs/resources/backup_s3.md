@@ -35,3 +35,12 @@ This resource does not track state — it performs a one-time backup to the spec
 | `s3_compatible_host` | string | ✅ yes   | Hostname of S3-compatible provider (e.g., `https://s3.example.com`)           |
 | `password`           | string | ✅ yes   | Password to encrypt the backup archive                                        |
 | `cron_rule`          | string | 🚫 optional | Optional cron rule for scheduling backups (e.g., `@daily`) *(not yet stored in state)* |
+
+## Scheduled run status
+
+| Name | Type | Description |
+|------|------|-------------|
+| `last_run_failed` | bool | Whether the most recent scheduled S3 backup failed. |
+| `last_run_timestamp` | string | UTC timestamp of the most recent scheduled S3 backup, empty when none has run. |
+
+Both are read from Portainer's S3 backup status endpoint and are informational: an instance that has never run a scheduled backup simply reports nothing, and the read does not fail over it.

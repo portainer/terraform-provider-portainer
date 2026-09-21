@@ -58,3 +58,9 @@ variable "matcher_is_equal" {
   type        = bool
   default     = true
 }
+
+variable "silence_created_by" {
+  description = "Name recorded as the author of the silence"
+  type        = string
+  default     = "terraform"
+}

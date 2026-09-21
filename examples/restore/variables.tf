@@ -15,3 +15,10 @@ variable "secret" {
   sensitive   = true
   default     = ""
 }
+
+variable "backup_archive_base64" {
+  description = "Base64-encoded Portainer backup archive. Read it with filebase64(\"path/to/portainer-backup.tar.gz\") from the calling configuration; it is a variable here so the example validates without an archive committed to the repository."
+  type        = string
+  sensitive   = true
+  default     = ""
+}

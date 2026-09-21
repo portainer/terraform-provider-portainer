@@ -10,18 +10,21 @@ import (
 )
 
 type SettingsPayload struct {
-	EdgePortainerURL            string                `json:"EdgePortainerURL,omitempty"`
-	AuthenticationMethod        int                   `json:"authenticationMethod,omitempty"`
-	EnableTelemetry             bool                  `json:"EnableTelemetry,omitempty"`
-	LogoURL                     string                `json:"logoURL,omitempty"`
-	SnapshotInterval            string                `json:"snapshotInterval,omitempty"`
-	TemplatesURL                string                `json:"templatesURL,omitempty"`
-	EnableEdgeComputeFeatures   bool                  `json:"enableEdgeComputeFeatures,omitempty"`
-	EnforceEdgeID               bool                  `json:"enforceEdgeID,omitempty"`
-	UserSessionTimeout          string                `json:"userSessionTimeout,omitempty"`
-	KubeconfigExpiry            string                `json:"kubeconfigExpiry,omitempty"`
-	KubectlShellImage           string                `json:"kubectlShellImage,omitempty"`
-	HelmRepositoryURL           string                `json:"helmRepositoryURL,omitempty"`
+	EdgePortainerURL          string `json:"EdgePortainerURL,omitempty"`
+	AuthenticationMethod      int    `json:"authenticationMethod,omitempty"`
+	EnableTelemetry           bool   `json:"EnableTelemetry,omitempty"`
+	LogoURL                   string `json:"logoURL,omitempty"`
+	SnapshotInterval          string `json:"snapshotInterval,omitempty"`
+	TemplatesURL              string `json:"templatesURL,omitempty"`
+	EnableEdgeComputeFeatures bool   `json:"enableEdgeComputeFeatures,omitempty"`
+	EnforceEdgeID             bool   `json:"enforceEdgeID,omitempty"`
+	UserSessionTimeout        string `json:"userSessionTimeout,omitempty"`
+	KubeconfigExpiry          string `json:"kubeconfigExpiry,omitempty"`
+	KubectlShellImage         string `json:"kubectlShellImage,omitempty"`
+	HelmRepositoryURL         string `json:"helmRepositoryURL,omitempty"`
+	// AddonsCatalogURL is Business Edition only; an empty value is omitted so it
+	// never reaches a CE instance and never clears a configured catalog.
+	AddonsCatalogURL            string                `json:"AddonsCatalogURL,omitempty"`
 	TrustOnFirstConnect         bool                  `json:"trustOnFirstConnect,omitempty"`
 	EdgeAgentCheckinInterval    int                   `json:"edgeAgentCheckinInterval,omitempty"`
 	BlackListedLabels           []LabelPair           `json:"blackListedLabels,omitempty"`
@@ -140,6 +143,7 @@ func resourceSettings() *schema.Resource {
 			"user_session_timeout":         {Type: schema.TypeString, Optional: true, Computed: true, Description: "Duration after which an idle user session expires (e.g. \"8h\")."},
 			"kubeconfig_expiry":            {Type: schema.TypeString, Optional: true, Computed: true, Description: "Validity period of kubeconfig files generated for users (e.g. \"24h\", \"0\" for never)."},
 			"kubectl_shell_image":          {Type: schema.TypeString, Optional: true, Computed: true, Description: "Container image used for the in-browser kubectl shell."},
+			"addons_catalog_url":           {Type: schema.TypeString, Optional: true, Computed: true, Description: "URL the add-on catalog is fetched from. Business Edition only. Leave unset to keep the built-in catalog."},
 			"helm_repository_url":          {Type: schema.TypeString, Optional: true, Computed: true, Description: "Global Helm repository URL used by Portainer for chart browsing."},
 			"disable_kube_roles_sync": {
 				Type:        schema.TypeBool,
@@ -568,6 +572,7 @@ func resourceSettingsApply(ctx context.Context, d *schema.ResourceData, meta int
 		KubeconfigExpiry:          d.Get("kubeconfig_expiry").(string),
 		KubectlShellImage:         d.Get("kubectl_shell_image").(string),
 		HelmRepositoryURL:         d.Get("helm_repository_url").(string),
+		AddonsCatalogURL:          d.Get("addons_catalog_url").(string),
 		TrustOnFirstConnect:       d.Get("trust_on_first_connect").(bool),
 		EdgeAgentCheckinInterval:  d.Get("edge_agent_checkin_interval").(int),
 		BlackListedLabels:         labels,
@@ -606,6 +611,7 @@ func resourceSettingsRead(ctx context.Context, d *schema.ResourceData, meta inte
 		"kubeconfig_expiry":             result.KubeconfigExpiry,
 		"kubectl_shell_image":           result.KubectlShellImage,
 		"helm_repository_url":           result.HelmRepositoryURL,
+		"addons_catalog_url":            result.AddonsCatalogURL,
 		"trust_on_first_connect":        result.TrustOnFirstConnect,
 		"edge_agent_checkin_interval":   result.EdgeAgentCheckinInterval,
 		"disable_kube_roles_sync":       result.DisableKubeRolesSync,

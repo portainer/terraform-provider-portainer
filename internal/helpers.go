@@ -268,6 +268,39 @@ func apiGETCtx(ctx context.Context, url string, apiKey string, client *APIClient
 	return io.ReadAll(resp.Body)
 }
 
+// apiGETRaw fetches a response body and, unlike apiGETCtx, fails on a non-2xx
+// status instead of handing the error body back as if it were data. It returns
+// the same *apiStatusError doJSON does, so isAPINotFound works on its result.
+//
+// Use this for endpoints that answer with something other than a JSON document
+// the caller can decode into a struct - raw text, or a payload whose shape is
+// not fixed - where a silently returned error page would otherwise be stored
+// in state.
+func apiGETRaw(ctx context.Context, client *APIClient, urlStr string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := setAuthHeader(req, client); err != nil {
+		return nil, err
+	}
+
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, &apiStatusError{StatusCode: resp.StatusCode, Body: string(body)}
+	}
+	return body, nil
+}
+
 func apiGETWithCodeCtx(ctx context.Context, url string, apiKey string, client *APIClient) ([]byte, int, error) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if apiKey != "" {

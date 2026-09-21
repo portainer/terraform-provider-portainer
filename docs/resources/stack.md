@@ -412,6 +412,17 @@ terraform apply
 ```
 > ⚠️ **One of `stack_file_content`, `stack_file_path`, `repository_url`, or `manifest_url` (for K8s) must be provided depending on the method.**
 
+### Asynchronous deployment on Portainer 2.45+
+
+From Portainer 2.45 a stack deploy is asynchronous: the create call returns as soon as the deploy job is queued, and Portainer keeps the stack in status `Deploying` until `docker compose up` actually finishes — rejecting every mutating call in that window with `409 Stack deployment is already in progress`.
+
+The provider waits for the deployment to settle before it sends anything else to that stack, so no configuration change is needed. Two consequences worth knowing:
+
+- **A create can take as long as the deployment does.** Image pulls are the usual reason. The wait is bounded by the resource's `create`/`update` timeout (30 minutes by default), so raise that rather than expecting the apply to return early.
+- **A deployment that fails is reported as a failure.** Portainer releases the lock either way, so the provider checks the resulting status instead of assuming success: a stack that ends in `Error` fails the apply with a pointer to the stack's logs, rather than reporting a healthy apply for a stack that never came up.
+
+On Portainer 2.39 and other pre-2.45 versions deployment is synchronous and no lock exists, so nothing changes.
+
 ---
 
 ## Arguments Reference
