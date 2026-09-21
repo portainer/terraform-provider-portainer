@@ -27,7 +27,7 @@ output "leader_user_ids" {
   value = data.portainer_team_memberships.test.leader_user_ids
 
   precondition {
-    condition     = contains(data.portainer_team_memberships.test.leader_user_ids, portainer_user.member.id)
+    condition     = contains(data.portainer_team_memberships.test.leader_user_ids, tonumber(portainer_user.member.id))
     error_message = "the member added with role 1 must be reported as a team leader."
   }
 }
