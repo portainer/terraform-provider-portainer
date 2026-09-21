@@ -58,7 +58,7 @@ resource "portainer_gitops_workflow" "platform" {
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `name` | string | ✅ yes | Name of the artifact. |
+| `name` | string | ✅ yes | Name of the artifact. Portainer cannot rename an artifact, so changing it forces a new resource. |
 | `type` | string | ❌ no | `stack` or `edgeStack`. Defaults to `edgeStack`. |
 | `deployment_type` | string | ✅ yes | Deployment type, for example `compose` or `kubernetes`. |
 | `edge_group_ids` | list(number) | ✅ yes | Edge groups the artifact is deployed to. |
@@ -99,6 +99,8 @@ resource "portainer_gitops_workflow" "platform" {
 ## Lifecycle & Behavior
 
 **`on_destroy` is a real choice.** Portainer has two removal endpoints that do different things: `destroy` tears the deployed stacks down along with the workflow, `detach` leaves them running and only unlinks them from GitOps. The default is `destroy`, which is what removing a resource normally means in Terraform.
+
+**An artifact cannot be renamed.** Portainer's update payload has no name field at all, so renaming one in the configuration forces the workflow to be replaced. Without that, the new name would be accepted into state and never sent, leaving the configuration and Portainer quietly disagreeing.
 
 **Only artifact identifiers are read back.** The update payload keys artifacts by the identifier Portainer assigned, so those are read into state. The rest of an artifact is driven by the configuration: Portainer normalises the file and config fields, and reading them back would make a stable configuration churn.
 

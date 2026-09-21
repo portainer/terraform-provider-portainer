@@ -308,3 +308,55 @@ func TestDataSourceOmniServiceAccount_Accepts(t *testing.T) {
 		t.Errorf("error: expected empty, got %v", got)
 	}
 }
+
+// TestDataSourceOmniServiceAccount_NeverLeaksTheKey is the regression guard
+// for the credential leak a review caught. The endpoint takes the service
+// account key as a query parameter, and an *apiStatusError renders the whole
+// request URL - so reporting the error verbatim put the key into the `error`
+// attribute (and therefore state), and into the diagnostic printed to the
+// console on the default path.
+func TestDataSourceOmniServiceAccount_NeverLeaksTheKey(t *testing.T) {
+	const key = "super-secret-omni-key"
+
+	t.Run("not in state when the result is reported", func(t *testing.T) {
+		mock := NewMockServer(t)
+		mock.On("GET", "/omni/serviceaccount/validate", RespondString(http.StatusUnauthorized,
+			"application/json", `{"message":"invalid service account key"}`))
+
+		ds := dataSourceOmniServiceAccount()
+		d := ds.TestResourceData()
+		_ = d.Set("endpoint", "https://omni.example.com")
+		_ = d.Set("service_account_key", key)
+		_ = d.Set("fail_on_error", false)
+
+		if err := rcRead(ds, d, mock.Client()); err != nil {
+			t.Fatalf("Read failed: %v", err)
+		}
+		if got := d.Get("error").(string); strings.Contains(got, key) {
+			t.Errorf("the service account key must never reach state, got %q", got)
+		}
+		if got := d.Get("error").(string); !strings.Contains(got, "invalid service account key") {
+			t.Errorf("what Omni said must still be reported, got %q", got)
+		}
+	})
+
+	t.Run("not in the diagnostic on the default path", func(t *testing.T) {
+		mock := NewMockServer(t)
+		mock.On("GET", "/omni/serviceaccount/validate", RespondString(http.StatusUnauthorized,
+			"application/json", `{"message":"invalid service account key"}`))
+
+		ds := dataSourceOmniServiceAccount()
+		d := ds.TestResourceData()
+		_ = d.Set("endpoint", "https://omni.example.com")
+		_ = d.Set("service_account_key", key)
+		_ = d.Set("fail_on_error", true)
+
+		err := rcRead(ds, d, mock.Client())
+		if err == nil {
+			t.Fatal("expected the read to fail")
+		}
+		if strings.Contains(err.Error(), key) {
+			t.Errorf("the service account key must never reach a diagnostic, got %q", err.Error())
+		}
+	})
+}

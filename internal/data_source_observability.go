@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -59,10 +60,18 @@ func dataSourceAlertingConnectivityRead(ctx context.Context, d *schema.ResourceD
 	reachable := err == nil
 	message := ""
 	if err != nil {
-		message = err.Error()
+		// Only what Portainer said is stored, not the error: the message is
+		// written to state, and an error carries the whole request URL.
+		var statusErr *apiStatusError
+		if errors.As(err, &statusErr) {
+			message = statusErr.Body
+		} else {
+			message = "the connectivity check could not be sent"
+		}
+
 		if d.Get("fail_on_error").(bool) {
-			return diag.FromErr(fmt.Errorf("the Alertmanager at %s could not be reached (set fail_on_error = false to read the result instead): %w",
-				d.Get("url").(string), err))
+			return diag.FromErr(fmt.Errorf("the Alertmanager at %s could not be reached (set fail_on_error = false to read the result instead): %s",
+				d.Get("url").(string), message))
 		}
 		body = nil
 	}

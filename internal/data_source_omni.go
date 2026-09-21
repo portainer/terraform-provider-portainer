@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -769,9 +770,20 @@ func dataSourceOmniServiceAccountRead(ctx context.Context, d *schema.ResourceDat
 	message := ""
 	if err := doJSON(ctx, client, http.MethodGet, validateURL, nil, nil); err != nil {
 		valid = false
-		message = err.Error()
+
+		// The request URL carries the service account key as a query
+		// parameter, so only what Omni said is reported - never the error
+		// itself, which would put the credential into state and into the
+		// diagnostics printed to the console.
+		var statusErr *apiStatusError
+		if errors.As(err, &statusErr) {
+			message = statusErr.Body
+		} else {
+			message = "the validation request could not be sent"
+		}
+
 		if d.Get("fail_on_error").(bool) {
-			return diag.FromErr(fmt.Errorf("the Omni service account was rejected (set fail_on_error = false to read the result instead): %w", err))
+			return diag.FromErr(fmt.Errorf("the Omni service account was rejected (set fail_on_error = false to read the result instead): %s", message))
 		}
 	}
 

@@ -48,9 +48,15 @@ func resourceGitopsWorkflow() *schema.Resource {
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"name": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Name of the artifact.",
+							Type:     schema.TypeString,
+							Required: true,
+							// Portainer's update payload has no name field at
+							// all, so an artifact cannot be renamed in place.
+							// Without ForceNew a rename would be accepted into
+							// state and never sent, leaving the configuration
+							// and Portainer quietly disagreeing.
+							ForceNew:    true,
+							Description: "Name of the artifact. Portainer cannot rename an artifact, so changing it forces a new resource.",
 						},
 						"type": {
 							Type:         schema.TypeString,
@@ -290,6 +296,7 @@ func gitopsArtifactConfig(raw interface{}) (map[string]interface{}, bool) {
 // gitopsArtifacts builds the artifact list. On update Portainer keys artifacts
 // by their identifier and takes their type, where on create it takes the name
 // and deployment type - so the two payloads differ by more than a field name.
+// The update payload has no name field, which is why the name is ForceNew.
 func gitopsArtifacts(d *schema.ResourceData, forUpdate bool) []map[string]interface{} {
 	list, _ := d.Get("artifact").([]interface{})
 	artifacts := make([]map[string]interface{}, 0, len(list))

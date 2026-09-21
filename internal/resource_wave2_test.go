@@ -887,3 +887,42 @@ func TestWebhook_ReassignOptInAvoidsReplacement(t *testing.T) {
 		t.Error("with reassign_on_change the webhook must be updated in place, not replaced")
 	}
 }
+
+// TestGitopsWorkflow_ArtifactRenameForcesNew guards a silent divergence:
+// Portainer's update payload has no name field, so a renamed artifact would be
+// accepted into state and never sent, leaving the configuration and the server
+// quietly disagreeing. Renaming has to replace instead.
+func TestGitopsWorkflow_ArtifactRenameForcesNew(t *testing.T) {
+	r := resourceGitopsWorkflow()
+
+	seed := r.TestResourceData()
+	seed.SetId("4")
+	_ = seed.Set("name", "platform")
+	_ = seed.Set("artifact", []interface{}{map[string]interface{}{
+		"name": "monitoring", "type": "edgeStack", "deployment_type": "compose",
+		"edge_group_ids": []interface{}{1},
+		"file": []interface{}{map[string]interface{}{
+			"source_id": 3, "path": "portainer.yaml", "ref": "refs/heads/main",
+		}},
+	}})
+	state := seed.State()
+
+	config := terraform.NewResourceConfigRaw(map[string]interface{}{
+		"name": "platform",
+		"artifact": []interface{}{map[string]interface{}{
+			"name": "observability", "type": "edgeStack", "deployment_type": "compose",
+			"edge_group_ids": []interface{}{1},
+			"file": []interface{}{map[string]interface{}{
+				"source_id": 3, "path": "portainer.yaml", "ref": "refs/heads/main",
+			}},
+		}},
+	})
+
+	diff, err := r.Diff(context.Background(), state, config, nil)
+	if err != nil {
+		t.Fatalf("Diff failed: %v", err)
+	}
+	if diff == nil || !diff.RequiresNew() {
+		t.Fatal("renaming an artifact must replace the workflow: Portainer cannot rename one in place")
+	}
+}

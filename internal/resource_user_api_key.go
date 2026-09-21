@@ -86,6 +86,14 @@ func resourceUserAPIKeyCreate(ctx context.Context, d *schema.ResourceData, meta 
 		RawAPIKey string          `json:"rawAPIKey"`
 		APIKey    portainerAPIKey `json:"apiKey"`
 	}
+	// Portainer accepts this call only from a session, never from an API key,
+	// and only for the calling user's own account. Saying so here turns an
+	// opaque 401 "Auth not supported" into something actionable.
+	if client.APIKey != "" {
+		return diag.FromErr(fmt.Errorf(
+			"cannot create an API key for user %d: Portainer only accepts this call from a session, so the provider has to be configured with api_user and api_password rather than api_key - and the key can only be created for that same user", userID))
+	}
+
 	url := fmt.Sprintf("%s/users/%d/tokens", client.Endpoint, userID)
 	if err := doJSON(ctx, client, http.MethodPost, url, payload, &response); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to create an API key for user %d: %w", userID, err))

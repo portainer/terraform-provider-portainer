@@ -23,3 +23,9 @@ variable "user_password" {
   sensitive   = true
   default     = "e2eStrongPassw0rd!"
 }
+
+variable "user_username" {
+  description = "Username of the user the API key is generated for"
+  type        = string
+  default     = "e2e-api-key-user"
+}

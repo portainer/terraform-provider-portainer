@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -66,8 +67,44 @@ type apiStatusError struct {
 	Body       string
 }
 
+// sensitiveQueryParams are query parameter names whose value must never reach
+// an error message. Some Portainer endpoints take a credential in the query
+// string, and an error carrying the full URL would put it into Terraform
+// diagnostics and, for any caller that stores the message, into state.
+var sensitiveQueryParams = map[string]bool{
+	"serviceaccountkey": true,
+	"apikey":            true,
+	"api_key":           true,
+	"password":          true,
+	"token":             true,
+	"secret":            true,
+	"key":               true,
+}
+
+// redactURL replaces the value of any sensitive query parameter with REDACTED,
+// leaving the rest of the URL readable so the error still says what failed.
+func redactURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.RawQuery == "" {
+		return raw
+	}
+	query := parsed.Query()
+	redacted := false
+	for name := range query {
+		if sensitiveQueryParams[strings.ToLower(name)] {
+			query.Set(name, "REDACTED")
+			redacted = true
+		}
+	}
+	if !redacted {
+		return raw
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
 func (e *apiStatusError) Error() string {
-	return fmt.Sprintf("%s %s failed with status %d: %s", e.Method, e.URL, e.StatusCode, e.Body)
+	return fmt.Sprintf("%s %s failed with status %d: %s", e.Method, redactURL(e.URL), e.StatusCode, e.Body)
 }
 
 // isAPINotFound reports whether err is (or wraps) an apiStatusError with a 404
