@@ -1,18 +1,19 @@
 # Full cycle: the key is created on apply and revoked on destroy, which is the
 # gap this resource exists to close - portainer_user could only ever create one.
+#
+# The key is created for the account the provider is signed in as. Portainer
+# lets a user create a key only for themselves, and a provider authenticates
+# when Terraform configures it - before any resource exists - so a user created
+# by this same configuration could never be signed in as.
 
-resource "portainer_user" "key_owner" {
-  username = var.user_username
-  password = var.user_password
-  role     = 2
+data "portainer_user" "self" {
+  username = var.portainer_username
 }
 
 resource "portainer_user_api_key" "test" {
-  provider = portainer.as_key_owner
-
-  user_id     = portainer_user.key_owner.id
+  user_id     = tonumber(data.portainer_user.self.id)
   description = "e2e"
-  password    = var.user_password
+  password    = var.portainer_password
 }
 
 output "api_key_prefix" {

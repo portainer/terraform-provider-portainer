@@ -4,28 +4,22 @@ variable "portainer_url" {
   default     = "https://localhost:9443"
 }
 
-variable "portainer_api_key" {
-  description = "Default Portainer Admin API Key"
+variable "portainer_username" {
+  description = "Portainer username the key is created for. Portainer only lets a user create a key for themselves."
   type        = string
   sensitive   = true
-  default     = "ptr_xrP7XWqfZEOoaCJRu5c8qKaWuDtVc2Zb07Q5g22YpS8="
+  default     = "admin"
+}
+
+variable "portainer_password" {
+  description = "Password of that user"
+  type        = string
+  sensitive   = true
+  default     = "password123456789"
 }
 
 variable "portainer_skip_ssl_verify" {
   description = "Set to true to skip TLS certificate verification (useful for self-signed certs)"
   type        = bool
   default     = true
-}
-
-variable "user_password" {
-  description = "Password of the user the API key is generated for"
-  type        = string
-  sensitive   = true
-  default     = "e2eStrongPassw0rd!"
-}
-
-variable "user_username" {
-  description = "Username of the user the API key is generated for"
-  type        = string
-  default     = "e2e-api-key-user"
 }

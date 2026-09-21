@@ -49,34 +49,31 @@ A key revoked in the Portainer UI disappears from state on the next refresh, and
 
 ## Authentication
 
-Because Portainer only lets a user create a key for themselves, a configuration that both
-creates a user and issues their key needs two provider instances: the administrator creates
-the user, and a second instance authenticated as that user creates the key.
+Portainer only lets a user create a key for themselves, and a provider authenticates when
+Terraform configures it - before any resource exists. A user created by the same
+configuration can therefore never be signed in as, not even through a second aliased
+provider: the alias would try to log in during the plan, while the user does not exist yet.
+
+So the account the key is for has to exist beforehand, and the provider has to be signed in
+as that account:
 
 ```hcl
 provider "portainer" {
-  endpoint = var.portainer_url
-  api_key  = var.portainer_api_key
-}
-
-provider "portainer" {
-  alias        = "as_key_owner"
   endpoint     = var.portainer_url
   api_user     = var.username
   api_password = var.password
 }
 
-resource "portainer_user" "key_owner" {
+data "portainer_user" "self" {
   username = var.username
-  password = var.password
-  role     = 2
 }
 
 resource "portainer_user_api_key" "key" {
-  provider = portainer.as_key_owner
-
-  user_id     = portainer_user.key_owner.id
+  user_id     = tonumber(data.portainer_user.self.id)
   description = "ci"
   password    = var.password
 }
 ```
+
+To issue a key for a user Terraform creates, split it across two applies: create the user in
+one configuration, then run a second one signed in as them.
