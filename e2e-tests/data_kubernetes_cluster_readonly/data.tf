@@ -55,8 +55,10 @@ output "node_ready" {
 }
 
 output "kubeconfig_generated" {
-  value     = data.portainer_kubernetes_config.prod.kubeconfig != ""
-  sensitive = false
+  # The kubeconfig is sensitive; whether one was generated is not. The mark is
+  # dropped explicitly so the check stays readable in the run output instead
+  # of being hidden behind sensitive = true.
+  value = nonsensitive(data.portainer_kubernetes_config.prod.kubeconfig != "")
 
   precondition {
     condition     = data.portainer_kubernetes_config.prod.kubeconfig != ""

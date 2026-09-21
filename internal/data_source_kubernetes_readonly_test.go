@@ -284,3 +284,45 @@ func TestDataSourceKubernetesConfig_YAMLBody(t *testing.T) {
 		}
 	}
 }
+
+// TestDataSourceKubernetesCluster_DashboardBothShapes guards a decode failure
+// an e2e run turned up. Portainer's API specification types the dashboard
+// response as a list, but the server answers with a single object - and the
+// mismatch took the whole data source down over a handful of counters.
+func TestDataSourceKubernetesCluster_DashboardBothShapes(t *testing.T) {
+	counters := map[string]interface{}{
+		"applicationsCount": 3, "namespacesCount": 4, "servicesCount": 5,
+		"ingressesCount": 1, "configMapsCount": 6, "secretsCount": 7, "volumesCount": 2,
+	}
+
+	for name, dashboard := range map[string]interface{}{
+		"object the server actually returns": counters,
+		"list the specification describes":   []interface{}{counters},
+	} {
+		t.Run(name, func(t *testing.T) {
+			mock := NewMockServer(t)
+			mock.On("GET", "/kubernetes/4/version", RespondJSON(http.StatusOK, map[string]interface{}{
+				"gitVersion": "v1.31.0", "major": "1", "minor": "31",
+			}))
+			mock.On("GET", "/kubernetes/4/rbac_enabled", RespondJSON(http.StatusOK, true))
+			mock.On("GET", "/kubernetes/4/dashboard", RespondJSON(http.StatusOK, dashboard))
+			mock.On("GET", "/kubernetes/4/max_resource_limits", RespondJSON(http.StatusOK, map[string]interface{}{
+				"CPU": 4000, "Memory": 8192,
+			}))
+
+			ds := dataSourceKubernetesCluster()
+			d := ds.TestResourceData()
+			_ = d.Set("environment_id", 4)
+
+			if err := rcRead(ds, d, mock.Client()); err != nil {
+				t.Fatalf("Read failed: %v", err)
+			}
+			if got := d.Get("applications_count"); got != 3 {
+				t.Errorf("applications_count: got %v", got)
+			}
+			if got := d.Get("volumes_count"); got != 2 {
+				t.Errorf("volumes_count: got %v", got)
+			}
+		})
+	}
+}
