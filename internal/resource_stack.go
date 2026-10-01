@@ -960,10 +960,16 @@ func setStackActive(ctx context.Context, client *APIClient, stackID string, endp
 
 	// Stopping a stack Portainer is still deploying is rejected by the same
 	// deployment lock as any other mutation (issue #145), and this runs right
-	// after a create or a redeploy — exactly when the lock is held. Only the
-	// lock is waited out: starting or stopping a stack whose last deployment
-	// failed is a request to fix it, not a reason to refuse (issue #147).
-	if err := waitForStackLockReleased(ctx, client, stackID); err != nil {
+	// after a create or a redeploy — exactly when the lock is held.
+	//
+	// Every caller reaches this after a deployment of ours: the create at the
+	// end of Create, and enforceStackActive after an update or a git redeploy.
+	// So a failure here is ours to report, and waiting the failure-aware way is
+	// what stops an active = false apply from reporting success for a stack
+	// that never came up. Recovering a stack that failed EARLIER is not this
+	// function's job — that already happened in the waiter before the update
+	// request went out (issue #147).
+	if err := waitForStackDeployment(ctx, client, stackID); err != nil {
 		return err
 	}
 

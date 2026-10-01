@@ -42,7 +42,7 @@ func dataSourceEndpointRegistries() *schema.Resource {
 						"name":           {Type: schema.TypeString, Computed: true, Description: "Name of the registry."},
 						"url":            {Type: schema.TypeString, Computed: true, Description: "URL of the registry."},
 						"base_url":       {Type: schema.TypeString, Computed: true, Description: "Base URL of the registry, where the type distinguishes it from `url`."},
-						"type":           {Type: schema.TypeInt, Computed: true, Description: "Registry type: 1 = Quay, 2 = Azure, 3 = Custom, 4 = GitLab, 5 = ProGet, 6 = DockerHub, 7 = ECR."},
+						"type":           {Type: schema.TypeInt, Computed: true, Description: "Registry type: 1 = Quay, 2 = Azure, 3 = Custom, 4 = GitLab, 5 = ProGet, 6 = DockerHub, 7 = ECR, 8 = GitHub."},
 						"authentication": {Type: schema.TypeBool, Computed: true, Description: "Whether the registry requires authentication."},
 						"username":       {Type: schema.TypeString, Computed: true, Description: "Username Portainer authenticates with. The password and any access token are deliberately not exposed."},
 					},

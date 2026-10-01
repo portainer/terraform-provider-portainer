@@ -422,21 +422,56 @@ func TestStackUpdate_StillWaitsForDeployingBeforeRecovering(t *testing.T) {
 	}
 }
 
-// TestSetStackActive_StopsAFailedStack covers the start/stop path. Stopping a
-// stack whose last deployment failed is exactly what the #147 reporter had to
-// do by hand in the UI, so the provider must not be the thing refusing it.
-func TestSetStackActive_StopsAFailedStack(t *testing.T) {
+// TestSetStackActive_ReportsOurOwnFailedDeployment guards the boundary of the
+// #147 fix. setStackActive is only ever reached after a deployment of ours —
+// at the end of Create, or through enforceStackActive after an update or a git
+// redeploy — so a failure it sees is ours to report. Waiting the lock-only way
+// here would let an active = false apply report success for a stack that never
+// came up, which is the guarantee issue #145 was about.
+func TestSetStackActive_ReportsOurOwnFailedDeployment(t *testing.T) {
 	withFastStackPolling(t)
 
 	mock := NewMockServer(t)
-	mock.On("GET", "/stacks/3", respondStackStatuses(stackStatusError))
+	mock.On("GET", "/stacks/3", respondStackStatuses(stackStatusDeploying, stackStatusError))
 	mock.On("POST", "/stacks/3/stop", RespondJSON(http.StatusOK, map[string]interface{}{}))
 
-	if err := setStackActive(context.Background(), mock.Client(), "3", 1, false); err != nil {
-		t.Fatalf("stopping a stack in Error must be allowed: %v", err)
+	err := setStackActive(context.Background(), mock.Client(), "3", 1, false)
+	if err == nil {
+		t.Fatal("a deployment of ours that failed must be reported, not stopped and called a success")
+	}
+	if mock.FindRequest("POST", "/stacks/3/stop") != nil {
+		t.Error("the stop must not be sent once the deployment is known to have failed")
+	}
+}
+
+// TestStackUpdate_InactiveStackRecoversFromError is the other half: recovering
+// a stack left in Error must keep working for active = false too, where the
+// update is followed by a stop. The statuses below are the real sequence —
+// Error from the previous deployment before the PUT, then Deploying and Active
+// from ours, because Portainer takes the deployment lock (status 3) before the
+// update call returns.
+func TestStackUpdate_InactiveStackRecoversFromError(t *testing.T) {
+	withFastStackPolling(t)
+
+	mock := NewMockServer(t)
+	mock.On("GET", "/stacks/3", respondStackStatuses(
+		stackStatusError, stackStatusDeploying, 1,
+	))
+	mock.On("PUT", "/stacks/3", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 3, "Name": "app"}))
+	mock.On("POST", "/stacks/3/stop", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	mock.On("GET", "/stacks/3/file", RespondJSON(http.StatusOK, map[string]interface{}{
+		"StackFileContent": "version: '3'",
+	}))
+
+	r, d := stackUpdateResourceData(t, "3", false)
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
+		t.Fatalf("an inactive stack in Error must still be recoverable: %v", err)
+	}
+	if mock.FindRequest("PUT", "/stacks/3") == nil {
+		t.Error("the update PUT was never sent (issue #147)")
 	}
 	if mock.FindRequest("POST", "/stacks/3/stop") == nil {
-		t.Error("the stop was never sent")
+		t.Error("active = false must still be enforced after the recovery")
 	}
 }
 
