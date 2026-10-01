@@ -4,6 +4,7 @@
 
 resource "portainer_stack_delete_by_name" "absent" {
   name        = "e2e-stack-that-does-not-exist"
+  namespace   = "default"
   endpoint_id = var.endpoint_id
   external    = false
 }

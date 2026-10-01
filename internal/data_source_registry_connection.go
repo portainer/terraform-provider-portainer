@@ -23,17 +23,21 @@ func dataSourceRegistryConnection() *schema.Resource {
 			"type": {
 				Type:         schema.TypeInt,
 				Required:     true,
-				ValidateFunc: validation.IntBetween(1, 7),
-				Description:  "Registry type: 1 = Quay, 2 = Azure, 3 = Custom, 4 = GitLab, 5 = ProGet, 6 = DockerHub, 7 = ECR.",
+				ValidateFunc: validation.IntBetween(1, 8),
+				Description:  "Registry type: 1 = Quay, 2 = Azure, 3 = Custom, 4 = GitLab, 5 = ProGet, 6 = DockerHub, 7 = ECR, 8 = GitHub.",
 			},
+			// Portainer rejects a ping without credentials with 400 "Username and
+			// password are required", for every registry type including DockerHub.
+			// Requiring them here turns that into a plan-time error naming the
+			// attribute, rather than a confusing failure half way through an apply.
 			"username": {
 				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Username used for the test. Leave unset for an anonymous registry.",
+				Required:    true,
+				Description: "Username used for the test. Portainer requires credentials for every registry type, including public ones.",
 			},
 			"password": {
 				Type:        schema.TypeString,
-				Optional:    true,
+				Required:    true,
 				Sensitive:   true,
 				Description: "Password or token paired with `username`.",
 			},
@@ -73,12 +77,8 @@ func dataSourceRegistryConnectionRead(ctx context.Context, d *schema.ResourceDat
 		"Type": d.Get("type").(int),
 		"TLS":  d.Get("tls").(bool),
 	}
-	if v, ok := d.GetOk("username"); ok {
-		payload["Username"] = v.(string)
-	}
-	if v, ok := d.GetOk("password"); ok {
-		payload["Password"] = v.(string)
-	}
+	payload["Username"] = d.Get("username").(string)
+	payload["Password"] = d.Get("password").(string)
 
 	var result struct {
 		Success bool   `json:"success"`

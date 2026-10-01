@@ -423,6 +423,14 @@ The provider waits for the deployment to settle before it sends anything else to
 
 On Portainer 2.39 and other pre-2.45 versions deployment is synchronous and no lock exists, so nothing changes.
 
+#### Recovering a stack left in `Error`
+
+Portainer does not clear the `Error` status by itself - it stays until something deploys the stack again — and it only persists a new compose file once a deploy has succeeded. A stack whose deployment failed therefore sits in `Error` with its previous definition still on disk.
+
+The check above applies only to a deployment this provider started. Before an update, a start or a stop, the provider waits out a deployment that is still running but does **not** treat an earlier failure as fatal: that call is exactly what replaces the broken definition. Fixing the compose file and re-applying recovers the stack, with no manual step in the Portainer UI.
+
+Note that a stack can be reported as failed for reasons that have nothing to do with your configuration - see [portainer/portainer#13281](https://github.com/portainer/portainer/issues/13281), where a historical failed Swarm task makes a successful update report `deployment failed`. Being able to re-apply matters more in that case, not less.
+
 ---
 
 ## Arguments Reference

@@ -130,6 +130,7 @@ func TestStackDeleteByName_SendsQuery(t *testing.T) {
 	r := resourceStackDeleteByName()
 	d := r.TestResourceData()
 	_ = d.Set("name", "my-stack")
+	_ = d.Set("namespace", "legacy-apps")
 	_ = d.Set("endpoint_id", 4)
 	_ = d.Set("external", true)
 
@@ -141,7 +142,12 @@ func TestStackDeleteByName_SendsQuery(t *testing.T) {
 	if del == nil {
 		t.Fatal("expected DELETE /stacks/name/my-stack")
 	}
-	for _, want := range []string{"endpointId=4", "external=true"} {
+	// namespace is in this list because Portainer 2.45.1 answers 400 "Invalid
+	// query parameter: namespace" without it, for every call including
+	// external ones, and checks it before it even resolves the environment.
+	// Its API specification does not document the parameter, so this test is
+	// the only thing standing between the resource and being broken outright.
+	for _, want := range []string{"endpointId=4", "external=true", "namespace=legacy-apps"} {
 		if !strings.Contains(del.Query, want) {
 			t.Errorf("query %q should contain %q", del.Query, want)
 		}
@@ -158,6 +164,7 @@ func TestStackDeleteByName_AlreadyGoneIsSuccess(t *testing.T) {
 	r := resourceStackDeleteByName()
 	d := r.TestResourceData()
 	_ = d.Set("name", "gone")
+	_ = d.Set("namespace", "default")
 	_ = d.Set("endpoint_id", 4)
 
 	if err := rcCreate(r, d, mock.Client()); err != nil {
@@ -307,5 +314,22 @@ func TestEndpointRelations_OmittedOptionalListsDoNotPanic(t *testing.T) {
 	// A block that configures nothing is a no-op on the Portainer side.
 	if len(payload.Relations["9"]) != 0 {
 		t.Errorf("a relation configuring nothing must send an empty object, got %v", payload.Relations["9"])
+	}
+}
+
+// TestStackDeleteByName_NamespaceIsRequired states the contract that the API
+// specification leaves out. The parameter is not optional and not defaultable:
+// Portainer rejects an empty value exactly as it rejects a missing one, so the
+// only honest schema is a required attribute naming the namespace.
+func TestStackDeleteByName_NamespaceIsRequired(t *testing.T) {
+	ns := resourceStackDeleteByName().Schema["namespace"]
+	if ns == nil {
+		t.Fatal("namespace must exist: without it every call fails with 400")
+	}
+	if !ns.Required {
+		t.Error("namespace must be Required, Portainer rejects a missing or empty value")
+	}
+	if !ns.ForceNew {
+		t.Error("namespace must be ForceNew: this is a one-shot action keyed by what it deleted")
 	}
 }

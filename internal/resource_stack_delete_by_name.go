@@ -23,6 +23,18 @@ func resourceStackDeleteByName() *schema.Resource {
 				ForceNew:    true,
 				Description: "Name of the Kubernetes stack to remove. Every stack with this name in the target environment is removed.",
 			},
+			// Portainer rejects this call with 400 "Invalid query parameter:
+			// namespace" whenever the parameter is missing or empty, regardless
+			// of `external`, and it checks it before it even resolves the
+			// environment. The OpenAPI specification does not document the
+			// parameter at all, which is how it came to be left out: the
+			// resource could not have worked without it.
+			"namespace": {
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
+				Description: "Kubernetes namespace the stack was deployed into. Portainer requires it, even though its API specification does not list it.",
+			},
 			"endpoint_id": {
 				Type:        schema.TypeInt,
 				Required:    true,
@@ -48,6 +60,7 @@ func resourceStackDeleteByNameCreate(ctx context.Context, d *schema.ResourceData
 
 	q := url.Values{}
 	q.Set("endpointId", fmt.Sprint(endpointID))
+	q.Set("namespace", d.Get("namespace").(string))
 	if d.Get("external").(bool) {
 		q.Set("external", "true")
 	}

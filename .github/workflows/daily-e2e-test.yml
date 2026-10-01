@@ -110,6 +110,11 @@ jobs:
             fi
           done
 
+      - name: 🧪 Recover a stack left in Error
+        run: |
+          cd e2e-tests/stack_error_recovery
+          bash run.sh
+
       - name: 🧽 Run Terraform E2E tests - Destroy Kubernetes Environment
         run: |
           cd e2e-tests/environment

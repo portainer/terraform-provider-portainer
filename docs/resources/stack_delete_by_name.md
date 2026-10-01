@@ -10,6 +10,7 @@ This is an **action resource**: the work happens when it is created, and destroy
 ```hcl
 resource "portainer_stack_delete_by_name" "legacy" {
   name        = "legacy-app"
+  namespace   = "legacy-apps"
   endpoint_id = 4
   external    = true
 }
@@ -20,6 +21,7 @@ resource "portainer_stack_delete_by_name" "legacy" {
 | Name          | Type   | Required | Default | Description                                                                                            |
 |---------------|--------|----------|---------|------------------------------------------------------------------------------------------------------|
 | `name`        | string | ✅ yes   | –       | Name of the stack to remove. **Every** stack with this name in the environment is removed.               |
+| `namespace`   | string | ✅ yes   | –       | Kubernetes namespace the stack was deployed into. Portainer requires it, even though its API specification does not list it. |
 | `endpoint_id` | number | ✅ yes   | –       | Identifier of the environment the stack was deployed to.                                                 |
 | `external`    | bool   | ❌ no    | `false` | Whether the stack was created outside Portainer, rather than deployed by it.                             |
 

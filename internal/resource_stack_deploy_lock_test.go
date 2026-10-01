@@ -242,7 +242,7 @@ func TestWaitForStackSettled_GivesUpWithTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
-	err := waitForStackSettled(ctx, mock.Client(), "9")
+	err := waitForStackDeployment(ctx, mock.Client(), "9")
 	if err == nil {
 		t.Fatal("expected a timeout for a stack stuck in Deploying")
 	}
@@ -302,5 +302,191 @@ func TestStackCreate_SwarmWaitsOutAsyncDeployment(t *testing.T) {
 	}
 	if !sawGet || !sawPut {
 		t.Errorf("expected both a status poll and a finalize PUT, got poll=%v put=%v", sawGet, sawPut)
+	}
+}
+
+// =========================================================================
+// Coverage for issue #147, a regression the fix above introduced. Waiting for
+// the stack to settle was applied before every mutating call, and a stack in
+// status 4 (Error) was reported as a failure there too. But before a mutation
+// that status belongs to an EARLIER deployment, and the call about to be sent
+// is precisely what would replace it. Portainer keeps the status until
+// something deploys the stack again, so an apply that fixed a broken compose
+// file was refused in a fraction of a second without a single request being
+// sent, and every later apply failed the same way — the stack could only be
+// recovered by starting it by hand in the Portainer UI.
+//
+// The rule these tests pin: a failed deployment is fatal only where the
+// deployment was ours (waitForStackDeployment), never where we are about to
+// replace it (waitForStackLockReleased).
+// =========================================================================
+
+// stackUpdateResourceData builds a plain string-method stack for update tests.
+func stackUpdateResourceData(t *testing.T, id string, active bool) (*schema.Resource, *schema.ResourceData) {
+	t.Helper()
+	r := resourcePortainerStack()
+	d := r.TestResourceData()
+	d.SetId(id)
+	_ = d.Set("method", "string")
+	_ = d.Set("name", "app")
+	_ = d.Set("endpoint_id", 1)
+	_ = d.Set("stack_file_content", "version: '3'")
+	_ = d.Set("active", active)
+	return r, d
+}
+
+// TestStackUpdate_FailedStackIsRecoverable is the regression test for #147: a
+// stack Portainer left in Error must still accept an update, because that
+// update is the fix. Before this, the apply failed without sending anything.
+func TestStackUpdate_FailedStackIsRecoverable(t *testing.T) {
+	withFastStackPolling(t)
+
+	mock := NewMockServer(t)
+	// The stack stays in Error: Portainer does not clear the status by itself,
+	// and it only persists the new compose file once a deploy succeeds.
+	mock.On("GET", "/stacks/3", respondStackStatuses(stackStatusError))
+	mock.On("PUT", "/stacks/3", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 3, "Name": "app"}))
+	mock.On("GET", "/stacks/3/file", RespondJSON(http.StatusOK, map[string]interface{}{
+		"StackFileContent": "version: '3'",
+	}))
+
+	r, d := stackUpdateResourceData(t, "3", true)
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
+		t.Fatalf("a stack in Error must still be updatable, that update is the fix: %v", err)
+	}
+	if mock.FindRequest("PUT", "/stacks/3") == nil {
+		t.Error("the update PUT was never sent — the failed deployment blocked it (issue #147)")
+	}
+}
+
+// TestStackUpdate_GitRedeployRecoversFailedStack covers the same recovery on
+// the repository path, where a bad commit is the usual way to end up in Error.
+func TestStackUpdate_GitRedeployRecoversFailedStack(t *testing.T) {
+	withFastStackPolling(t)
+
+	mock := NewMockServer(t)
+	mock.On("GET", "/stacks/7", respondStackStatuses(stackStatusError))
+	mock.On("POST", "/stacks/7/git", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	mock.On("PUT", "/stacks/7/git/redeploy", RespondJSON(http.StatusOK, map[string]interface{}{}))
+
+	r := resourcePortainerStack()
+	d := r.TestResourceData()
+	d.SetId("7")
+	_ = d.Set("method", "repository")
+	_ = d.Set("name", "gitapp")
+	_ = d.Set("endpoint_id", 1)
+	_ = d.Set("repository_url", "https://github.com/acme/app.git")
+	_ = d.Set("repository_reference_name", "refs/heads/main")
+	_ = d.Set("active", true)
+
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
+		t.Fatalf("a repository stack in Error must still redeploy: %v", err)
+	}
+	if mock.FindRequest("PUT", "/stacks/7/git/redeploy") == nil {
+		t.Error("the redeploy was never sent — the failed deployment blocked it (issue #147)")
+	}
+}
+
+// TestStackUpdate_StillWaitsForDeployingBeforeRecovering guards the fix against
+// overcorrecting. Ignoring a failed deployment must not mean skipping the wait:
+// a deployment still in flight holds the lock whatever it ends up doing, so the
+// mutation has to wait it out, then go ahead even though it ended in Error.
+func TestStackUpdate_StillWaitsForDeployingBeforeRecovering(t *testing.T) {
+	withFastStackPolling(t)
+
+	mock := NewMockServer(t)
+	mock.On("GET", "/stacks/3", respondStackStatuses(
+		stackStatusDeploying, stackStatusDeploying, stackStatusError,
+	))
+	mock.On("PUT", "/stacks/3", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 3, "Name": "app"}))
+	mock.On("GET", "/stacks/3/file", RespondJSON(http.StatusOK, map[string]interface{}{
+		"StackFileContent": "version: '3'",
+	}))
+
+	r, d := stackUpdateResourceData(t, "3", true)
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	var polls int
+	for _, req := range mock.Requests() {
+		if req.Method == http.MethodGet && req.Path == "/stacks/3" {
+			polls++
+		}
+		if req.Method == http.MethodPut && req.Path == "/stacks/3" && polls < 3 {
+			t.Fatalf("the PUT was sent after %d poll(s), while the stack was still Deploying", polls)
+		}
+	}
+	if mock.FindRequest("PUT", "/stacks/3") == nil {
+		t.Error("expected the update PUT once the deployment finished")
+	}
+}
+
+// TestSetStackActive_ReportsOurOwnFailedDeployment guards the boundary of the
+// #147 fix. setStackActive is only ever reached after a deployment of ours —
+// at the end of Create, or through enforceStackActive after an update or a git
+// redeploy — so a failure it sees is ours to report. Waiting the lock-only way
+// here would let an active = false apply report success for a stack that never
+// came up, which is the guarantee issue #145 was about.
+func TestSetStackActive_ReportsOurOwnFailedDeployment(t *testing.T) {
+	withFastStackPolling(t)
+
+	mock := NewMockServer(t)
+	mock.On("GET", "/stacks/3", respondStackStatuses(stackStatusDeploying, stackStatusError))
+	mock.On("POST", "/stacks/3/stop", RespondJSON(http.StatusOK, map[string]interface{}{}))
+
+	err := setStackActive(context.Background(), mock.Client(), "3", 1, false)
+	if err == nil {
+		t.Fatal("a deployment of ours that failed must be reported, not stopped and called a success")
+	}
+	if mock.FindRequest("POST", "/stacks/3/stop") != nil {
+		t.Error("the stop must not be sent once the deployment is known to have failed")
+	}
+}
+
+// TestStackUpdate_InactiveStackRecoversFromError is the other half: recovering
+// a stack left in Error must keep working for active = false too, where the
+// update is followed by a stop. The statuses below are the real sequence —
+// Error from the previous deployment before the PUT, then Deploying and Active
+// from ours, because Portainer takes the deployment lock (status 3) before the
+// update call returns.
+func TestStackUpdate_InactiveStackRecoversFromError(t *testing.T) {
+	withFastStackPolling(t)
+
+	mock := NewMockServer(t)
+	mock.On("GET", "/stacks/3", respondStackStatuses(
+		stackStatusError, stackStatusDeploying, 1,
+	))
+	mock.On("PUT", "/stacks/3", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 3, "Name": "app"}))
+	mock.On("POST", "/stacks/3/stop", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	mock.On("GET", "/stacks/3/file", RespondJSON(http.StatusOK, map[string]interface{}{
+		"StackFileContent": "version: '3'",
+	}))
+
+	r, d := stackUpdateResourceData(t, "3", false)
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
+		t.Fatalf("an inactive stack in Error must still be recoverable: %v", err)
+	}
+	if mock.FindRequest("PUT", "/stacks/3") == nil {
+		t.Error("the update PUT was never sent (issue #147)")
+	}
+	if mock.FindRequest("POST", "/stacks/3/stop") == nil {
+		t.Error("active = false must still be enforced after the recovery")
+	}
+}
+
+// TestWaitForStackWrappers_DifferOnlyOnFailedDeployments states the rule
+// directly, so the two names cannot drift into meaning the same thing.
+func TestWaitForStackWrappers_DifferOnlyOnFailedDeployments(t *testing.T) {
+	withFastStackPolling(t)
+
+	mock := NewMockServer(t)
+	mock.On("GET", "/stacks/9", respondStackStatuses(stackStatusError))
+
+	if err := waitForStackDeployment(context.Background(), mock.Client(), "9"); err == nil {
+		t.Error("a deployment of ours that failed must be reported (issue #145)")
+	}
+	if err := waitForStackLockReleased(context.Background(), mock.Client(), "9"); err != nil {
+		t.Errorf("a deployment that failed earlier must not block our mutation (issue #147): %v", err)
 	}
 }

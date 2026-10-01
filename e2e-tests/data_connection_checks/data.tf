@@ -2,9 +2,14 @@
 # both are expected to report failure - which is exactly the branch worth
 # testing: the request must be made and the outcome reported, not raised.
 
+# Credentials are not optional: Portainer answers a ping without them with
+# 400 "Username and password are required", for every registry type. They are
+# deliberately bogus - the host does not resolve, so they are never used.
 data "portainer_registry_connection" "unreachable" {
   url           = "registry.invalid.example"
   type          = 3
+  username      = "unused"
+  password      = "unused"
   fail_on_error = false
 }
 

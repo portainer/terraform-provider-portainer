@@ -2,6 +2,7 @@
 # namespace. Use portainer_stack for stacks Terraform owns.
 resource "portainer_stack_delete_by_name" "legacy" {
   name        = "legacy-app"
+  namespace   = "legacy-apps"
   endpoint_id = 4
   external    = true
 }

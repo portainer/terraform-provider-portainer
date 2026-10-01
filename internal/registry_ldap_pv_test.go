@@ -296,3 +296,65 @@ func TestKubernetesPersistentVolume_Read404ClearsID(t *testing.T) {
 		t.Errorf("expected the ID to be cleared, got %q", d.Id())
 	}
 }
+
+// TestDataSourceRegistryConnection_AlwaysSendsCredentials pins what Portainer
+// 2.45.1 actually does, measured against a live server rather than read off the
+// specification: POST /registries/ping answers 400 "Username and password are
+// required" whenever either is missing, for EVERY registry type including
+// DockerHub. The e2e check omitted them and failed on that 400 before ever
+// reaching the unreachable-registry branch it meant to cover.
+func TestDataSourceRegistryConnection_AlwaysSendsCredentials(t *testing.T) {
+	ds := dataSourceRegistryConnection()
+	for _, field := range []string{"username", "password"} {
+		if !ds.Schema[field].Required {
+			t.Errorf("%s must be Required: Portainer rejects a ping without it, and a plan-time "+
+				"error naming the attribute beats a 400 half way through an apply", field)
+		}
+	}
+
+	mock := NewMockServer(t)
+	mock.On("POST", "/registries/ping", RespondJSON(http.StatusOK, map[string]interface{}{
+		"success": false, "message": "Connection error",
+	}))
+
+	d := ds.TestResourceData()
+	_ = d.Set("url", "registry.invalid.example")
+	_ = d.Set("type", 6) // DockerHub — credentials are required even here.
+	_ = d.Set("username", "unused")
+	_ = d.Set("password", "unused")
+
+	if err := rcRead(ds, d, mock.Client()); err != nil {
+		t.Fatalf("an unreachable registry must be reported, not raised: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := mock.FindRequest("POST", "/registries/ping").DecodeJSON(&payload); err != nil {
+		t.Fatalf("payload is not JSON: %v", err)
+	}
+	for _, k := range []string{"Username", "Password"} {
+		if _, ok := payload[k]; !ok {
+			t.Errorf("%s must always be in the payload, Portainer 400s without it", k)
+		}
+	}
+}
+
+// TestDataSourceRegistryConnection_AcceptsGitHubType covers registry type 8.
+// The data source capped the type at 7 while the sibling portainer_registry
+// resource already allowed 8, so a GitHub registry was rejected by the provider
+// before the request was ever made. Portainer 2.45.1 accepts 8 and rejects 9.
+func TestDataSourceRegistryConnection_AcceptsGitHubType(t *testing.T) {
+	validate := dataSourceRegistryConnection().Schema["type"].ValidateFunc
+	if validate == nil {
+		t.Fatal("type must keep a ValidateFunc")
+	}
+	for _, valid := range []int{1, 7, 8} {
+		if _, errs := validate(valid, "type"); len(errs) > 0 {
+			t.Errorf("type %d must be accepted: %v", valid, errs)
+		}
+	}
+	for _, invalid := range []int{0, 9} {
+		if _, errs := validate(invalid, "type"); len(errs) == 0 {
+			t.Errorf("type %d must be rejected, Portainer does not know it", invalid)
+		}
+	}
+}
