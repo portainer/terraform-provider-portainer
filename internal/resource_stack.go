@@ -496,7 +496,7 @@ func resourcePortainerStackCreate(ctx context.Context, d *schema.ResourceData, m
 		// bounded number of times in case another client starts a deploy in the
 		// window between the poll and this request.
 		for attempt := 0; ; attempt++ {
-			if err := waitForStackSettled(ctx, client, d.Id()); err != nil {
+			if err := waitForStackDeployment(ctx, client, d.Id()); err != nil {
 				return diag.FromErr(err)
 			}
 
@@ -850,8 +850,33 @@ var stackSettlePollInterval = 2 * time.Second
 // a second client starting a deploy inside that window.
 const maxStackConflictRetries = 3
 
+// waitForStackDeployment waits out a deployment this provider just started and
+// reports a failed one as an error.
+//
+// Use it after a call of ours put the stack into Deploying: there, status 4
+// (Error) is the outcome of that very deployment, and reporting success for a
+// stack that did not come up would be a lie.
+func waitForStackDeployment(ctx context.Context, client *APIClient, stackID string) error {
+	return waitForStackSettled(ctx, client, stackID, true)
+}
+
+// waitForStackLockReleased waits only while a deployment is in flight, so that
+// a mutation of ours can be sent.
+//
+// Use it before a call of ours. A stack sitting in status 4 from an earlier
+// deployment - a previous apply, a webhook, a redeploy in the UI - is not a
+// reason to refuse: the call about to be sent is exactly what replaces that
+// failed definition. Treating it as fatal left a failed stack unfixable through
+// Terraform, because Portainer keeps the status until something deploys the
+// stack again (issue #147).
+func waitForStackLockReleased(ctx context.Context, client *APIClient, stackID string) error {
+	return waitForStackSettled(ctx, client, stackID, false)
+}
+
 // waitForStackSettled blocks until Portainer reports that the stack is no
-// longer being deployed.
+// longer being deployed. Callers reach it through the two wrappers above
+// rather than directly, because whether a failed deployment is an error
+// depends entirely on whose deployment it was.
 //
 // Portainer 2.45 made stack deployment asynchronous: POST /stacks/create/...
 // returns as soon as the deploy job is queued, while the stack stays in status
@@ -865,11 +890,11 @@ const maxStackConflictRetries = 3
 // Waiting on the stack's status rather than simply retrying the mutation
 // matters for a reason beyond politeness: a deployment that FAILS also releases
 // the lock, so a blind retry would eventually succeed and report a healthy
-// apply for a broken stack. Status 4 (Error) is surfaced as an error instead.
+// apply for a broken stack.
 //
 // Portainer versions older than 2.45 never report status 3, so this returns
 // after the first poll and behaves exactly as before.
-func waitForStackSettled(ctx context.Context, client *APIClient, stackID string) error {
+func waitForStackSettled(ctx context.Context, client *APIClient, stackID string, failOnFailedDeployment bool) error {
 	url := fmt.Sprintf("%s/stacks/%s", client.Endpoint, stackID)
 	timedOut := func(cause error) error {
 		return fmt.Errorf("gave up waiting for stack %s to finish deploying (raise the resource's create/update timeout if the deployment is simply slow): %w", stackID, cause)
@@ -896,6 +921,12 @@ func waitForStackSettled(ctx context.Context, client *APIClient, stackID string)
 		case stackStatusDeploying:
 			// Still deploying — fall through to the wait below.
 		case stackStatusError:
+			if !failOnFailedDeployment {
+				// A deployment that failed earlier still holds no lock, so the
+				// mutation about to be sent can go ahead - and is what fixes
+				// the stack.
+				return nil
+			}
 			return fmt.Errorf("stack %s was deployed but Portainer reports its deployment failed (status %d); check the stack's logs in Portainer", stackID, stack.Status)
 		default:
 			return nil
@@ -929,8 +960,10 @@ func setStackActive(ctx context.Context, client *APIClient, stackID string, endp
 
 	// Stopping a stack Portainer is still deploying is rejected by the same
 	// deployment lock as any other mutation (issue #145), and this runs right
-	// after a create or a redeploy — exactly when the lock is held.
-	if err := waitForStackSettled(ctx, client, stackID); err != nil {
+	// after a create or a redeploy — exactly when the lock is held. Only the
+	// lock is waited out: starting or stopping a stack whose last deployment
+	// failed is a request to fix it, not a reason to refuse (issue #147).
+	if err := waitForStackLockReleased(ctx, client, stackID); err != nil {
 		return err
 	}
 
@@ -1098,7 +1131,9 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 
 		// Portainer rejects this while an earlier deployment is still running
 		// (issue #145) — a webhook or another apply can leave one in flight.
-		if err := waitForStackSettled(ctx, client, stackID); err != nil {
+		// Only the lock is waited out here: a deployment that already failed is
+		// exactly what this call replaces (issue #147).
+		if err := waitForStackLockReleased(ctx, client, stackID); err != nil {
 			return diag.FromErr(err)
 		}
 
@@ -1152,7 +1187,9 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 
 		// Portainer rejects this while an earlier deployment is still running
 		// (issue #145) — a webhook or another apply can leave one in flight.
-		if err := waitForStackSettled(ctx, client, stackID); err != nil {
+		// Only the lock is waited out here: a deployment that already failed is
+		// exactly what this call replaces (issue #147).
+		if err := waitForStackLockReleased(ctx, client, stackID); err != nil {
 			return diag.FromErr(err)
 		}
 
@@ -1200,7 +1237,9 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 
 		// Portainer rejects this while an earlier deployment is still running
 		// (issue #145) — a webhook or another apply can leave one in flight.
-		if err := waitForStackSettled(ctx, client, d.Id()); err != nil {
+		// Only the lock is waited out here: a deployment that already failed is
+		// exactly what this call replaces (issue #147).
+		if err := waitForStackLockReleased(ctx, client, d.Id()); err != nil {
 			return diag.FromErr(err)
 		}
 
