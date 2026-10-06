@@ -112,7 +112,7 @@ resource "meu_portainer_environment" "docker_tls" {
 | `tls_key`                | string                        | 🚫 optional (sensitive)      | PEM-encoded client private key. Uploaded as `TLSKeyFile` when `tls_enabled = true` and `tls_skip_verify = false`.       |
 | `user_access_policies`   | map(object({ RoleId = int })) | 🚫 optional                  | Access control for users (applies to environments only).                                                                |
 | `team_access_policies`   | map(object({ RoleId = int })) | 🚫 optional                  | Access control for teams (applies to environments only).                                                                |
-
+| `container_engine`       | string                        | 🚫 optional (default `docker`) | Container engine sent when creating an Edge Agent environment (`type = 4`). Value must be one of: `docker` or `podman` |
 ---
 
 ## Attributes Reference
