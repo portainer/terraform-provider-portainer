@@ -50,7 +50,7 @@ func resourceEndpointGroupCreate(ctx context.Context, d *schema.ResourceData, me
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	if existingID, err := findExistingEndpointGroupByName(client, name); err != nil {
+	if existingID, err := findExistingEndpointGroupByName(ctx, client, name); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to check for existing endpoint group: %w", err))
 	} else if existingID != 0 {
 		d.SetId(strconv.Itoa(existingID))
@@ -86,8 +86,8 @@ func resourceEndpointGroupCreate(ctx context.Context, d *schema.ResourceData, me
 	return resourceEndpointGroupRead(ctx, d, meta)
 }
 
-func findExistingEndpointGroupByName(client *APIClient, name string) (int, error) {
-	ctx, errBody := withErrorCapture(context.Background())
+func findExistingEndpointGroupByName(ctx context.Context, client *APIClient, name string) (int, error) {
+	ctx, errBody := withErrorCapture(ctx)
 	params := endpoint_groups.NewEndpointGroupListParams()
 	params.SetContext(ctx)
 	resp, err := client.Client.EndpointGroups.EndpointGroupList(params, client.AuthInfo)

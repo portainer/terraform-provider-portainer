@@ -45,7 +45,7 @@ func resourceBackupCreate(ctx context.Context, d *schema.ResourceData, meta inte
 		"password": password,
 	}
 
-	resp, err := client.DoRequest("POST", "/backup", nil, body)
+	resp, err := client.DoRequest(ctx, "POST", "/backup", nil, body)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to create backup: %w", err))
 	}

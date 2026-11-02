@@ -1,10 +1,13 @@
 package internal
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -46,9 +49,16 @@ func resourceGitopsSource() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"url": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "URL of the Git repository the source syncs from.",
+				Type:     schema.TypeString,
+				Required: true,
+				// Portainer stores the URL normalized (lowercase scheme and
+				// host, no credentials, no trailing slash or .git), so the
+				// usual "https://github.com/org/repo.git" planned an update on
+				// every run.
+				DiffSuppressFunc: func(_, old, new string, _ *schema.ResourceData) bool {
+					return normalizeGitURL(old) == normalizeGitURL(new)
+				},
+				Description: "URL of the Git repository the source syncs from. Portainer stores it normalized (without a trailing `/` or `.git`); such differences are not shown as changes.",
 			},
 			"name": {
 				Type:        schema.TypeString,
@@ -68,11 +78,14 @@ func resourceGitopsSource() *schema.Resource {
 				Description: "Username used to authenticate against the Git repository. Leave unset for a public repository.",
 			},
 			"password": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Sensitive:   true,
-				Description: "Password or personal access token paired with `username`. Portainer never returns it, so it is kept from configuration and cannot detect drift.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				ConflictsWith: []string{"password_wo"},
+				Description:   "Password or personal access token paired with `username`. Portainer never returns it, so it is kept from configuration and cannot detect drift. Use `password_wo` to keep it out of state.",
 			},
+			"password_wo":         writeOnlySecretSchema("password", "password_wo_version", "password or personal access token paired with `username`"),
+			"password_wo_version": writeOnlyVersionSchema("password_wo", false),
 			"tls_skip_verify": {
 				Type:        schema.TypeBool,
 				Optional:    true,
@@ -134,8 +147,20 @@ func resourceGitopsSource() *schema.Resource {
 // gitopsAuthPayload returns the authentication object for a create/update
 // payload, or nil when no credentials are configured.
 func gitopsAuthPayload(d *schema.ResourceData) map[string]interface{} {
-	username := d.Get("username").(string)
-	password := d.Get("password").(string)
+	return gitopsAuth(d.Get("username").(string), d.Get("password").(string))
+}
+
+// gitopsSourceAuthPayload is gitopsAuthPayload for the source resource, whose
+// password can also come from the write-only password_wo.
+func gitopsSourceAuthPayload(d *schema.ResourceData) (map[string]interface{}, error) {
+	password, err := secretValue(d, "password", "password_wo", "password_wo_version")
+	if err != nil {
+		return nil, err
+	}
+	return gitopsAuth(d.Get("username").(string), password), nil
+}
+
+func gitopsAuth(username, password string) map[string]interface{} {
 	if username == "" && password == "" {
 		return nil
 	}
@@ -157,7 +182,11 @@ func resourceGitopsSourceCreate(ctx context.Context, d *schema.ResourceData, met
 	if v, ok := d.GetOk("interval"); ok {
 		payload["interval"] = v.(string)
 	}
-	if auth := gitopsAuthPayload(d); auth != nil {
+	auth, err := gitopsSourceAuthPayload(d)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if auth != nil {
 		payload["authentication"] = auth
 	}
 	if v, ok := d.GetOk("user_accesses"); ok {
@@ -231,14 +260,18 @@ func resourceGitopsSourceUpdate(ctx context.Context, d *schema.ResourceData, met
 	// Portainer splits the update in two: the git connection is updated on the
 	// source itself, while access control has its own endpoint and is not part
 	// of sources.GitSourceUpdatePayload.
-	if d.HasChanges("url", "name", "interval", "tls_skip_verify", "username", "password") {
+	if d.HasChanges("url", "name", "interval", "tls_skip_verify", "username", "password", "password_wo_version") {
 		payload := map[string]interface{}{
 			"url":           d.Get("url").(string),
 			"name":          d.Get("name").(string),
 			"interval":      d.Get("interval").(string),
 			"tlsSkipVerify": d.Get("tls_skip_verify").(bool),
 		}
-		if auth := gitopsAuthPayload(d); auth != nil {
+		auth, err := gitopsSourceAuthPayload(d)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		if auth != nil {
 			payload["authentication"] = auth
 		}
 		url := fmt.Sprintf("%s/gitops/sources/%s", client.Endpoint, d.Id())
@@ -276,4 +309,19 @@ func resourceGitopsSourceDelete(ctx context.Context, d *schema.ResourceData, met
 
 	d.SetId("")
 	return nil
+}
+
+// normalizeGitURL mirrors Portainer's gittypes.NormalizeURL: lowercase scheme
+// (https when missing) and host, no credentials, no trailing slash or .git.
+// An unparsable URL is returned unchanged.
+func normalizeGitURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	u.Scheme = strings.ToLower(cmp.Or(u.Scheme, "https"))
+	u.Host = strings.ToLower(u.Host)
+	u.User = nil
+	u.Path = strings.TrimSuffix(strings.TrimRight(u.Path, "/"), ".git")
+	return u.String()
 }

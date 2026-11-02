@@ -50,3 +50,11 @@ terraform destroy
 | Name | Description              |
 |------|--------------------------|
 | `id` | A combination of endpoint ID and node ID (`{endpoint}-{node}`) |
+
+## Import
+
+Swarm nodes can be imported as `<endpoint_id>-<node_id>`:
+
+```shell
+terraform import portainer_docker_node.example 1-ktnbjxoalbkvbvedmg1urrz8h
+```

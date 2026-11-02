@@ -2,6 +2,7 @@ package internal
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
 )
 
@@ -187,12 +188,13 @@ func TestKubernetesNamespaceDelete_HappyPath(t *testing.T) {
 	if del == nil {
 		t.Fatal("expected DELETE request to be recorded")
 	}
-	var payload map[string]string
+	// Portainer's DELETE /kubernetes/{id}/namespaces takes a list of names.
+	var payload []string
 	if err := del.DecodeJSON(&payload); err != nil {
 		t.Fatalf("decode body: %v", err)
 	}
-	if payload["Name"] != "my-ns" {
-		t.Errorf("payload.Name: expected %q, got %v", "my-ns", payload["Name"])
+	if len(payload) != 1 || payload[0] != "my-ns" {
+		t.Errorf("payload: expected [\"my-ns\"], got %v", payload)
 	}
 	if d.Id() != "" {
 		t.Errorf("expected ID cleared, got %q", d.Id())
@@ -213,5 +215,82 @@ func TestKubernetesNamespaceRead_404ClearsID(t *testing.T) {
 	}
 	if d.Id() != "" {
 		t.Errorf("expected ID cleared on 404, got %q", d.Id())
+	}
+}
+
+// TestKubernetesNamespaceRead_QuotaKeysFollowConfig is the regression test for
+// an unlicensed quota (cpu/memory) read back as the *_limit/*_request pair
+// Portainer stores it as, which planned a change on every run.
+func TestKubernetesNamespaceRead_QuotaKeysFollowConfig(t *testing.T) {
+	hard := map[string]interface{}{
+		"limits.cpu": "800m", "requests.cpu": "800m",
+		"limits.memory": "129Mi", "requests.memory": "129Mi",
+	}
+	cases := []struct {
+		name       string
+		configured map[string]interface{}
+		want       map[string]interface{}
+	}{
+		{
+			name:       "cpu and memory",
+			configured: map[string]interface{}{"cpu": "1", "memory": "128Mi"},
+			want:       map[string]interface{}{"cpu": "800m", "memory": "129Mi"},
+		},
+		{
+			name:       "limits and requests",
+			configured: map[string]interface{}{"cpu_limit": "1", "cpu_request": "1", "memory_limit": "1Gi", "memory_request": "1Gi"},
+			want:       map[string]interface{}{"cpu_limit": "800m", "cpu_request": "800m", "memory_limit": "129Mi", "memory_request": "129Mi"},
+		},
+		{
+			name: "import",
+			want: map[string]interface{}{"cpu": "800m", "memory": "129Mi"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := NewMockServer(t)
+			mock.On("GET", "/kubernetes/1/namespaces/my-ns", RespondJSON(http.StatusOK, map[string]interface{}{
+				"Name":          "my-ns",
+				"ResourceQuota": map[string]interface{}{"spec": map[string]interface{}{"hard": hard}},
+			}))
+
+			r := resourceKubernetesNamespace()
+			d := r.TestResourceData()
+			d.SetId("1:my-ns")
+			_ = d.Set("resource_quota", tc.configured)
+
+			if err := rcRead(r, d, mock.Client()); err != nil {
+				t.Fatalf("Read failed: %v", err)
+			}
+			if got := d.Get("resource_quota"); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("resource_quota: expected %v, got %v", tc.want, got)
+			}
+		})
+	}
+}
+
+// TestKubernetesNamespaceCreate_WithoutQuota is the regression test for a
+// namespace without resource_quota, which Portainer rejected because the
+// payload enabled a quota with empty values.
+func TestKubernetesNamespaceCreate_WithoutQuota(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/licenses", RespondJSON(http.StatusOK, []map[string]interface{}{}))
+	mock.On("POST", "/kubernetes/1/namespaces", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	mock.On("GET", "/kubernetes/1/namespaces/my-ns", RespondJSON(http.StatusOK, map[string]interface{}{"Name": "my-ns"}))
+
+	r := resourceKubernetesNamespace()
+	d := r.TestResourceData()
+	_ = d.Set("environment_id", 1)
+	_ = d.Set("name", "my-ns")
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	var payload map[string]interface{}
+	if err := mock.FindRequest("POST", "/kubernetes/1/namespaces").DecodeJSON(&payload); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if rq := payload["ResourceQuota"]; !reflect.DeepEqual(rq, map[string]interface{}{"enabled": false}) {
+		t.Errorf("ResourceQuota: expected a disabled quota, got %v", rq)
 	}
 }

@@ -224,3 +224,39 @@ func TestRegistryCreate_HTTPError(t *testing.T) {
 		t.Errorf("expected empty ID after error, got %q", d.Id())
 	}
 }
+
+// TestRegistryCreate_UsernameImpliesAuthentication is the regression test for
+// the documented Azure/GitLab/ProGet/Docker Hub examples, which set a username
+// and password without authentication = true: the credentials were never sent
+// and every plan showed the username again.
+func TestRegistryCreate_UsernameImpliesAuthentication(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/registries", RespondJSON(http.StatusOK, []map[string]interface{}{}))
+	mock.On("POST", "/registries", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 5}))
+	mock.On("GET", "/registries/5", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 5, "Name": "Azure", "URL": "myproject.azurecr.io", "Type": 2,
+		"Authentication": true, "Username": "azure-user",
+	}))
+
+	r := resourceRegistry()
+	d := r.TestResourceData()
+	_ = d.Set("name", "Azure")
+	_ = d.Set("url", "myproject.azurecr.io")
+	_ = d.Set("type", 2)
+	_ = d.Set("username", "azure-user")
+	_ = d.Set("password", "azure-password")
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	var payload map[string]interface{}
+	if err := mock.FindRequest("POST", "/registries").DecodeJSON(&payload); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if payload["authentication"] != true || payload["username"] != "azure-user" || payload["password"] != "azure-password" {
+		t.Errorf("expected the credentials with authentication, got %v", payload)
+	}
+	if got := d.Get("authentication"); got != true {
+		t.Errorf("authentication: expected true in state, got %v", got)
+	}
+}

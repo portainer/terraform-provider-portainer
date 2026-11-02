@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -96,7 +97,7 @@ func resourceDockerImageCreate(ctx context.Context, d *schema.ResourceData, meta
 	if resp.StatusCode >= 400 {
 		return diag.FromErr(fmt.Errorf("failed to pull image, status code: %d, body: %s", resp.StatusCode, string(body)))
 	}
-	fmt.Printf("[DEBUG] Docker image pull result: %s\n", string(body))
+	log.Printf("[DEBUG] Docker image pull result: %s", string(body))
 
 	d.SetId(fmt.Sprintf("%d-%s", endpointID, image))
 	return nil
@@ -141,7 +142,7 @@ func resourceDockerImageDelete(ctx context.Context, d *schema.ResourceData, meta
 	if resp.StatusCode >= 400 {
 		return diag.FromErr(fmt.Errorf("failed to delete image, status code: %d, body: %s", resp.StatusCode, string(body)))
 	}
-	fmt.Printf("[DEBUG] Docker image delete result: %s\n", string(body))
+	log.Printf("[DEBUG] Docker image delete result: %s", string(body))
 
 	d.SetId("")
 	return nil

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"net/http"
 	"testing"
 )
@@ -38,8 +39,8 @@ func TestStackCov5_UpdateAccessControl(t *testing.T) {
 				_ = d.Set("authorized_teams", []interface{}{2})
 			}
 
-			if err := updateStackAccessControl(d, mock.Client(), "42"); err != nil {
-				t.Fatalf("updateStackAccessControl(%s) failed: %v", tc.ownership, err)
+			if err := updateStackAccessControl(context.Background(), d, mock.Client(), "42"); err != nil {
+				t.Fatalf("updateStackAccessControl(context.Background(), %s) failed: %v", tc.ownership, err)
 			}
 			if mock.FindRequest("PUT", "/resource_controls/55") == nil {
 				t.Errorf("%s: expected PUT /resource_controls/55", tc.ownership)
@@ -57,7 +58,7 @@ func TestStackCov5_UpdateAccessControl_NoOwnership(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("42")
 
-	if err := updateStackAccessControl(d, mock.Client(), "42"); err != nil {
+	if err := updateStackAccessControl(context.Background(), d, mock.Client(), "42"); err != nil {
 		t.Fatalf("expected nil for unset ownership, got: %v", err)
 	}
 	if len(mock.Requests()) != 0 {
@@ -77,7 +78,7 @@ func TestStackCov5_UpdateAccessControl_LookupError(t *testing.T) {
 	d.SetId("42")
 	_ = d.Set("ownership", "public")
 
-	if err := updateStackAccessControl(d, mock.Client(), "42"); err == nil {
+	if err := updateStackAccessControl(context.Background(), d, mock.Client(), "42"); err == nil {
 		t.Fatal("expected error when resource-control lookup fails, got nil")
 	}
 }

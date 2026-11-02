@@ -6,6 +6,10 @@ on:
   pull_request:
     branches:
       - main
+
+permissions:
+  contents: read
+
 jobs:
   mdvalidate:
     name: Validate Markdown Files
@@ -15,18 +19,28 @@ jobs:
       GOOS: linux
     steps:
       - name: Check out code
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
 
       - name: ⚙️ Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
       - name: Markdown Link Validation
-        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        env:
+          # Authenticated GitHub requests, so the many github.com links do not
+          # hit the anonymous rate limit and fail the check at random.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: >-
+            --no-progress
+            --exclude-path portainer_data
+            './**/*.md'
+          fail: true
 
       - name: Schema/docs drift check
         run: |
@@ -36,7 +50,7 @@ jobs:
             echo "## Schema/docs drift check"
             echo ""
             if [ "$status" -eq 0 ]; then
-              echo "OK — every schema field is documented."
+              echo "OK — every schema field is documented and every documented field exists."
             else
               echo '```'
               cat docs-drift.out

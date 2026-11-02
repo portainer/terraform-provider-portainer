@@ -21,6 +21,9 @@ func resourceRegistryAccess() *schema.Resource {
 		ReadContext:   resourceRegistryAccessRead,
 		UpdateContext: resourceRegistryAccessUpdate,
 		DeleteContext: resourceRegistryAccessDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: importRegistryAccess,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"registry_id": {
@@ -57,8 +60,8 @@ func resourceRegistryAccess() *schema.Resource {
 	}
 }
 
-func getRegistryPolicies(client *APIClient, registryID int, endpointID int) (*models.PortainerRegistryAccessPolicies, error) {
-	ctx, errBody := withErrorCapture(context.Background())
+func getRegistryPolicies(ctx context.Context, client *APIClient, registryID int, endpointID int) (*models.PortainerRegistryAccessPolicies, error) {
+	ctx, errBody := withErrorCapture(ctx)
 	params := registries.NewRegistryInspectParams()
 	params.SetContext(ctx)
 	params.ID = int64(registryID)
@@ -103,7 +106,7 @@ func resourceRegistryAccessCreate(ctx context.Context, d *schema.ResourceData, m
 		return diag.FromErr(fmt.Errorf("either team_id or user_id must be provided"))
 	}
 
-	policies, err := getRegistryPolicies(client, registryID, endpointID)
+	policies, err := getRegistryPolicies(ctx, client, registryID, endpointID)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -151,7 +154,7 @@ func resourceRegistryAccessRead(ctx context.Context, d *schema.ResourceData, met
 	teamID, hasTeam := d.GetOk("team_id")
 	userID, hasUser := d.GetOk("user_id")
 
-	policies, err := getRegistryPolicies(client, registryID, endpointID)
+	policies, err := getRegistryPolicies(ctx, client, registryID, endpointID)
 	if err != nil {
 		if errors.Is(err, ErrRegistryNotFound) {
 			d.SetId("")
@@ -197,7 +200,7 @@ func resourceRegistryAccessDelete(ctx context.Context, d *schema.ResourceData, m
 	teamID, hasTeam := d.GetOk("team_id")
 	userID, hasUser := d.GetOk("user_id")
 
-	policies, err := getRegistryPolicies(client, registryID, endpointID)
+	policies, err := getRegistryPolicies(ctx, client, registryID, endpointID)
 	if err != nil {
 		if errors.Is(err, ErrRegistryNotFound) {
 			return nil

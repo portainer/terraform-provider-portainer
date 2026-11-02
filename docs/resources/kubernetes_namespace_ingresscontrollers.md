@@ -22,7 +22,11 @@ resource "portainer_kubernetes_namespace_ingresscontrollers" "test" {
 
 ## Lifecycle & Behavior
 - This resource updates ingress controller configurations via the Portainer API.
-- You can enable, disable or modify ingress controllers declaratively via Terraform.
+- You can enable, disable or modify ingress controllers declaratively via Terraform; changes apply in place.
+- Per-namespace availability only takes effect when the environment has `ingress_availability_per_namespace` enabled (see `portainer_kubernetes_environment_config`); otherwise Portainer reports every controller as available.
+- A controller blocked for the whole environment is not listed for the namespace and shows as drift.
+- Portainer only takes `class_name` and `availability`; `name`, `type`, `used` and `new` are informational and a difference in them is not planned once the controller is in state. Every `class_name` must exist in the cluster, otherwise the apply fails.
+- Destroying the resource makes the listed controllers available in the namespace again (Portainer's default).
 
 ### Arguments Reference
 | Name             | Type   | Required | Description                                           |
@@ -34,12 +38,12 @@ resource "portainer_kubernetes_namespace_ingresscontrollers" "test" {
 #### `controllers` block
 | Name          | Type   | Required | Description                                             |
 |---------------|--------|----------|---------------------------------------------------------|
-| `name`        | string | ✅ yes   | Name of the ingress controller.                         |
-| `class_name`  | string | ✅ yes   | Class name of the ingress controller.                   |
-| `type`        | string | ✅ yes   | Controller type (e.g., `nginx`).                        |
+| `name`        | string | ✅ yes   | Name of the ingress controller. Informational.          |
+| `class_name`  | string | ✅ yes   | Class name of the ingress controller. Must exist in the cluster. |
+| `type`        | string | ✅ yes   | Controller type (e.g., `nginx`). Informational.         |
 | `availability`| bool   | ✅ yes   | Whether the controller is available.                    |
-| `used`        | bool   | ✅ yes   | Whether the controller is used in this namespace.       |
-| `new`         | bool   | ✅ yes   | Whether the controller is newly added.                  |
+| `used`        | bool   | ✅ yes   | Whether the controller is used in this namespace. Informational. |
+| `new`         | bool   | ✅ yes   | Whether the controller is newly added. Informational.   |
 
 ---
 
@@ -48,3 +52,11 @@ resource "portainer_kubernetes_namespace_ingresscontrollers" "test" {
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | Unique identifier for the kubernetes namespace ingresscontrollers    |
+
+## Import
+
+Namespace ingress controller settings can be imported using `environment_id:namespace`:
+
+```shell
+terraform import portainer_kubernetes_namespace_ingresscontrollers.example 4:default
+```

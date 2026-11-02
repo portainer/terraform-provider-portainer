@@ -36,17 +36,34 @@ type SecuritySettings struct {
 	AllowPrivilegedModeForRegularUsers        bool `json:"allowPrivilegedModeForRegularUsers"`
 	AllowStackManagementForRegularUsers       bool `json:"allowStackManagementForRegularUsers"`
 	AllowSysctlSettingForRegularUsers         bool `json:"allowSysctlSettingForRegularUsers"`
+	AllowSecurityOptForRegularUsers           bool `json:"allowSecurityOptForRegularUsers"`
 	AllowVolumeBrowserForRegularUsers         bool `json:"allowVolumeBrowserForRegularUsers"`
 	EnableHostManagementFeatures              bool `json:"enableHostManagementFeatures"`
 }
 
 type EndpointSettingsPayload struct {
-	EnableGPUManagement     bool               `json:"enableGPUManagement"`
-	EnableImageNotification bool               `json:"enableImageNotification,omitempty"`
-	GPUs                    []GPU              `json:"gpus,omitempty"`
-	ChangeWindow            *ChangeWindow      `json:"changeWindow,omitempty"`
-	DeploymentOptions       *DeploymentOptions `json:"deploymentOptions,omitempty"`
-	SecuritySettings        *SecuritySettings  `json:"securitySettings,omitempty"`
+	EnableGPUManagement     bool `json:"enableGPUManagement"`
+	EnableImageNotification bool `json:"enableImageNotification,omitempty"`
+	// GPUs is nil (sent as null, Portainer keeps its list) unless gpus is set
+	// or changed; an empty list then clears the GPUs.
+	GPUs              []GPU              `json:"gpus"`
+	ChangeWindow      *ChangeWindow      `json:"changeWindow,omitempty"`
+	DeploymentOptions *DeploymentOptions `json:"deploymentOptions,omitempty"`
+	SecuritySettings  *SecuritySettings  `json:"securitySettings,omitempty"`
+
+	// PUT /endpoints/{id}/settings reads the security switches as top-level
+	// fields; the nested securitySettings object above is ignored by
+	// Portainer CE.
+	AllowBindMountsForRegularUsers            *bool `json:"allowBindMountsForRegularUsers,omitempty"`
+	AllowContainerCapabilitiesForRegularUsers *bool `json:"allowContainerCapabilitiesForRegularUsers,omitempty"`
+	AllowDeviceMappingForRegularUsers         *bool `json:"allowDeviceMappingForRegularUsers,omitempty"`
+	AllowHostNamespaceForRegularUsers         *bool `json:"allowHostNamespaceForRegularUsers,omitempty"`
+	AllowPrivilegedModeForRegularUsers        *bool `json:"allowPrivilegedModeForRegularUsers,omitempty"`
+	AllowStackManagementForRegularUsers       *bool `json:"allowStackManagementForRegularUsers,omitempty"`
+	AllowSysctlSettingForRegularUsers         *bool `json:"allowSysctlSettingForRegularUsers,omitempty"`
+	AllowSecurityOptForRegularUsers           *bool `json:"allowSecurityOptForRegularUsers,omitempty"`
+	AllowVolumeBrowserForRegularUsers         *bool `json:"allowVolumeBrowserForRegularUsers,omitempty"`
+	EnableHostManagementFeatures              *bool `json:"enableHostManagementFeatures,omitempty"`
 }
 
 func resourceEndpointSettings() *schema.Resource {
@@ -55,6 +72,9 @@ func resourceEndpointSettings() *schema.Resource {
 		ReadContext:   resourceEndpointSettingsRead,
 		UpdateContext: resourceEndpointSettingsUpdate,
 		DeleteContext: resourceEndpointSettingsDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: resourceEndpointSettingsImport,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_id":               {Type: schema.TypeInt, Required: true, ForceNew: true, Description: "ID of the Portainer environment whose runtime settings are managed."},
@@ -112,6 +132,7 @@ func resourceEndpointSettings() *schema.Resource {
 						"allow_privileged_mode":        {Type: schema.TypeBool, Optional: true, Description: "Whether regular users may run containers in privileged mode."},
 						"allow_stack_management":       {Type: schema.TypeBool, Optional: true, Description: "Whether regular users may create and manage stacks."},
 						"allow_sysctl_setting":         {Type: schema.TypeBool, Optional: true, Description: "Whether regular users may set sysctl values on containers."},
+						"allow_security_opt":           {Type: schema.TypeBool, Optional: true, Description: "Whether regular users may set security options (`--security-opt`) on containers."},
 						"allow_volume_browser":         {Type: schema.TypeBool, Optional: true, Description: "Whether regular users may browse the contents of volumes via Portainer."},
 						"enable_host_management":       {Type: schema.TypeBool, Optional: true, Description: "Whether host management features (host browser, host info) are enabled in the UI."},
 					},
@@ -137,6 +158,7 @@ func resourceEndpointSettingsUpdate(ctx context.Context, d *schema.ResourceData,
 			AllowPrivilegedModeForRegularUsers:        m["allow_privileged_mode"].(bool),
 			AllowStackManagementForRegularUsers:       m["allow_stack_management"].(bool),
 			AllowSysctlSettingForRegularUsers:         m["allow_sysctl_setting"].(bool),
+			AllowSecurityOptForRegularUsers:           m["allow_security_opt"].(bool),
 			AllowVolumeBrowserForRegularUsers:         m["allow_volume_browser"].(bool),
 			EnableHostManagementFeatures:              m["enable_host_management"].(bool),
 		}
@@ -177,6 +199,12 @@ func resourceEndpointSettingsUpdate(ctx context.Context, d *schema.ResourceData,
 		}
 	}
 
+	// Removing every GPU has to reach Portainer as an empty list; omitempty
+	// would drop it and the GPUs would stay, planned for removal forever.
+	if gpus == nil && d.HasChange("gpus") {
+		gpus = []GPU{}
+	}
+
 	payload := EndpointSettingsPayload{
 		EnableGPUManagement:     d.Get("enable_gpu_management").(bool),
 		EnableImageNotification: d.Get("enable_image_notification").(bool),
@@ -185,18 +213,105 @@ func resourceEndpointSettingsUpdate(ctx context.Context, d *schema.ResourceData,
 		ChangeWindow:            cw,
 		DeploymentOptions:       deploy,
 	}
+	if sec != nil {
+		payload.AllowBindMountsForRegularUsers = new(sec.AllowBindMountsForRegularUsers)
+		payload.AllowContainerCapabilitiesForRegularUsers = new(sec.AllowContainerCapabilitiesForRegularUsers)
+		payload.AllowDeviceMappingForRegularUsers = new(sec.AllowDeviceMappingForRegularUsers)
+		payload.AllowHostNamespaceForRegularUsers = new(sec.AllowHostNamespaceForRegularUsers)
+		payload.AllowPrivilegedModeForRegularUsers = new(sec.AllowPrivilegedModeForRegularUsers)
+		payload.AllowStackManagementForRegularUsers = new(sec.AllowStackManagementForRegularUsers)
+		payload.AllowSysctlSettingForRegularUsers = new(sec.AllowSysctlSettingForRegularUsers)
+		payload.AllowSecurityOptForRegularUsers = new(sec.AllowSecurityOptForRegularUsers)
+		payload.AllowVolumeBrowserForRegularUsers = new(sec.AllowVolumeBrowserForRegularUsers)
+		payload.EnableHostManagementFeatures = new(sec.EnableHostManagementFeatures)
+	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/settings", client.Endpoint, endpointID)
 	if err := doJSON(ctx, client, http.MethodPut, url, payload, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update endpoint settings: %w", err))
 	}
 	d.SetId(strconv.Itoa(endpointID))
-	return nil
+	return resourceEndpointSettingsRead(ctx, d, meta)
 }
 
+// endpointSettingsState is the part of GET /endpoints/{id} this resource
+// manages. Change window, deployment options and image notifications are
+// Business Edition fields the Community Edition endpoint does not return, so
+// they are left as configured.
+type endpointSettingsState struct {
+	EnableGPUManagement bool              `json:"EnableGPUManagement"`
+	Gpus                []GPU             `json:"Gpus"`
+	SecuritySettings    *SecuritySettings `json:"SecuritySettings"`
+}
+
+// resourceEndpointSettingsRead used to only set the ID, so a setting changed
+// in the Portainer UI never showed up in the plan. The GPU list and the
+// security block are only written back when the configuration manages them
+// (or on import): both are optional without being computed, and filling them
+// in otherwise would plan their removal on every run.
 func resourceEndpointSettingsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	d.SetId(strconv.Itoa(d.Get("endpoint_id").(int)))
-	return nil
+	return diag.FromErr(readEndpointSettings(ctx, d, meta.(*APIClient), false))
+}
+
+func readEndpointSettings(ctx context.Context, d *schema.ResourceData, client *APIClient, importing bool) error {
+	endpointID := d.Get("endpoint_id").(int)
+	var state endpointSettingsState
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/endpoints/%d", client.Endpoint, endpointID), nil, &state); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return fmt.Errorf("failed to read settings of environment %d: %w", endpointID, err)
+	}
+
+	d.SetId(strconv.Itoa(endpointID))
+	fields := map[string]interface{}{"enable_gpu_management": state.EnableGPUManagement}
+	if _, ok := d.GetOk("gpus"); ok || importing {
+		gpus := make([]map[string]interface{}, 0, len(state.Gpus))
+		for _, g := range state.Gpus {
+			gpus = append(gpus, map[string]interface{}{"name": g.Name, "value": g.Value})
+		}
+		fields["gpus"] = gpus
+	}
+	if _, ok := d.GetOk("security_settings"); (ok || importing) && state.SecuritySettings != nil {
+		sec := state.SecuritySettings
+		fields["security_settings"] = []map[string]interface{}{{
+			"allow_bind_mounts":            sec.AllowBindMountsForRegularUsers,
+			"allow_container_capabilities": sec.AllowContainerCapabilitiesForRegularUsers,
+			"allow_device_mapping":         sec.AllowDeviceMappingForRegularUsers,
+			"allow_host_namespace":         sec.AllowHostNamespaceForRegularUsers,
+			"allow_privileged_mode":        sec.AllowPrivilegedModeForRegularUsers,
+			"allow_stack_management":       sec.AllowStackManagementForRegularUsers,
+			"allow_sysctl_setting":         sec.AllowSysctlSettingForRegularUsers,
+			"allow_security_opt":           sec.AllowSecurityOptForRegularUsers,
+			"allow_volume_browser":         sec.AllowVolumeBrowserForRegularUsers,
+			"enable_host_management":       sec.EnableHostManagementFeatures,
+		}}
+	}
+	return setFields(d, fields)
+}
+
+// resourceEndpointSettingsImport takes the environment ID.
+func resourceEndpointSettingsImport(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	endpointID, err := strconv.Atoi(d.Id())
+	if err != nil {
+		return nil, fmt.Errorf("invalid import ID %q: expected the numeric environment ID", d.Id())
+	}
+	if err := d.Set("endpoint_id", endpointID); err != nil {
+		return nil, err
+	}
+	// Business Edition only and not returned by the API: take the schema
+	// default, or the first plan after an import would set it.
+	if err := d.Set("enable_image_notification", false); err != nil {
+		return nil, err
+	}
+	if err := readEndpointSettings(ctx, d, meta.(*APIClient), true); err != nil {
+		return nil, err
+	}
+	if d.Id() == "" {
+		return nil, fmt.Errorf("environment %d not found", endpointID)
+	}
+	return []*schema.ResourceData{d}, nil
 }
 
 func resourceEndpointSettingsDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {

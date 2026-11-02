@@ -20,17 +20,32 @@ func resourceRegistry() *schema.Resource {
 		ReadContext:   resourceRegistryRead,
 		DeleteContext: resourceRegistryDelete,
 		UpdateContext: resourceRegistryUpdate,
+		CustomizeDiff: registryAuthenticationDiff,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
-			"name":                     {Type: schema.TypeString, Required: true, ValidateFunc: validation.NoZeroValues, Description: "Name of the registry as displayed in Portainer."},
-			"url":                      {Type: schema.TypeString, Required: true, ValidateFunc: validation.NoZeroValues, Description: "URL of the registry (e.g. registry hostname). Used by Portainer to push and pull images."},
-			"base_url":                 {Type: schema.TypeString, Optional: true, Description: "Optional base URL of the registry used by Portainer for web-based actions and links."},
-			"type":                     {Type: schema.TypeInt, Required: true, ForceNew: true, ValidateFunc: validation.IntBetween(1, 8), Description: "Registry type: 1 = Quay, 2 = Azure, 3 = Custom, 4 = GitLab, 5 = ProGet, 6 = DockerHub, 7 = ECR, 8 = GitHub. Changing this value forces resource recreation."},
-			"authentication":           {Type: schema.TypeBool, Optional: true, Default: false, Description: "Whether the registry requires authentication. When true, username and password are sent to Portainer."},
-			"username":                 {Type: schema.TypeString, Optional: true, Description: "Username used to authenticate against the registry when authentication is enabled."},
-			"password":                 {Type: schema.TypeString, Optional: true, Sensitive: true, Description: "Password used to authenticate against the registry when authentication is enabled. Stored in state as a sensitive value."},
+			"name":           {Type: schema.TypeString, Required: true, ValidateFunc: validation.NoZeroValues, Description: "Name of the registry as displayed in Portainer."},
+			"url":            {Type: schema.TypeString, Required: true, ValidateFunc: validation.NoZeroValues, Description: "URL of the registry (e.g. registry hostname). Used by Portainer to push and pull images."},
+			"base_url":       {Type: schema.TypeString, Optional: true, Description: "Optional base URL of the registry used by Portainer for web-based actions and links."},
+			"type":           {Type: schema.TypeInt, Required: true, ForceNew: true, ValidateFunc: validation.IntBetween(1, 8), Description: "Registry type: 1 = Quay, 2 = Azure, 3 = Custom, 4 = GitLab, 5 = ProGet, 6 = DockerHub, 7 = ECR, 8 = GitHub. Changing this value forces resource recreation."},
+			"authentication": {Type: schema.TypeBool, Optional: true, Computed: true, Description: "Whether the registry requires authentication. When true, username and password are sent to Portainer. Defaults to true when `username` is set, false otherwise."},
+			"username":       {Type: schema.TypeString, Optional: true, Description: "Username used to authenticate against the registry when authentication is enabled."},
+			"password":       {Type: schema.TypeString, Optional: true, Sensitive: true, ConflictsWith: []string{"password_wo"}, Description: "Password used to authenticate against the registry when authentication is enabled. Stored in state as a sensitive value; use `password_wo` to keep it out of state."},
+			"password_wo": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				WriteOnly:     true,
+				ConflictsWith: []string{"password"},
+				RequiredWith:  []string{"password_wo_version"},
+				Description:   "Write-only registry password (supports ephemeral values; never stored in Terraform state). Sent on create and whenever `password_wo_version` changes. Requires Terraform 1.11 or later.",
+			},
+			"password_wo_version": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "Version of `password_wo`. Increment it to send a new password; the registry is updated in place.",
+			},
 			"instance_url":             {Type: schema.TypeString, Optional: true, Description: "Instance URL used by GitLab (type 4) registries to identify the GitLab instance."},
 			"aws_region":               {Type: schema.TypeString, Optional: true, Description: "AWS region used by ECR (type 7) registries."},
 			"github_use_organisation":  {Type: schema.TypeBool, Optional: true, Default: false, Description: "Whether the GitHub (type 8) registry should be scoped to an organisation rather than a user account."},
@@ -45,7 +60,7 @@ func resourceRegistryCreate(ctx context.Context, d *schema.ResourceData, meta in
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	existingID, err := findRegistryByName(client, name)
+	existingID, err := findRegistryByName(ctx, client, name)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -57,7 +72,7 @@ func resourceRegistryCreate(ctx context.Context, d *schema.ResourceData, meta in
 	registryType := int64(d.Get("type").(int))
 	url := d.Get("url").(string)
 	baseURL := d.Get("base_url").(string)
-	auth := d.Get("authentication").(bool)
+	auth := registryAuthentication(d)
 
 	ctx, errBody := withErrorCapture(ctx)
 	params := registries.NewRegistryCreateParams()
@@ -71,8 +86,12 @@ func resourceRegistryCreate(ctx context.Context, d *schema.ResourceData, meta in
 	}
 
 	if auth {
+		password, err := registryPassword(d, true)
+		if err != nil {
+			return diag.FromErr(err)
+		}
 		params.Body.Username = d.Get("username").(string)
-		params.Body.Password = d.Get("password").(string)
+		params.Body.Password = password
 	}
 
 	switch registryType {
@@ -105,8 +124,8 @@ func resourceRegistryCreate(ctx context.Context, d *schema.ResourceData, meta in
 	return resourceRegistryRead(ctx, d, meta)
 }
 
-func findRegistryByName(client *APIClient, name string) (int, error) {
-	ctx, errBody := withErrorCapture(context.Background())
+func findRegistryByName(ctx context.Context, client *APIClient, name string) (int, error) {
+	ctx, errBody := withErrorCapture(ctx)
 	params := registries.NewRegistryListParams()
 	params.SetContext(ctx)
 	resp, err := client.Client.Registries.RegistryList(params, client.AuthInfo)
@@ -197,7 +216,12 @@ func resourceRegistryUpdate(ctx context.Context, d *schema.ResourceData, meta in
 
 	name := d.Get("name").(string)
 	url := d.Get("url").(string)
-	auth := d.Get("authentication").(bool)
+	auth := registryAuthentication(d)
+
+	password, err := registryPassword(d, d.HasChange("password_wo_version"))
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	ctx, errBody := withErrorCapture(ctx)
 	params := registries.NewRegistryUpdateParams()
@@ -209,7 +233,8 @@ func resourceRegistryUpdate(ctx context.Context, d *schema.ResourceData, meta in
 		BaseURL:        d.Get("base_url").(string),
 		Authentication: &auth,
 		Username:       d.Get("username").(string),
-		Password:       d.Get("password").(string),
+		// An empty password is left out, so Portainer keeps the stored one.
+		Password: password,
 	}
 
 	registryType := d.Get("type").(int)
@@ -232,12 +257,37 @@ func resourceRegistryUpdate(ctx context.Context, d *schema.ResourceData, meta in
 		}
 	}
 
-	_, err := client.Client.Registries.RegistryUpdate(params, client.AuthInfo)
+	_, err = client.Client.Registries.RegistryUpdate(params, client.AuthInfo)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update registry: %w", decorateSDKError(err, errBody)))
 	}
 
 	return resourceRegistryRead(ctx, d, meta)
+}
+
+// registryAuthentication is the configured authentication, or whether a
+// username is set. The documented Azure, GitLab, ProGet and Docker Hub
+// examples set credentials without authentication = true, which used to
+// create those registries without them.
+func registryAuthentication(d *schema.ResourceData) bool {
+	if v := configuredBool(d, "authentication"); v != nil {
+		return *v
+	}
+	return d.Get("username").(string) != ""
+}
+
+// registryAuthenticationDiff plans the authentication registryAuthentication
+// will send when it is not configured.
+func registryAuthenticationDiff(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	raw := d.GetRawConfig()
+	if raw.IsNull() || !raw.GetAttr("authentication").IsNull() || !d.NewValueKnown("username") {
+		return nil
+	}
+	want := d.Get("username").(string) != ""
+	if d.Get("authentication").(bool) == want {
+		return nil
+	}
+	return d.SetNew("authentication", want)
 }
 
 func resourceRegistryDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -262,4 +312,16 @@ func resourceRegistryDelete(ctx context.Context, d *schema.ResourceData, meta in
 		return diag.FromErr(fmt.Errorf("failed to delete registry: %w", decorateSDKError(err, errBody)))
 	}
 	return nil
+}
+
+// registryPassword returns the password to send: password_wo when sendWO is
+// set (on create, or when password_wo_version changed), otherwise password.
+func registryPassword(d *schema.ResourceData, sendWO bool) (string, error) {
+	if sendWO && d.Get("password_wo_version").(int) != 0 {
+		wo, err := writeOnlyString(d, "password_wo")
+		if err != nil || wo != "" {
+			return wo, err
+		}
+	}
+	return d.Get("password").(string), nil
 }

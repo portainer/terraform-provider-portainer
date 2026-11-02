@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"bytes"
 	"context"
 	"net/http"
 	"testing"
@@ -227,7 +226,7 @@ func TestDoRequest_HappyPath_Cov(t *testing.T) {
 	mock.On("POST", "/widgets", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 1}))
 
 	client := mock.Client()
-	resp, err := client.DoRequest("POST", "/api/widgets", nil, map[string]interface{}{"name": "w"})
+	resp, err := client.DoRequest(context.Background(), "POST", "/api/widgets", nil, map[string]interface{}{"name": "w"})
 	if err != nil {
 		t.Fatalf("DoRequest failed: %v", err)
 	}
@@ -260,7 +259,7 @@ func TestDoRequest_NilBodyAndCustomHeaders_Cov(t *testing.T) {
 	mock.On("GET", "/ping", RespondString(http.StatusOK, "application/json", `pong`))
 
 	client := mock.Client()
-	resp, err := client.DoRequest("GET", "/api/ping", map[string]string{"Content-Type": "text/plain", "X-Extra": "e"}, nil)
+	resp, err := client.DoRequest(context.Background(), "GET", "/api/ping", map[string]string{"Content-Type": "text/plain", "X-Extra": "e"}, nil)
 	if err != nil {
 		t.Fatalf("DoRequest failed: %v", err)
 	}
@@ -287,7 +286,7 @@ func TestDoRequest_JWTAuth_Cov(t *testing.T) {
 	client.APIKey = ""
 	client.JWTToken = "jwt-xyz"
 
-	resp, err := client.DoRequest("GET", "/api/secured", nil, nil)
+	resp, err := client.DoRequest(context.Background(), "GET", "/api/secured", nil, nil)
 	if err != nil {
 		t.Fatalf("DoRequest failed: %v", err)
 	}
@@ -302,86 +301,9 @@ func TestDoRequest_JWTAuth_Cov(t *testing.T) {
 func TestDoRequest_NonGenericError_Cov(t *testing.T) {
 	// Invalid method triggers http.NewRequest error.
 	client := &APIClient{Endpoint: "http://example.com", APIKey: "k"}
-	resp, err := client.DoRequest("BAD METHOD WITH SPACES", "/x", nil, nil)
+	resp, err := client.DoRequest(context.Background(), "BAD METHOD WITH SPACES", "/x", nil, nil)
 	if err == nil {
 		resp.Body.Close()
 		t.Fatal("expected error from invalid request construction")
-	}
-}
-
-// --- (*APIClient).DoMultipartRequest ----------------------------------------
-
-func TestDoMultipartRequest_HappyPath_Cov(t *testing.T) {
-	mock := NewMockServer(t)
-	mock.On("POST", "/upload", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 7, "Name": "f"}))
-
-	client := mock.Client()
-	body := bytes.NewBufferString("--boundary--")
-	var out struct {
-		ID   int    `json:"Id"`
-		Name string `json:"Name"`
-	}
-	err := client.DoMultipartRequest("POST", mock.URL+"/api/upload",
-		body, map[string]string{"Content-Type": "multipart/form-data; boundary=boundary"}, &out)
-	if err != nil {
-		t.Fatalf("DoMultipartRequest failed: %v", err)
-	}
-	if out.ID != 7 || out.Name != "f" {
-		t.Errorf("unexpected decoded output: %+v", out)
-	}
-
-	req := mock.FindRequest("POST", "/upload")
-	if req == nil || req.Headers.Get("X-API-Key") != "test-api-key" {
-		t.Errorf("expected X-API-Key on multipart request, got %v", req)
-	}
-}
-
-func TestDoMultipartRequest_NoOut_Cov(t *testing.T) {
-	mock := NewMockServer(t)
-	mock.On("POST", "/upload2", RespondString(http.StatusNoContent, "", ""))
-
-	client := mock.Client()
-	if err := client.DoMultipartRequest("POST", mock.URL+"/api/upload2",
-		bytes.NewBufferString("x"), nil, nil); err != nil {
-		t.Fatalf("DoMultipartRequest with nil out failed: %v", err)
-	}
-}
-
-func TestDoMultipartRequest_JWTAuth_Cov(t *testing.T) {
-	mock := NewMockServer(t)
-	mock.On("POST", "/upload3", RespondString(http.StatusOK, "application/json", `{}`))
-
-	client := mock.Client()
-	client.APIKey = ""
-	client.JWTToken = "jwt-mp"
-
-	if err := client.DoMultipartRequest("POST", mock.URL+"/api/upload3",
-		bytes.NewBufferString("x"), nil, nil); err != nil {
-		t.Fatalf("DoMultipartRequest failed: %v", err)
-	}
-	req := mock.FindRequest("POST", "/upload3")
-	if req == nil || req.Headers.Get("Authorization") != "Bearer jwt-mp" {
-		t.Errorf("expected Bearer auth, got %v", req)
-	}
-}
-
-func TestDoMultipartRequest_HTTPError_Cov(t *testing.T) {
-	mock := NewMockServer(t)
-	mock.On("POST", "/uploadbad", RespondString(http.StatusInternalServerError, "application/json", `{"message":"kaboom"}`))
-
-	client := mock.Client()
-	err := client.DoMultipartRequest("POST", mock.URL+"/api/uploadbad",
-		bytes.NewBufferString("x"), nil, nil)
-	if err == nil {
-		t.Fatal("expected error on non-2xx response")
-	}
-}
-
-func TestDoMultipartRequest_BadURL_Cov(t *testing.T) {
-	client := &APIClient{APIKey: "k"}
-	err := client.DoMultipartRequest("POST", "://bad-url",
-		bytes.NewBufferString("x"), nil, nil)
-	if err == nil {
-		t.Fatal("expected error from invalid URL")
 	}
 }

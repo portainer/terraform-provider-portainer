@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 
 	httptransport "github.com/go-openapi/runtime/client"
@@ -11,7 +12,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/portainer/client-api-go/v2/pkg/client/auth"
-	"github.com/portainer/client-api-go/v2/pkg/client/team_memberships"
 	"github.com/portainer/client-api-go/v2/pkg/client/users"
 	"github.com/portainer/client-api-go/v2/pkg/models"
 )
@@ -55,7 +55,7 @@ func resourceUser() *schema.Resource {
 			"team_id": {
 				Type:        schema.TypeInt,
 				Optional:    true,
-				Description: "Optional Portainer team ID. Only applicable for standard users (role = 2).",
+				Description: "Optional Portainer team ID the user is a member of. Only applicable for standard users (role = 2). Memberships managed with `portainer_team_membership` are not reflected here.",
 			},
 			"generate_api_key": {
 				Type:        schema.TypeBool,
@@ -131,22 +131,8 @@ func resourceUserCreate(ctx context.Context, d *schema.ResourceData, meta interf
 		if role != 2 {
 			return diag.FromErr(fmt.Errorf("team_id can only be used with standard users (role = 2)"))
 		}
-		teamID := int64(teamIDInt.(int))
-		userID := respCreate.Payload.ID
-		roleMember := int64(2)
-
-		teamCtx, teamErrBody := withErrorCapture(ctx)
-		paramsTeam := team_memberships.NewTeamMembershipCreateParams()
-		paramsTeam.SetContext(teamCtx)
-		paramsTeam.Body = &models.TeammembershipsTeamMembershipCreatePayload{
-			UserID: &userID,
-			TeamID: &teamID,
-			Role:   &roleMember,
-		}
-
-		_, err := client.Client.TeamMemberships.TeamMembershipCreate(paramsTeam, client.AuthInfo)
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to assign user to team: %w", decorateSDKError(err, teamErrBody)))
+		if err := updateUserTeam(ctx, client, int(respCreate.Payload.ID), 0, teamIDInt.(int)); err != nil {
+			return diag.FromErr(err)
 		}
 	}
 
@@ -220,23 +206,70 @@ func resourceUserRead(ctx context.Context, d *schema.ResourceData, meta interfac
 		return diag.FromErr(err)
 	}
 
-	// Attempt to find team_id for standard users. Best-effort: errors here
-	// don't fail Read, so we don't decorate them.
-	if resp.Payload.Role == 2 {
-		paramsTM := team_memberships.NewTeamMembershipListParams()
-		respTM, err := client.Client.TeamMemberships.TeamMembershipList(paramsTM, client.AuthInfo)
-		if err == nil {
-			for _, m := range respTM.Payload {
-				if m.UserID == id {
-					if err := d.Set("team_id", int(m.TeamID)); err != nil {
-						return diag.FromErr(err)
-					}
-					break
-				}
+	// team_id tracks only the membership this resource manages. Other
+	// memberships (portainer_team_membership) would otherwise show up as a
+	// team_id the configuration does not have.
+	if teamID := d.Get("team_id").(int); teamID != 0 {
+		membership, err := findUserTeamMembership(ctx, client, int(id), teamID)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		if membership == nil {
+			if err := d.Set("team_id", 0); err != nil {
+				return diag.FromErr(err)
 			}
 		}
 	}
 
+	return nil
+}
+
+type userTeamMembership struct {
+	ID     int `json:"Id"`
+	UserID int `json:"UserID"`
+	TeamID int `json:"TeamID"`
+}
+
+// findUserTeamMembership returns the user's membership in the team, or nil.
+func findUserTeamMembership(ctx context.Context, client *APIClient, userID, teamID int) (*userTeamMembership, error) {
+	var memberships []userTeamMembership
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/team_memberships", nil, &memberships); err != nil {
+		return nil, fmt.Errorf("failed to list team memberships: %w", err)
+	}
+	for i := range memberships {
+		if memberships[i].UserID == userID && memberships[i].TeamID == teamID {
+			return &memberships[i], nil
+		}
+	}
+	return nil, nil
+}
+
+// updateUserTeam moves the user from the old team_id to the new one. A
+// membership that already exists (e.g. after an import) is kept.
+func updateUserTeam(ctx context.Context, client *APIClient, userID, oldTeam, newTeam int) error {
+	if oldTeam != 0 {
+		membership, err := findUserTeamMembership(ctx, client, userID, oldTeam)
+		if err != nil {
+			return err
+		}
+		if membership != nil {
+			url := fmt.Sprintf("%s/team_memberships/%d", client.Endpoint, membership.ID)
+			if err := doJSON(ctx, client, http.MethodDelete, url, nil, nil); err != nil && !isAPINotFound(err) {
+				return fmt.Errorf("failed to remove user from team %d: %w", oldTeam, err)
+			}
+		}
+	}
+	if newTeam == 0 {
+		return nil
+	}
+	membership, err := findUserTeamMembership(ctx, client, userID, newTeam)
+	if err != nil || membership != nil {
+		return err
+	}
+	body := map[string]int{"userID": userID, "teamID": newTeam, "role": 2}
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/team_memberships", body, nil); err != nil {
+		return fmt.Errorf("failed to assign user to team %d: %w", newTeam, err)
+	}
 	return nil
 }
 
@@ -265,7 +298,7 @@ func resourceUserImport(ctx context.Context, d *schema.ResourceData, meta interf
 	for _, u := range resp.Payload {
 		if u.Username == username {
 			d.SetId(strconv.FormatInt(u.ID, 10))
-			if diags := resourceUserRead(context.Background(), d, meta); diags.HasError() {
+			if diags := resourceUserRead(ctx, d, meta); diags.HasError() {
 				return nil, fmt.Errorf("%s", diags[0].Summary)
 			}
 			return []*schema.ResourceData{d}, nil
@@ -278,6 +311,12 @@ func resourceUserImport(ctx context.Context, d *schema.ResourceData, meta interf
 func resourceUserUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
+
+	// Checked before anything is changed, so a rejected team_id does not
+	// leave the user half-updated.
+	if d.Get("team_id").(int) != 0 && d.Get("role").(int) != 2 {
+		return diag.FromErr(fmt.Errorf("team_id can only be used with standard users (role = 2)"))
+	}
 
 	if d.HasChange("password") {
 		oldPw, newPw := d.GetChange("password")
@@ -320,6 +359,13 @@ func resourceUserUpdate(ctx context.Context, d *schema.ResourceData, meta interf
 	_, err := client.Client.Users.UserUpdate(params, client.AuthInfo)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update user: %w", decorateSDKError(err, errBody)))
+	}
+
+	if d.HasChange("team_id") {
+		oldTeam, newTeam := d.GetChange("team_id")
+		if err := updateUserTeam(ctx, client, int(id), oldTeam.(int), newTeam.(int)); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return resourceUserRead(ctx, d, meta)

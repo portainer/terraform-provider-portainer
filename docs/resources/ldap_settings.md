@@ -41,6 +41,8 @@ This resource updates the Portainer global settings to configure LDAP authentica
 | `anonymous_mode`             | bool         | no       | Enable anonymous mode (ReaderDN and Password not used).            |
 | `auto_create_users`          | bool         | no       | Automatically provision users from LDAP.                           |
 | `password`                   | string       | no       | Password for the search account (sensitive).                       |
+| `password_wo`                | string       | no       | Write-only, never stored in state (Terraform 1.11+). Conflicts with `password`; requires `password_wo_version` |
+| `password_wo_version`        | number       | no       | Version of `password_wo`. Increment it to send a new value |
 | `reader_dn`                  | string       | no       | DN of the account used to search users.                            |
 | `start_tls`                  | bool         | no       | Whether to use StartTLS.                                           |
 | `url`                        | string       | no       | LDAP server URL (deprecated, use `urls`).                          |

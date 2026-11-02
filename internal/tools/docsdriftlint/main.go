@@ -10,6 +10,9 @@
 // resource and data source is mentioned by name in its documentation page. It
 // deliberately checks field-name presence (snake_case identifiers are
 // distinctive enough to avoid false positives) rather than description wording.
+// In the other direction, every field listed in a doc page's argument/attribute
+// table (header "Name", "Attribute" or "Field") must exist in the schema, at
+// the top level or in a nested block, so renamed fields do not linger.
 //
 // Usage: docsdriftlint [module-root]   (defaults to ".")
 package main
@@ -59,7 +62,7 @@ func main() {
 	}
 
 	// 2. Extract top-level schema field names per constructor function.
-	fields, err := parseConstructorFields(fset, internalDir)
+	fields, allFields, err := parseConstructorFields(fset, internalDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "docsdriftlint: %v\n", err)
 		os.Exit(2)
@@ -92,10 +95,22 @@ func main() {
 				})
 			}
 		}
+		// The other direction: a field listed in an argument/attribute table
+		// must exist somewhere in the schema (top-level or nested), so renamed
+		// or removed fields do not linger in the docs.
+		known := allFields[e.constructor]
+		for _, f := range docTableFields(text) {
+			if !known[f] {
+				violations = append(violations, violation{
+					e.tfName, docPath,
+					fmt.Sprintf("documented field %q is not in the schema", f),
+				})
+			}
+		}
 	}
 
 	if len(violations) == 0 {
-		fmt.Printf("docsdriftlint: OK — every schema field is documented (%d entries checked, %d skipped as non-static).\n",
+		fmt.Printf("docsdriftlint: OK — every schema field is documented and every documented field exists (%d entries checked, %d skipped as non-static).\n",
 			len(entries)-skipped, skipped)
 		return
 	}
@@ -181,9 +196,12 @@ func parseProviderMaps(fset *token.FileSet, path string) ([]entry, error) {
 }
 
 // parseConstructorFields maps each constructor function name to the top-level
-// field names of the schema.Resource it returns.
-func parseConstructorFields(fset *token.FileSet, dir string) (map[string][]string, error) {
+// field names of the schema.Resource it returns, and to every field name
+// (top-level or nested) declared anywhere in the function.
+func parseConstructorFields(fset *token.FileSet, dir string) (map[string][]string, map[string]map[string]bool, error) {
 	out := map[string][]string{}
+	all := map[string]map[string]bool{}
+	funcs := map[string]*ast.FuncDecl{}
 
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -200,12 +218,15 @@ func parseConstructorFields(fset *token.FileSet, dir string) (map[string][]strin
 		}
 		f, perr := parser.ParseFile(fset, path, nil, 0)
 		if perr != nil {
-			return nil // tolerate; schemalint reports parse errors separately
+			return nil //nolint:nilerr // tolerate; schemalint reports parse errors separately
 		}
 		for _, decl := range f.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok || fn.Body == nil {
 				continue
+			}
+			if fn.Recv == nil {
+				funcs[fn.Name.Name] = fn
 			}
 			if names := schemaFieldsInFunc(fn); len(names) > 0 {
 				out[fn.Name.Name] = names
@@ -213,7 +234,106 @@ func parseConstructorFields(fset *token.FileSet, dir string) (map[string][]strin
 		}
 		return nil
 	})
-	return out, err
+	for name := range out {
+		if fn := funcs[name]; fn != nil {
+			all[name] = allSchemaKeysInFunc(fn, funcs, map[string]bool{})
+		}
+	}
+	return out, all, err
+}
+
+// allSchemaKeysInFunc returns every string key of a map[string]*schema.Schema
+// literal in fn, including the ones of nested blocks, plus "id". Keys of the
+// package functions fn calls count too, so a nested block built by a shared
+// helper (Elem: someElem()) is seen.
+func allSchemaKeysInFunc(fn *ast.FuncDecl, funcs map[string]*ast.FuncDecl, seen map[string]bool) map[string]bool {
+	keys := map[string]bool{"id": true}
+	seen[fn.Name.Name] = true
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok {
+			if id, ok := call.Fun.(*ast.Ident); ok && funcs[id.Name] != nil && !seen[id.Name] {
+				for k := range allSchemaKeysInFunc(funcs[id.Name], funcs, seen) {
+					keys[k] = true
+				}
+			}
+			return true
+		}
+		cl, ok := n.(*ast.CompositeLit)
+		if !ok {
+			return true
+		}
+		mt, ok := cl.Type.(*ast.MapType)
+		if !ok || !isSchemaSchemaPtr(mt.Value) {
+			// The Schema field of a schema.Resource literal has an implicit
+			// type, so recognise it through its parent key below as well.
+			if !isSchemaResource(cl.Type) {
+				return true
+			}
+			for _, elt := range cl.Elts {
+				if kv, ok := elt.(*ast.KeyValueExpr); ok {
+					if id, ok := kv.Key.(*ast.Ident); ok && id.Name == "Schema" {
+						if m, ok := kv.Value.(*ast.CompositeLit); ok {
+							addStringKeys(keys, m)
+						}
+					}
+				}
+			}
+			return true
+		}
+		addStringKeys(keys, cl)
+		return true
+	})
+	return keys
+}
+
+func addStringKeys(keys map[string]bool, cl *ast.CompositeLit) {
+	for _, elt := range cl.Elts {
+		if kv, ok := elt.(*ast.KeyValueExpr); ok {
+			if lit, ok := kv.Key.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				keys[strings.Trim(lit.Value, `"`)] = true
+			}
+		}
+	}
+}
+
+// isSchemaSchemaPtr matches the `*schema.Schema` type expression.
+func isSchemaSchemaPtr(t ast.Expr) bool {
+	star, ok := t.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := star.X.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	return ok && pkg.Name == "schema" && sel.Sel.Name == "Schema"
+}
+
+var (
+	docTableHeader = regexp.MustCompile(`^\|\s*(Name|Attribute|Field)\s*\|`)
+	docTableField  = regexp.MustCompile("^\\|\\s*`([a-z][a-z0-9_]*)`\\s*\\|")
+)
+
+// docTableFields returns the field names listed in the first column of the
+// argument/attribute tables (header "Name", "Attribute" or "Field").
+func docTableFields(text string) []string {
+	var names []string
+	inTable := false
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case docTableHeader.MatchString(line):
+			inTable = true
+		case !strings.HasPrefix(line, "|"):
+			inTable = false
+		case inTable:
+			if m := docTableField.FindStringSubmatch(line); m != nil {
+				names = append(names, m[1])
+			}
+		}
+	}
+	return names
 }
 
 // schemaFieldsInFunc finds the value of the "Schema" key of a schema.Resource

@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	neturl "net/url"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -62,6 +65,12 @@ func resourceResourceControl() *schema.Resource {
 				Elem:        &schema.Schema{Type: schema.TypeInt},
 				Description: "List of Portainer user identifiers granted access to the resource.",
 			},
+			"endpoint_id": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "ID of the Docker environment holding the resource. Needed to read back the control of a container, service, volume, network, secret or config (types 1-5 and 7), so changes made in Portainer show up in the plan; without it those controls are tracked as configured.",
+			},
 			"sub_resource_ids": {
 				Type:        schema.TypeList,
 				Optional:    true,
@@ -79,55 +88,189 @@ func resourceResourceControl() *schema.Resource {
 // which is why this has to be told apart from "the resource is gone".
 var errResourceControlNotLookupable = errors.New("resource control cannot be looked up for this resource type")
 
-func lookupResourceControlID(client *APIClient, resourceType int, resourceID string) (string, map[string]interface{}, error) {
+// errResourceControlNotFound marks a resource that exists but has no resource
+// control any more, which drops the resource from state like a 404 does.
+var errResourceControlNotFound = errors.New("no resource control found")
+
+// dockerResourcePaths are the Docker API collections of the resource control
+// types Portainer decorates through its Docker proxy.
+var dockerResourcePaths = map[int]string{
+	1: "containers",
+	2: "services",
+	3: "volumes",
+	4: "networks",
+	5: "secrets",
+	7: "configs",
+}
+
+func lookupResourceControlID(ctx context.Context, client *APIClient, resourceType int, resourceID string) (string, map[string]interface{}, error) {
+	return lookupResourceControl(ctx, client, resourceType, resourceID, 0)
+}
+
+// lookupResourceControl finds the resource control of a resource. Portainer
+// has no endpoint to read one by ID, so it is read from the object it
+// protects: the stack, or for Docker objects the "Portainer" metadata its
+// Docker proxy adds to them. endpointID is only needed for Docker objects.
+func lookupResourceControl(ctx context.Context, client *APIClient, resourceType int, resourceID string, endpointID int) (string, map[string]interface{}, error) {
+	if path, ok := dockerResourcePaths[resourceType]; ok {
+		if endpointID == 0 {
+			return "", nil, fmt.Errorf("%w: type %d without endpoint_id", errResourceControlNotLookupable, resourceType)
+		}
+		var object struct {
+			// The identifier Portainer keys the control by: the full ID
+			// (containers, services, networks, secrets, configs, "ID" for
+			// the swarm ones) or, for a volume, "<name>_<docker ID>", which
+			// the proxy adds as ResourceID. resource_id may be a name or a
+			// short ID instead.
+			ID         string `json:"Id"`
+			SwarmID    string `json:"ID"`
+			ResourceID string `json:"ResourceID"`
+			Portainer  struct {
+				ResourceControl map[string]interface{} `json:"ResourceControl"`
+			} `json:"Portainer"`
+		}
+		url := fmt.Sprintf("%s/endpoints/%d/docker/%s/%s", client.Endpoint, endpointID, path, resourceID)
+		if path == "containers" {
+			url += "/json"
+		}
+		err := doJSON(ctx, client, http.MethodGet, url, nil, &object)
+		// A volume control's resource_id is usually Portainer's own key,
+		// "<name>_<docker ID>", which Docker does not know; the volume is
+		// "<name>".
+		if name, _, ok := cutLast(resourceID, "_"); ok && resourceType == 3 && isAPINotFound(err) {
+			err = doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/endpoints/%d/docker/volumes/%s", client.Endpoint, endpointID, name), nil, &object)
+		}
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to read %s %s: %w", path, resourceID, err)
+		}
+		return ownResourceControl(object.Portainer.ResourceControl, resourceType, resourceID, object.ID, object.SwarmID, object.ResourceID)
+	}
+
 	switch resourceType {
 	case 6: // stack
+		// A stack deployed outside Portainer has no stack object to read: its
+		// resource control is keyed "<endpointId>_<compose project>", not by a
+		// numeric stack ID, and GET /stacks/{id} cannot resolve it. Its
+		// containers carry it, though.
+		if _, err := strconv.Atoi(resourceID); err != nil {
+			return lookupExternalStackResourceControl(ctx, client, resourceID)
+		}
 		var result struct {
 			ResourceControl map[string]interface{} `json:"ResourceControl"`
 		}
-		if err := doJSON(context.Background(), client, http.MethodGet, fmt.Sprintf("%s/stacks/%s", client.Endpoint, resourceID), nil, &result); err != nil {
+		if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/stacks/%s", client.Endpoint, resourceID), nil, &result); err != nil {
 			return "", nil, fmt.Errorf("failed to lookup stack: %w", err)
 		}
-		if result.ResourceControl == nil || result.ResourceControl["Id"] == nil {
-			return "", nil, fmt.Errorf("no resource control found for stack %s", resourceID)
+		id, ok := result.ResourceControl["Id"].(float64)
+		if !ok {
+			return "", nil, fmt.Errorf("%w for stack %s", errResourceControlNotFound, resourceID)
 		}
-
-		id := int(result.ResourceControl["Id"].(float64))
-		return strconv.Itoa(id), result.ResourceControl, nil
+		return strconv.Itoa(int(id)), result.ResourceControl, nil
 
 	default:
 		return "", nil, fmt.Errorf("%w: %d", errResourceControlNotLookupable, resourceType)
 	}
 }
 
+// cutLast slices s around the last instance of sep.
+func cutLast(s, sep string) (before, after string, found bool) {
+	if i := strings.LastIndex(s, sep); i >= 0 {
+		return s[:i], s[i+len(sep):], true
+	}
+	return s, "", false
+}
+
+// ownResourceControl returns rc when it is the control of the resource itself.
+// The Docker proxy also shows a control a resource inherits - a container gets
+// its service's or its stack's - and taking that one for ours would point
+// every later update at the stack's control.
+//
+// The control is keyed by the object's canonical identifier, which differs
+// from resource_id when that is a name or a short ID, so the identifiers the
+// object reports for itself count as well.
+func ownResourceControl(rc map[string]interface{}, resourceType int, resourceID string, canonicalIDs ...string) (string, map[string]interface{}, error) {
+	id, ok := rc["Id"].(float64)
+	rcType, _ := rc["Type"].(float64)
+	rcResource, _ := rc["ResourceId"].(string)
+	own := rcResource != "" && (rcResource == resourceID || slices.Contains(canonicalIDs, rcResource))
+	if !ok || int(rcType) != resourceType || !own {
+		return "", nil, fmt.Errorf("%w for %s", errResourceControlNotFound, resourceID)
+	}
+	return strconv.Itoa(int(id)), rc, nil
+}
+
+// lookupExternalStackResourceControl reads the control of a stack deployed
+// outside Portainer ("<endpointId>_<compose project>") from its containers,
+// which the Docker proxy decorates with it. A container with a control of its
+// own shows that one instead, so the stack's control only counts as gone when
+// some container shows no control at all; a project without containers, or
+// whose containers all have their own, cannot be read and is tracked as
+// configured.
+func lookupExternalStackResourceControl(ctx context.Context, client *APIClient, resourceID string) (string, map[string]interface{}, error) {
+	endpoint, project, ok := strings.Cut(resourceID, "_")
+	endpointID, err := strconv.Atoi(endpoint)
+	if !ok || err != nil || project == "" {
+		return "", nil, fmt.Errorf("%w: external stack %q", errResourceControlNotLookupable, resourceID)
+	}
+
+	filters := fmt.Sprintf(`{"label":["com.docker.compose.project=%s"]}`, project)
+	url := fmt.Sprintf("%s/endpoints/%d/docker/containers/json?all=1&filters=%s", client.Endpoint, endpointID, neturl.QueryEscape(filters))
+	var containers []struct {
+		Portainer struct {
+			ResourceControl map[string]interface{} `json:"ResourceControl"`
+		} `json:"Portainer"`
+	}
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, &containers); err != nil {
+		return "", nil, fmt.Errorf("failed to list the containers of stack %q: %w", resourceID, err)
+	}
+	if len(containers) == 0 {
+		return "", nil, fmt.Errorf("%w: external stack %q has no containers", errResourceControlNotLookupable, resourceID)
+	}
+	undecorated := false
+	for _, c := range containers {
+		if c.Portainer.ResourceControl == nil {
+			undecorated = true
+			continue
+		}
+		if id, rc, err := ownResourceControl(c.Portainer.ResourceControl, 6, resourceID); err == nil {
+			return id, rc, nil
+		}
+	}
+	if undecorated {
+		return "", nil, fmt.Errorf("%w for external stack %s", errResourceControlNotFound, resourceID)
+	}
+	return "", nil, fmt.Errorf("%w: the containers of external stack %q only show their own controls", errResourceControlNotLookupable, resourceID)
+}
+
 func resourceResourceControlRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	// 1) Pokud máme přímo resource_control_id (třeba z docker_secret),
-	//    nevoláme žádné API, jen nastavíme ID ve state.
+	// 1) With an explicit resource_control_id (e.g. from docker_secret) no API
+	//    is called; only the ID is set in state.
 	if v, ok := d.GetOk("resource_control_id"); ok && v.(int) != 0 {
 		rcInt := v.(int)
 		rcID := strconv.Itoa(rcInt)
 
-		// Nastavíme ID resource v TF
+		// Set the Terraform resource ID
 		d.SetId(rcID)
 
-		// Pro jistotu uložíme zpět i resource_control_id,
-		// kdyby přišlo z importu nebo staršího state.
+		// Store resource_control_id back as well, in case it came from an
+		// import or an older state.
 		if err := d.Set("resource_control_id", rcInt); err != nil {
 			return diag.FromErr(err)
 		}
 
-		// Ostatní atributy (administrators_only, public, teams, users)
-		// necháme tak, jak jsou – pochází z konfigurace / předchozího apply.
+		// The other attributes (administrators_only, public, teams, users)
+		// are left as they are: they come from the configuration or the
+		// previous apply.
 		return nil
 	}
 
-	// 2) Jinak starý režim: lookup podle type + resource_id (stack apod.)
+	// 2) Otherwise the original mode: look up by type + resource_id (stack etc.)
 	resourceType := d.Get("type").(int)
 	resourceID := d.Get("resource_id").(string)
 
-	rcID, rcData, err := lookupResourceControlID(client, resourceType, resourceID)
+	rcID, rcData, err := lookupResourceControl(ctx, client, resourceType, resourceID, d.Get("endpoint_id").(int))
 	if err != nil {
 		if errors.Is(err, errResourceControlNotLookupable) && d.Id() != "" {
 			// Created through POST /resource_controls: there is no endpoint to
@@ -135,8 +278,15 @@ func resourceResourceControlRead(ctx context.Context, d *schema.ResourceData, me
 			// the resource being dropped from state.
 			return nil
 		}
-		d.SetId("") // resource not found, remove from state
-		return nil
+		// Only a resource or resource control that is gone leaves state. Any
+		// other failure (network, 5xx, auth) used to drop it as well, and the
+		// next apply then tried to create a resource control that still
+		// existed.
+		if isAPINotFound(err) || errors.Is(err, errResourceControlNotFound) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read resource control: %w", err))
 	}
 
 	d.SetId(rcID)
@@ -200,7 +350,7 @@ func resourceResourceControlCreate(ctx context.Context, d *schema.ResourceData, 
 
 	// Portainer creates a resource control implicitly for objects deployed
 	// through it, so an existing one is updated rather than duplicated.
-	if _, _, err := lookupResourceControlID(client, resourceType, resourceID); err == nil {
+	if _, _, err := lookupResourceControl(ctx, client, resourceType, resourceID, d.Get("endpoint_id").(int)); err == nil {
 		return resourceResourceControlUpdate(ctx, d, meta)
 	}
 
@@ -249,7 +399,7 @@ func resourceResourceControlUpdate(ctx context.Context, d *schema.ResourceData, 
 		resourceID := d.Get("resource_id").(string)
 
 		var err error
-		rcID, _, err = lookupResourceControlID(client, resourceType, resourceID)
+		rcID, _, err = lookupResourceControl(ctx, client, resourceType, resourceID, d.Get("endpoint_id").(int))
 		if err != nil {
 			if !errors.Is(err, errResourceControlNotLookupable) || d.Id() == "" {
 				return diag.FromErr(err)
@@ -283,11 +433,14 @@ func resourceResourceControlDelete(ctx context.Context, d *schema.ResourceData, 
 		resourceID := d.Get("resource_id").(string)
 
 		var err error
-		rcID, _, err = lookupResourceControlID(client, resourceType, resourceID)
+		rcID, _, err = lookupResourceControl(ctx, client, resourceType, resourceID, d.Get("endpoint_id").(int))
 		if err != nil {
-			if !errors.Is(err, errResourceControlNotLookupable) || d.Id() == "" {
+			if isAPINotFound(err) || errors.Is(err, errResourceControlNotFound) {
 				d.SetId("")
 				return nil
+			}
+			if !errors.Is(err, errResourceControlNotLookupable) || d.Id() == "" {
+				return diag.FromErr(err)
 			}
 			rcID = d.Id()
 		}

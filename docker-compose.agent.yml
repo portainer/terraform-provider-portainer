@@ -1,6 +1,6 @@
 services:
   portainer_agent:
-    image: portainer/agent
+    image: portainer/agent:${PORTAINER_VERSION:-2.45.3}
     pull_policy: always
     container_name: portainer_agent
     restart: unless-stopped

@@ -3,9 +3,12 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -31,6 +34,10 @@ func resourceDockerPlugin() *schema.Resource {
 				if err := d.Set("endpoint_id", endpointID); err != nil {
 					return nil, err
 				}
+				// The registry credentials cannot be read back; assume the default.
+				if err := setFields(d, map[string]interface{}{"name": parts[1], "registry_auth": "e30="}); err != nil {
+					return nil, err
+				}
 				d.SetId(parts[1])
 				return []*schema.ResourceData{d}, nil
 			},
@@ -51,8 +58,9 @@ func resourceDockerPlugin() *schema.Resource {
 			"name": {
 				Type:        schema.TypeString,
 				Optional:    true,
+				Computed:    true,
 				ForceNew:    true,
-				Description: "Local alias name for the installed Docker plugin.",
+				Description: "Local alias name for the installed Docker plugin. Defaults to `remote`.",
 			},
 			"registry_auth": {
 				Type:        schema.TypeString,
@@ -106,9 +114,9 @@ func resourceDockerPluginCreate(ctx context.Context, d *schema.ResourceData, met
 	enable := d.Get("enable").(bool)
 	auth := d.Get("registry_auth").(string)
 
-	query := fmt.Sprintf("?remote=%s", remote)
+	query := url.Values{"remote": {remote}}
 	if name != "" {
-		query += fmt.Sprintf("&name=%s", name)
+		query.Set("name", name)
 	}
 
 	var settings []interface{}
@@ -130,8 +138,8 @@ func resourceDockerPluginCreate(ctx context.Context, d *schema.ResourceData, met
 		"X-Registry-Auth": auth, // base64 encoded '{}'
 	}
 
-	path := fmt.Sprintf("/endpoints/%d/docker/plugins/pull%s", endpointID, query)
-	resp, err := client.DoRequest(http.MethodPost, path, headers, settings)
+	path := fmt.Sprintf("/endpoints/%d/docker/plugins/pull?%s", endpointID, query.Encode())
+	resp, err := client.DoRequest(ctx, http.MethodPost, path, headers, settings)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to install plugin: %w", err))
 	}
@@ -141,12 +149,32 @@ func resourceDockerPluginCreate(ctx context.Context, d *schema.ResourceData, met
 		body, _ := io.ReadAll(resp.Body)
 		return diag.FromErr(fmt.Errorf("failed to install plugin: %s", string(body)))
 	}
+	// Docker pulls the plugin while it streams the progress, and cancels the
+	// pull when the client hangs up, so read the stream to the end. Failures
+	// arrive inside it with status 200.
+	if err := checkDockerStream(resp.Body); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to install plugin: %w", err))
+	}
 
-	// enable if desired
+	// Docker names the plugin after the remote when no alias is given.
+	id := name
+	if id == "" {
+		id = remote
+	}
+
+	// Set before enabling, so a plugin that installed but failed to enable
+	// stays in state (tainted) instead of being left behind unmanaged.
+	d.SetId(id)
+	if err := d.Set("name", id); err != nil {
+		return diag.FromErr(err)
+	}
 
 	if enable {
-		enablePath := fmt.Sprintf("/endpoints/%d/docker/plugins/%s/enable", endpointID, name)
-		enableResp, err := client.DoRequest(http.MethodPost, enablePath, nil, nil)
+		// Docker requires the timeout parameter; without it the enable call
+		// fails with "strconv.Atoi: parsing \"\"", so enable = true never
+		// worked.
+		enablePath := fmt.Sprintf("/endpoints/%d/docker/plugins/%s/enable?timeout=0", endpointID, id)
+		enableResp, err := client.DoRequest(ctx, http.MethodPost, enablePath, nil, nil)
 		if err != nil {
 			return diag.FromErr(fmt.Errorf("plugin installed but failed to enable: %w", err))
 		}
@@ -158,8 +186,26 @@ func resourceDockerPluginCreate(ctx context.Context, d *schema.ResourceData, met
 		}
 	}
 
-	d.SetId(name)
 	return nil
+}
+
+// checkDockerStream reads a Docker progress stream to the end and returns
+// the first error reported in it.
+func checkDockerStream(r io.Reader) error {
+	dec := json.NewDecoder(r)
+	for {
+		var msg struct {
+			Error string `json:"error"`
+		}
+		if err := dec.Decode(&msg); err == io.EOF {
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("reading the progress stream: %w", err)
+		}
+		if msg.Error != "" {
+			return errors.New(msg.Error)
+		}
+	}
 }
 
 func resourceDockerPluginDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -167,8 +213,10 @@ func resourceDockerPluginDelete(ctx context.Context, d *schema.ResourceData, met
 	endpointID := d.Get("endpoint_id").(int)
 	plugin := d.Id()
 
-	url := fmt.Sprintf("%s/endpoints/%d/docker/plugins/%s", client.Endpoint, endpointID, plugin)
-	if err := doJSON(ctx, client, http.MethodDelete, url, nil, nil); err != nil && !isAPINotFound(err) {
+	// force: Docker refuses to remove an enabled plugin, which made every
+	// enable = true plugin impossible to destroy or replace.
+	reqURL := fmt.Sprintf("%s/endpoints/%d/docker/plugins/%s?force=true", client.Endpoint, endpointID, plugin)
+	if err := doJSON(ctx, client, http.MethodDelete, reqURL, nil, nil); err != nil && !isAPINotFound(err) {
 		return diag.FromErr(fmt.Errorf("failed to delete plugin: %w", err))
 	}
 
@@ -180,25 +228,13 @@ func resourceDockerPluginRead(ctx context.Context, d *schema.ResourceData, meta 
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	pluginName := d.Id()
-	url := fmt.Sprintf("%s/endpoints/%d/docker/plugins/%s/json", client.Endpoint, endpointID, pluginName)
+	reqURL := fmt.Sprintf("%s/endpoints/%d/docker/plugins/%s/json", client.Endpoint, endpointID, pluginName)
 
 	var plugin struct {
-		Enabled  bool `json:"Enabled"`
-		Settings struct {
-			Args []string `json:"Args"`
-		} `json:"Settings"`
-		Config struct {
-			Remote      string `json:"Remote"`
-			Description string `json:"Description"`
-			Interface   struct {
-				Types json.RawMessage `json:"Types"`
-			} `json:"Interface"`
-			Settings struct {
-				Env []string `json:"Env"`
-			} `json:"Settings"`
-		} `json:"Config"`
+		Enabled         bool   `json:"Enabled"`
+		PluginReference string `json:"PluginReference"`
 	}
-	if err := doJSON(ctx, client, http.MethodGet, url, nil, &plugin); err != nil {
+	if err := doJSON(ctx, client, http.MethodGet, reqURL, nil, &plugin); err != nil {
 		if isAPINotFound(err) {
 			d.SetId("")
 			return nil
@@ -209,33 +245,55 @@ func resourceDockerPluginRead(ctx context.Context, d *schema.ResourceData, meta 
 	if err := d.Set("enable", plugin.Enabled); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("remote", plugin.Config.Remote); err != nil {
-		return diag.FromErr(err)
-	}
-
-	// settings reconstruction (limited to env-based ones)
-	settings := make([]map[string]interface{}, 0, len(plugin.Config.Settings.Env))
-	for _, env := range plugin.Config.Settings.Env {
-		// env is of form "KEY=value"
-		var name, value string
-		n := strings.Index(env, "=")
-		if n >= 0 {
-			name = env[:n]
-			value = env[n+1:]
+	// Docker does not keep the remote as written nor the privileges granted at
+	// install (settings), and both force a new plugin, so they keep their
+	// configured values. Only an import fills them in: the remote from the
+	// plugin reference and the settings from the privileges it requires.
+	if d.Get("remote").(string) == "" {
+		remote := normalizePluginReference(plugin.PluginReference)
+		fields := map[string]interface{}{"remote": remote}
+		// The privileges come from the registry, which a private or
+		// unreachable one may refuse; the import then just has no settings.
+		if settings, err := dockerPluginPrivileges(ctx, client, endpointID, remote); err != nil {
+			log.Printf("[WARN] docker_plugin %s: settings not imported: %v", pluginName, err)
 		} else {
-			name = env
-			value = ""
+			fields["settings"] = settings
 		}
-		settings = append(settings, map[string]interface{}{
-			"name":  name,
-			"value": []interface{}{value},
-		})
-	}
-	if len(settings) > 0 {
-		if err := d.Set("settings", settings); err != nil {
+		if err := setFields(d, fields); err != nil {
 			return diag.FromErr(err)
 		}
 	}
 
 	return nil
+}
+
+// dockerPluginPrivileges returns the privileges the plugin asks for, which
+// Docker requires the install to grant exactly, in the shape of settings.
+func dockerPluginPrivileges(ctx context.Context, client *APIClient, endpointID int, remote string) ([]interface{}, error) {
+	reqURL := fmt.Sprintf("%s/endpoints/%d/docker/plugins/privileges?%s", client.Endpoint, endpointID, url.Values{"remote": {remote}}.Encode())
+	var privileges []struct {
+		Name  string   `json:"Name"`
+		Value []string `json:"Value"`
+	}
+	if err := doJSON(ctx, client, http.MethodGet, reqURL, nil, &privileges); err != nil {
+		return nil, fmt.Errorf("failed to read the privileges of plugin %s: %w", remote, err)
+	}
+	settings := make([]interface{}, 0, len(privileges))
+	for _, p := range privileges {
+		values := make([]interface{}, 0, len(p.Value))
+		for _, v := range p.Value {
+			values = append(values, v)
+		}
+		settings = append(settings, map[string]interface{}{"name": p.Name, "value": values})
+	}
+	return settings, nil
+}
+
+// normalizePluginReference turns Docker's canonical plugin reference
+// ("docker.io/rclone/docker-volume-rclone:latest") back into the short form
+// users write ("rclone/docker-volume-rclone").
+func normalizePluginReference(ref string) string {
+	ref = strings.TrimPrefix(ref, "docker.io/")
+	ref = strings.TrimPrefix(ref, "library/")
+	return strings.TrimSuffix(ref, ":latest")
 }

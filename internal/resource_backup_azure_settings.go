@@ -59,6 +59,9 @@ func resourceBackupAzureSettings() *schema.Resource {
 		// Portainer has no endpoint to clear the settings; removing the resource
 		// stops managing them and leaves the schedule as configured.
 		DeleteContext: removeFromStateContext,
+		Importer: &schema.ResourceImporter{
+			StateContext: importSingleton("portainer-backup-azure-settings"),
+		},
 
 		// The Azure fields are spelled out in each of the three resources that
 		// take them rather than shared through a helper, so docsdriftlint can

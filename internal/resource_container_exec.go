@@ -39,12 +39,12 @@ func resourceContainerExec() *schema.Resource {
 func resourceContainerExecCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	mode := d.Get("mode").(string)
 	if mode == "swarm" {
-		return diag.FromErr(execInSwarm(d, meta))
+		return diag.FromErr(execInSwarm(ctx, d, meta))
 	}
-	return diag.FromErr(execInStandalone(d, meta))
+	return diag.FromErr(execInStandalone(ctx, d, meta))
 }
 
-func execInStandalone(d *schema.ResourceData, meta interface{}) error {
+func execInStandalone(ctx context.Context, d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	container := d.Get("service_name").(string)
@@ -53,16 +53,18 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 	wait := d.Get("wait").(int)
 
 	timeout := d.Timeout(schema.TimeoutCreate)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	if wait > 0 {
-		time.Sleep(time.Duration(wait) * time.Second)
+		if err := sleepCtx(ctx, time.Duration(wait)*time.Second); err != nil {
+			return err
+		}
 	}
 
 	filter := fmt.Sprintf(`{"name":["%s"]}`, container)
 	containersURL := fmt.Sprintf("%s/endpoints/%d/docker/containers/json?filters=%s", client.Endpoint, endpointID, url.QueryEscape(filter))
-	containersResp, err := apiGET(containersURL, client.APIKey, client)
+	containersResp, err := apiGETCtx(ctx, containersURL, client.APIKey, client)
 	if err != nil {
 		return err
 	}
@@ -72,7 +74,10 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("no container found with name %s", container)
 	}
 
-	containerID := containers[0]["Id"].(string)
+	containerID, _ := containers[0]["Id"].(string)
+	if containerID == "" {
+		return fmt.Errorf("container %s has no ID in the Docker response", container)
+	}
 
 	commandSplit := strings.Fields(command)
 	execBody := map[string]interface{}{
@@ -127,7 +132,7 @@ func execInStandalone(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func execInSwarm(d *schema.ResourceData, meta interface{}) error {
+func execInSwarm(ctx context.Context, d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
 	service := d.Get("service_name").(string)
@@ -136,17 +141,19 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 	wait := d.Get("wait").(int)
 
 	timeout := d.Timeout(schema.TimeoutCreate)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	if wait > 0 {
-		time.Sleep(time.Duration(wait) * time.Second)
+		if err := sleepCtx(ctx, time.Duration(wait)*time.Second); err != nil {
+			return err
+		}
 	}
 
 	filter := fmt.Sprintf(`{"service":{"%s":true},"desired-state":{"running":true}}`, service)
 	encodedFilter := url.QueryEscape(filter)
 	tasksURL := fmt.Sprintf("%s/endpoints/%d/docker/tasks?filters=%s", client.Endpoint, endpointID, encodedFilter)
-	tasksResp, err := apiGET(tasksURL, client.APIKey, client)
+	tasksResp, err := apiGETCtx(ctx, tasksURL, client.APIKey, client)
 	if err != nil {
 		return err
 	}
@@ -156,8 +163,14 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("failed to parse tasks or no tasks found")
 	}
 
-	nodeID := tasks[0]["NodeID"].(string)
-	nodeResp, err := apiGET(fmt.Sprintf("%s/endpoints/%d/docker/nodes/%s", client.Endpoint, endpointID, nodeID), client.APIKey, client)
+	// A task that is not scheduled yet has no node or container, which used to
+	// crash the provider on the type assertions below.
+	nodeID, _ := tasks[0]["NodeID"].(string)
+	containerID, _ := mustMap(mustMap(tasks[0]["Status"])["ContainerStatus"])["ContainerID"].(string)
+	if nodeID == "" || containerID == "" {
+		return fmt.Errorf("the task of service %s has no container yet; retry once it is running", service)
+	}
+	nodeResp, err := apiGETCtx(ctx, fmt.Sprintf("%s/endpoints/%d/docker/nodes/%s", client.Endpoint, endpointID, nodeID), client.APIKey, client)
 	if err != nil {
 		return err
 	}
@@ -165,9 +178,10 @@ func execInSwarm(d *schema.ResourceData, meta interface{}) error {
 	if err := json.Unmarshal(nodeResp, &node); err != nil {
 		return fmt.Errorf("failed to decode node info: %w", err)
 	}
-	hostname := node["Description"].(map[string]interface{})["Hostname"].(string)
-
-	containerID := tasks[0]["Status"].(map[string]interface{})["ContainerStatus"].(map[string]interface{})["ContainerID"].(string)
+	hostname, _ := mustMap(node["Description"])["Hostname"].(string)
+	if hostname == "" {
+		return fmt.Errorf("swarm node %s reports no hostname, so the exec cannot be routed to it", nodeID)
+	}
 
 	commandSplit := strings.Fields(command)
 	execBody := map[string]interface{}{

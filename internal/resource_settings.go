@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -38,6 +39,58 @@ type SettingsPayload struct {
 	DisplayDonationHeader       bool                  `json:"DisplayDonationHeader,omitempty"`
 	DisplayExternalContributors bool                  `json:"DisplayExternalContributors,omitempty"`
 	IsDockerDesktopExtension    bool                  `json:"IsDockerDesktopExtension,omitempty"`
+	ForceSecureCookies          bool                  `json:"ForceSecureCookies,omitempty"`
+}
+
+// settingsBlockSecret is the secret of the oauth_settings or ldap_settings
+// block, or the top-level write-only attribute woKey when its version is set.
+// The write-only attributes cannot live inside the blocks: those are
+// computed, and Terraform does not allow write-only attributes there.
+//
+// A configured write-only value wins, as in secretValue: the block is
+// computed, so key may still hold an old secret from state.
+func settingsBlockSecret(d *schema.ResourceData, m map[string]interface{}, key, woKey string) (string, error) {
+	if d.Get(woKey+"_version").(int) != 0 {
+		wo, err := writeOnlyString(d, woKey)
+		if err != nil || wo != "" {
+			return wo, err
+		}
+	}
+	v, _ := m[key].(string)
+	return v, nil
+}
+
+// settingsUpdateRequest is the PUT /settings body. The boolean switches of
+// SettingsPayload are omitempty, so turning one off was never sent and the
+// setting stayed on; these pointers shadow them (the outer field wins in
+// encoding/json) and carry false whenever it is configured.
+type settingsUpdateRequest struct {
+	SettingsPayload
+	EnableEdgeComputeFeatures *bool `json:"enableEdgeComputeFeatures,omitempty"`
+	EnforceEdgeID             *bool `json:"enforceEdgeID,omitempty"`
+	TrustOnFirstConnect       *bool `json:"trustOnFirstConnect,omitempty"`
+	DisableKubeRolesSync      *bool `json:"DisableKubeRolesSync,omitempty"`
+	DisableKubeShell          *bool `json:"DisableKubeShell,omitempty"`
+	DisableKubeconfigDownload *bool `json:"DisableKubeconfigDownload,omitempty"`
+	ForceSecureCookies        *bool `json:"ForceSecureCookies,omitempty"`
+}
+
+// configuredBool returns the configured value of an optional boolean, or nil
+// when the configuration leaves it out so Portainer keeps its own. Without a
+// configuration to look at, a true value is still sent, as before.
+func configuredBool(d *schema.ResourceData, key string) *bool {
+	if d.GetRawConfig().IsNull() {
+		if v := d.Get(key).(bool); v {
+			return &v
+		}
+		return nil
+	}
+	raw, diags := d.GetRawConfigAt(cty.GetAttrPath(key))
+	if diags.HasError() || !raw.IsKnown() || raw.IsNull() {
+		return nil
+	}
+	v := raw.True()
+	return &v
 }
 
 type LabelPair struct {
@@ -122,6 +175,12 @@ type TLSConfig struct {
 	TLSSkipVerify bool   `json:"TLSSkipVerify,omitempty"`
 }
 
+// settingsReadOnlyDeprecation marks settings Portainer reports but no edition
+// lets PUT /settings change: the display flags are deprecated and
+// IsDockerDesktopExtension is detected at startup. A configured value was never
+// sent, so it showed as drift on every plan.
+const settingsReadOnlyDeprecation = "This attribute has no effect: Portainer does not accept it through the settings API. Remove it from the configuration; it will become read-only in the next major version."
+
 func resourceSettings() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceSettingsApply,
@@ -134,7 +193,7 @@ func resourceSettings() *schema.Resource {
 		Schema: map[string]*schema.Schema{
 			"edge_portainer_url":           {Type: schema.TypeString, Optional: true, Computed: true, Description: "Public URL of the Portainer instance that edge agents use to reach back for polling and tunneling."},
 			"authentication_method":        {Type: schema.TypeInt, Optional: true, Computed: true, Description: "Authentication method used by Portainer. 1 = internal, 2 = LDAP, 3 = OAuth."},
-			"enable_telemetry":             {Type: schema.TypeBool, Optional: true, Computed: true, Description: "Whether anonymous usage telemetry is sent to Portainer."},
+			"enable_telemetry":             {Type: schema.TypeBool, Optional: true, Computed: true, Deprecated: settingsReadOnlyDeprecation, Description: "Whether anonymous usage telemetry is sent to Portainer. No effect: current Portainer has no such setting."},
 			"logo_url":                     {Type: schema.TypeString, Optional: true, Computed: true, Description: "URL of a custom logo displayed in the Portainer UI."},
 			"snapshot_interval":            {Type: schema.TypeString, Optional: true, Computed: true, Description: "Interval at which Portainer snapshots endpoints (e.g. \"5m\", \"1h\")."},
 			"templates_url":                {Type: schema.TypeString, Optional: true, Computed: true, Description: "URL of the JSON file with application templates used by the Portainer UI."},
@@ -149,38 +208,62 @@ func resourceSettings() *schema.Resource {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Computed:    true,
-				Description: "Whether automatic synchronization of Kubernetes roles is disabled.",
+				Description: "Whether automatic synchronization of Kubernetes roles is disabled. Business Edition only; Community Edition ignores it.",
 			},
 			"disable_kube_shell": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Computed:    true,
-				Description: "Whether the in-browser Kubernetes shell is disabled for users.",
+				Description: "Whether the in-browser Kubernetes shell is disabled for users. Business Edition only; Community Edition ignores it.",
 			},
 			"disable_kubeconfig_download": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Computed:    true,
-				Description: "Whether downloading kubeconfig files from the Portainer UI is disabled.",
+				Description: "Whether downloading kubeconfig files from the Portainer UI is disabled. Business Edition only; Community Edition ignores it.",
 			},
 			"display_donation_header": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Computed:    true,
+				Deprecated:  settingsReadOnlyDeprecation,
 				Description: "Whether the donation header banner is shown in the Portainer UI.",
 			},
 			"display_external_contributors": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Computed:    true,
+				Deprecated:  settingsReadOnlyDeprecation,
 				Description: "Whether external contributors are displayed in the Portainer UI.",
 			},
 			"is_docker_desktop_extension": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Computed:    true,
+				Deprecated:  settingsReadOnlyDeprecation,
 				Description: "Whether this Portainer instance runs as a Docker Desktop extension.",
 			},
+			"oauth_client_secret_wo": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				WriteOnly:     true,
+				ConflictsWith: []string{"oauth_settings.0.client_secret"},
+				RequiredWith:  []string{"oauth_client_secret_wo_version", "oauth_settings"},
+				Description:   "Write-only OAuth client secret used instead of `oauth_settings.client_secret` (supports ephemeral values; never stored in Terraform state). Requires Terraform 1.11 or later.",
+			},
+			"oauth_client_secret_wo_version": writeOnlyVersionSchema("oauth_client_secret_wo", false),
+			"ldap_password_wo": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				WriteOnly:     true,
+				ConflictsWith: []string{"ldap_settings.0.password"},
+				RequiredWith:  []string{"ldap_password_wo_version", "ldap_settings"},
+				Description:   "Write-only password of the LDAP reader account used instead of `ldap_settings.password` (supports ephemeral values; never stored in Terraform state). Requires Terraform 1.11 or later.",
+			},
+			"ldap_password_wo_version":    writeOnlyVersionSchema("ldap_password_wo", false),
+			"force_secure_cookies":        {Type: schema.TypeBool, Optional: true, Computed: true, Description: "Whether Portainer always sets the Secure attribute on its authentication cookies, whatever scheme it detects. Enable it when Portainer runs behind a TLS-terminating proxy. Portainer 2.45 and later."},
 			"trust_on_first_connect":      {Type: schema.TypeBool, Optional: true, Computed: true, Description: "Whether edge agents are automatically trusted on their first connection."},
 			"edge_agent_checkin_interval": {Type: schema.TypeInt, Optional: true, Computed: true, Description: "Heartbeat interval (in seconds) used by edge agents to poll Portainer."},
 			"black_listed_labels": {
@@ -236,7 +319,7 @@ func resourceSettings() *schema.Resource {
 							Optional:    true,
 							Computed:    true,
 							Sensitive:   true,
-							Description: "OAuth client secret. Stored in state as a sensitive value.",
+							Description: "OAuth client secret. Stored in state as a sensitive value; use the top-level `oauth_client_secret_wo` to keep it out.",
 						},
 						"default_team_id":         {Type: schema.TypeInt, Optional: true, Computed: true, Description: "Identifier of the team that new OAuth users are added to by default. 0 means no default team."},
 						"logout_uri":              {Type: schema.TypeString, Optional: true, Computed: true, Description: "URL the user is redirected to after logging out from Portainer."},
@@ -342,7 +425,7 @@ func resourceSettings() *schema.Resource {
 							Optional:    true,
 							Computed:    true,
 							Sensitive:   true,
-							Description: "Password used by the LDAP reader account. Stored in state as a sensitive value.",
+							Description: "Password used by the LDAP reader account. Stored in state as a sensitive value; use the top-level `ldap_password_wo` to keep it out.",
 						},
 						"reader_dn": {Type: schema.TypeString, Optional: true, Computed: true, Description: "Distinguished Name of the LDAP account used to perform user lookups."},
 						"start_tls": {Type: schema.TypeBool, Optional: true, Computed: true, Description: "Whether to upgrade the LDAP connection to TLS using StartTLS."},
@@ -384,7 +467,7 @@ func resourceSettings() *schema.Resource {
 									"tls":             {Type: schema.TypeBool, Optional: true, Computed: true, Description: "Whether TLS is enabled for the LDAP connection."},
 									"tls_ca_cert":     {Type: schema.TypeString, Optional: true, Computed: true, Description: "PEM-encoded CA certificate used to verify the LDAP server certificate."},
 									"tls_cert":        {Type: schema.TypeString, Optional: true, Computed: true, Description: "PEM-encoded client certificate presented to the LDAP server."},
-									"tls_key":         {Type: schema.TypeString, Optional: true, Computed: true, Description: "PEM-encoded private key matching the client certificate."},
+									"tls_key":         {Type: schema.TypeString, Optional: true, Computed: true, Sensitive: true, Description: "PEM-encoded private key matching the client certificate."},
 									"tls_skip_verify": {Type: schema.TypeBool, Optional: true, Computed: true, Description: "Whether to skip verification of the LDAP server certificate."},
 								},
 							},
@@ -417,13 +500,17 @@ func resourceSettingsApply(ctx context.Context, d *schema.ResourceData, meta int
 		items := v.([]interface{})
 		if len(items) > 0 && items[0] != nil {
 			m := items[0].(map[string]interface{})
+			clientSecret, err := settingsBlockSecret(d, m, "client_secret", "oauth_client_secret_wo")
+			if err != nil {
+				return diag.FromErr(err)
+			}
 
 			oauth = &OAuthSettings{
 				AccessTokenURI:              m["access_token_uri"].(string),
 				AuthStyle:                   m["auth_style"].(int),
 				AuthorizationURI:            m["authorization_uri"].(string),
 				ClientID:                    m["client_id"].(string),
-				ClientSecret:                m["client_secret"].(string),
+				ClientSecret:                clientSecret,
 				DefaultTeamID:               m["default_team_id"].(int),
 				LogoutURI:                   m["logout_uri"].(string),
 				OAuthAutoCreateUsers:        m["oauth_auto_create_users"].(bool),
@@ -487,11 +574,15 @@ func resourceSettingsApply(ctx context.Context, d *schema.ResourceData, meta int
 		items := v.([]interface{})
 		if len(items) > 0 && items[0] != nil {
 			m := items[0].(map[string]interface{})
+			ldapPassword, err := settingsBlockSecret(d, m, "password", "ldap_password_wo")
+			if err != nil {
+				return diag.FromErr(err)
+			}
 
 			ldap = &LDAPSettings{
 				AnonymousMode:   m["anonymous_mode"].(bool),
 				AutoCreateUsers: m["auto_create_users"].(bool),
-				Password:        m["password"].(string),
+				Password:        ldapPassword,
 				ReaderDN:        m["reader_dn"].(string),
 				StartTLS:        m["start_tls"].(bool),
 				URL:             m["url"].(string),
@@ -582,7 +673,18 @@ func resourceSettingsApply(ctx context.Context, d *schema.ResourceData, meta int
 		LDAPSettings:              ldap,
 	}
 
-	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/settings", client.Endpoint), payload, nil); err != nil {
+	request := settingsUpdateRequest{
+		SettingsPayload:           payload,
+		EnableEdgeComputeFeatures: configuredBool(d, "enable_edge_compute_features"),
+		EnforceEdgeID:             configuredBool(d, "enforce_edge_id"),
+		TrustOnFirstConnect:       configuredBool(d, "trust_on_first_connect"),
+		DisableKubeRolesSync:      configuredBool(d, "disable_kube_roles_sync"),
+		DisableKubeShell:          configuredBool(d, "disable_kube_shell"),
+		DisableKubeconfigDownload: configuredBool(d, "disable_kubeconfig_download"),
+		ForceSecureCookies:        configuredBool(d, "force_secure_cookies"),
+	}
+
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/settings", client.Endpoint), request, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update settings: %w", err))
 	}
 	d.SetId("portainer-settings")
@@ -620,6 +722,7 @@ func resourceSettingsRead(ctx context.Context, d *schema.ResourceData, meta inte
 		"display_donation_header":       result.DisplayDonationHeader,
 		"display_external_contributors": result.DisplayExternalContributors,
 		"is_docker_desktop_extension":   result.IsDockerDesktopExtension,
+		"force_secure_cookies":          result.ForceSecureCookies,
 	}
 
 	// black_listed_labels

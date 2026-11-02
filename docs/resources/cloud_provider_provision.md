@@ -161,7 +161,7 @@ resource "portainer_cloud_provider_provision" "example" {
 ---
 
 ## 🌐 Civo, DigitalOcean, Linode - Payload Fields
-| Name               | Type     | Required | Description                      |
+| Payload key        | Type     | Required | Description                      |
 |--------------------|----------|----------|----------------------------------|
 | `credentialID`     | number   | ✅ yes   | ID of the Portainer cloud credential |
 | `name`             | string   | ✅ yes   | Cluster name                     |
@@ -175,7 +175,7 @@ resource "portainer_cloud_provider_provision" "example" {
 ---
 
 ## ☁️ Amazon (EKS) - Payload Fields
-| Name               | Type     | Required | Description                      |
+| Payload key        | Type     | Required | Description                      |
 |--------------------|----------|----------|----------------------------------|
 | `credentialID`     | number   | ✅ yes   | ID of the Portainer cloud credential |
 | `name`             | string   | ✅ yes   | Cluster name                     |
@@ -191,7 +191,7 @@ resource "portainer_cloud_provider_provision" "example" {
 ---
 
 ## ☁️ Azure (AKS) - Payload Fields
-| Name                  | Type     | Required | Description                      |
+| Payload key           | Type     | Required | Description                      |
 |-----------------------|----------|----------|----------------------------------|
 | `credentialID`        | number   | ✅ yes   | ID of the Portainer cloud credential |
 | `name`                | string   | ✅ yes   | Cluster name                     |
@@ -211,7 +211,7 @@ resource "portainer_cloud_provider_provision" "example" {
 ---
 
 ## ☸️ Google GKE - Payload Fields
-| Name               | Type     | Required | Description                      |
+| Payload key        | Type     | Required | Description                      |
 |--------------------|----------|----------|----------------------------------|
 | `credentialID`     | number   | ✅ yes   | ID of the Portainer cloud credential |
 | `name`             | string   | ✅ yes   | Cluster name                     |

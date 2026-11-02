@@ -35,6 +35,7 @@ func edgeEnvDiff(t *testing.T, envType string, stateAddr, configAddr string) *te
 			"type":                envType,
 			"group_id":            "1",
 			"environment_address": stateAddr,
+			"container_engine":    "docker",
 		},
 	}
 	config := terraform.NewResourceConfigRaw(map[string]interface{}{
@@ -63,6 +64,116 @@ func TestEnvironmentDiff_EdgeAgentAddressChangeForcesReplacement(t *testing.T) {
 	}
 	if !diff.RequiresNew() {
 		t.Error("a real address change on an Edge Agent environment must force replacement")
+	}
+}
+
+func TestEnvironmentDiff_EdgeAgentContainerEngineChangeForcesReplacement(t *testing.T) {
+	r := resourceEnvironment()
+	state := &terraform.InstanceState{
+		ID: "30",
+		Attributes: map[string]string{
+			"id":                  "30",
+			"name":                "edge-prod",
+			"type":                "4",
+			"group_id":            "1",
+			"environment_address": "https://portainer.example.com",
+			"container_engine":    "docker",
+		},
+	}
+	config := terraform.NewResourceConfigRaw(map[string]interface{}{
+		"name":                "edge-prod",
+		"type":                "4",
+		"environment_address": "https://portainer.example.com",
+		"container_engine":    "podman",
+	})
+
+	diff, err := r.Diff(context.Background(), state, config, nil)
+	if err != nil {
+		t.Fatalf("Diff failed: %v", err)
+	}
+	if diff == nil || !diff.RequiresNew() {
+		t.Error("changing the container engine on an existing Edge Agent environment must force replacement")
+	}
+}
+
+// TestEnvironmentDiff_EdgeAgentEmptyContainerEngineDoesNotReplace covers state
+// without a container engine: written by a provider version before
+// container_engine existed, or read from an Edge Agent environment created by
+// an older Portainer, which stores an empty ContainerEngine for Docker. Neither
+// may plan a replacement, which would rotate the edge key and cut off the agent.
+func TestEnvironmentDiff_EdgeAgentEmptyContainerEngineDoesNotReplace(t *testing.T) {
+	for name, attrs := range map[string]map[string]string{
+		"attribute missing": {},
+		"empty engine":      {"container_engine": ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			state := &terraform.InstanceState{
+				ID: "30",
+				Attributes: map[string]string{
+					"id":                  "30",
+					"name":                "edge-prod",
+					"type":                "4",
+					"group_id":            "1",
+					"environment_address": "https://portainer.example.com",
+				},
+			}
+			for k, v := range attrs {
+				state.Attributes[k] = v
+			}
+			config := terraform.NewResourceConfigRaw(map[string]interface{}{
+				"name":                "edge-prod",
+				"type":                "4",
+				"environment_address": "https://portainer.example.com",
+			})
+
+			diff, err := resourceEnvironment().Diff(context.Background(), state, config, nil)
+			if err != nil {
+				t.Fatalf("Diff failed: %v", err)
+			}
+			if diff != nil && diff.RequiresNew() {
+				t.Errorf("an empty container engine in state must not force replacement, diff: %v", diff.Attributes)
+			}
+		})
+	}
+}
+
+// TestEnvironmentDiff_EdgeAgentCreatePlansDockerEngine guards the create plan:
+// the "docker" default must reach Create, otherwise Portainer provisions a
+// Kubernetes Edge Agent (type 7) instead.
+func TestEnvironmentDiff_EdgeAgentCreatePlansDockerEngine(t *testing.T) {
+	config := terraform.NewResourceConfigRaw(map[string]interface{}{
+		"name":                "edge-prod",
+		"type":                "4",
+		"environment_address": "https://portainer.example.com",
+	})
+
+	diff, err := resourceEnvironment().Diff(context.Background(), nil, config, nil)
+	if err != nil {
+		t.Fatalf("Diff failed: %v", err)
+	}
+	attr, ok := diff.Attributes["container_engine"]
+	if !ok || attr.New != "docker" {
+		t.Errorf("expected the create plan to carry container_engine %q, got %+v", "docker", attr)
+	}
+}
+
+func TestEnvironmentRead_EdgeAgentEmptyContainerEngineReadsAsDocker(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/30", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 30, "Name": "edge-prod", "Type": 4, "GroupId": 1,
+		"ContainerEngine": "", "TagIds": []int{},
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	d.SetId("30")
+	_ = d.Set("type", 4)
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if got := d.Get("container_engine").(string); got != "docker" {
+		t.Errorf("expected an empty ContainerEngine to read as %q, got %q", "docker", got)
 	}
 }
 

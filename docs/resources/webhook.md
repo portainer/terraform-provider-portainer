@@ -30,7 +30,7 @@ terraform apply
 | `endpoint_id`  | number | ✅ yes    | ID of the Portainer environment (endpoint).                                                                  |
 | `resource_id`  | string | ✅ yes    | ID of the target resource (Stack or Registry).                                                               |
 | `registry_id`  | number | 🚫 optional | ID of the registry (optional, used when webhook is linked to a registry).                                  |
-| `webhook_type` | number | ✅ yes    | Type of the webhook:<br>• `1` = Stack<br>• *(reserved for future use)* other values for Registries or Images. |
+| `webhook_type` | number | ✅ yes    | Type of the webhook:<br>• `1` = Docker Swarm service (the only type Community Edition accepts)<br>• `2` = container (Business Edition only) |
 | `reassign_on_change` | bool | 🚫 no | Reassign the existing webhook instead of replacing it when `resource_id` or `webhook_type` changes, keeping its token. **Business Edition only.** Defaults to `false`. |
 
 ## Attributes Reference
@@ -55,3 +55,13 @@ resource "portainer_webhook" "deploy" {
 ```
 
 It is off by default on purpose: Portainer CE has no reassign endpoint, so turning it on there makes the apply fail rather than replace the webhook the way it always has.
+
+## Import
+
+Webhooks can be imported using their numeric ID (listed by `GET /api/webhooks`):
+
+```shell
+terraform import portainer_webhook.example 12
+```
+
+`reassign_on_change` is not stored in Portainer and takes its default after an import.

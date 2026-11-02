@@ -55,8 +55,9 @@ func TestDockerPluginCov2_Import_BadEndpointID(t *testing.T) {
 }
 
 // TestDockerPluginCov2_Create_NoName covers the create path where no name is
-// supplied: the query omits the &name= segment and the ID is set to the empty
-// name. The enable branch is skipped (enable defaults false).
+// supplied: the query omits the name parameter and the ID falls back to the
+// remote, which is what Docker names the plugin. The enable branch is skipped
+// (enable defaults false).
 func TestDockerPluginCov2_Create_NoName(t *testing.T) {
 	mock := NewMockServer(t)
 
@@ -76,12 +77,13 @@ func TestDockerPluginCov2_Create_NoName(t *testing.T) {
 	if post == nil {
 		t.Fatal("expected pull POST")
 	}
-	if got := post.Query; got != "remote=vieux%2Fsshfs%3Alatest" && got != "remote=vieux/sshfs:latest" {
-		// The query is built with raw string concatenation (no escaping); accept
-		// either the raw or transport-escaped form.
-		t.Logf("query (informational): %q", got)
+	if got := post.Query; got != "remote=vieux%2Fsshfs%3Alatest" {
+		t.Errorf("query: expected only the escaped remote, got %q", got)
 	}
-	if d.Id() != "" {
-		t.Errorf("expected empty ID when name unset, got %q", d.Id())
+	if d.Id() != "vieux/sshfs:latest" {
+		t.Errorf("expected the remote as ID when name unset, got %q", d.Id())
+	}
+	if got := d.Get("name"); got != "vieux/sshfs:latest" {
+		t.Errorf("name: expected the remote, got %v", got)
 	}
 }

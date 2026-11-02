@@ -21,12 +21,16 @@ type OpenAMTSettings struct {
 	MpsUser          string `json:"mpsuser"`
 }
 
+// openAMTDeprecation is shown for every OpenAMT resource.
+const openAMTDeprecation = "Portainer deprecated OpenAMT in 2.36 and removed it in 2.42, so this resource only works against older Portainer versions. It will be removed in a future major release of the provider."
+
 func resourceOpenAMT() *schema.Resource {
 	return &schema.Resource{
-		CreateContext: resourceOpenAMTCreate,
-		ReadContext:   resourceOpenAMTRead,
-		DeleteContext: resourceOpenAMTDelete,
-		UpdateContext: nil,
+		DeprecationMessage: openAMTDeprecation,
+		CreateContext:      resourceOpenAMTCreate,
+		ReadContext:        resourceOpenAMTRead,
+		DeleteContext:      resourceOpenAMTDelete,
+		UpdateContext:      nil,
 		Schema: map[string]*schema.Schema{
 			"cert_file_content":  {Type: schema.TypeString, Required: true, ForceNew: true, Sensitive: true, Description: "Sensitive base64-encoded content of the OpenAMT provisioning certificate file."},
 			"cert_file_name":     {Type: schema.TypeString, Required: true, ForceNew: true, Description: "File name of the OpenAMT provisioning certificate."},
@@ -54,7 +58,7 @@ func resourceOpenAMTCreate(ctx context.Context, d *schema.ResourceData, meta int
 		MpsUser:          d.Get("mpsuser").(string),
 	}
 
-	resp, err := client.DoRequest("POST", "/open_amt", nil, settings)
+	resp, err := client.DoRequest(ctx, "POST", "/open_amt", nil, settings)
 	if err != nil {
 		return diag.FromErr(err)
 	}

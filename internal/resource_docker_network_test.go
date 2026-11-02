@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"testing"
 )
 
@@ -389,5 +390,62 @@ func TestDockerNetworkResource_NoUpdate(t *testing.T) {
 	r := resourceDockerNetwork()
 	if r.UpdateContext != nil {
 		t.Error("expected no Update function (network is ForceNew/immutable)")
+	}
+}
+
+// TestDockerNetworkRead_IgnoresDerivedOptions is the regression test for a
+// network that planned a replacement on every run: Docker 28+ copies
+// EnableIPv4/EnableIPv6 into the options, and options force a new network.
+// A derived option the user configured is still refreshed.
+func TestDockerNetworkRead_IgnoresDerivedOptions(t *testing.T) {
+	cases := []struct {
+		name       string
+		configured map[string]interface{}
+		want       map[string]interface{}
+	}{
+		{
+			name:       "not configured",
+			configured: map[string]interface{}{"com.docker.network.bridge.enable_icc": "true"},
+			want:       map[string]interface{}{"com.docker.network.bridge.enable_icc": "true"},
+		},
+		{
+			name: "configured",
+			configured: map[string]interface{}{
+				"com.docker.network.bridge.enable_icc": "true",
+				"com.docker.network.enable_ipv6":       "false",
+			},
+			want: map[string]interface{}{
+				"com.docker.network.bridge.enable_icc": "true",
+				"com.docker.network.enable_ipv6":       "false",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := NewMockServer(t)
+			mock.On("GET", "/endpoints/1/docker/networks/net1", RespondJSON(http.StatusOK, map[string]interface{}{
+				"Name":   "your-network",
+				"Driver": "bridge",
+				"Scope":  "local",
+				"Options": map[string]interface{}{
+					"com.docker.network.bridge.enable_icc": "true",
+					"com.docker.network.enable_ipv4":       "true",
+					"com.docker.network.enable_ipv6":       "false",
+				},
+			}))
+
+			r := resourceDockerNetwork()
+			d := r.TestResourceData()
+			d.SetId("net1")
+			_ = d.Set("endpoint_id", 1)
+			_ = d.Set("options", tc.configured)
+
+			if err := rcRead(r, d, mock.Client()); err != nil {
+				t.Fatalf("Read failed: %v", err)
+			}
+			if got := d.Get("options"); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("options: expected %v, got %v", tc.want, got)
+			}
+		})
 	}
 }

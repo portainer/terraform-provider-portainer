@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"net/http"
 	"testing"
 )
@@ -13,6 +14,7 @@ func TestEndpointSettingsCreate_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 
 	mock.On("PUT", "/endpoints/7/settings", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	mock.On("GET", "/endpoints/7", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 7}))
 
 	r := resourceEndpointSettings()
 	d := r.TestResourceData()
@@ -102,6 +104,7 @@ func TestEndpointSettingsCreate_Minimal(t *testing.T) {
 	mock := NewMockServer(t)
 
 	mock.On("PUT", "/endpoints/1/settings", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	mock.On("GET", "/endpoints/1", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 1}))
 
 	r := resourceEndpointSettings()
 	d := r.TestResourceData()
@@ -132,6 +135,7 @@ func TestEndpointSettingsUpdate_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 
 	mock.On("PUT", "/endpoints/3/settings", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	mock.On("GET", "/endpoints/3", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 3}))
 
 	r := resourceEndpointSettings()
 	d := r.TestResourceData()
@@ -153,18 +157,75 @@ func TestEndpointSettingsUpdate_HappyPath(t *testing.T) {
 	}
 }
 
-// TestEndpointSettingsRead_SetsID verifies the no-op Read still pins the ID
-// to endpoint_id.
-func TestEndpointSettingsRead_SetsID(t *testing.T) {
+// TestEndpointSettingsRead_RefreshesManagedSettings verifies Read writes back
+// what Portainer reports for the blocks the configuration manages.
+func TestEndpointSettingsRead_RefreshesManagedSettings(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/42", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id":                  42,
+		"EnableGPUManagement": true,
+		"Gpus":                []map[string]string{{"name": "gpu0", "value": "0"}},
+		"SecuritySettings": map[string]bool{
+			"allowBindMountsForRegularUsers":  true,
+			"allowSecurityOptForRegularUsers": true,
+		},
+	}))
 	r := resourceEndpointSettings()
 	d := r.TestResourceData()
 	_ = d.Set("endpoint_id", 42)
+	_ = d.Set("security_settings", []interface{}{map[string]interface{}{"allow_bind_mounts": false}})
 
-	if err := rcRead(r, d, nil); err != nil {
+	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if d.Id() != "42" {
 		t.Errorf("expected ID %q, got %q", "42", d.Id())
+	}
+	if !d.Get("enable_gpu_management").(bool) {
+		t.Error("enable_gpu_management: expected true from Portainer")
+	}
+	if !d.Get("security_settings.0.allow_bind_mounts").(bool) || !d.Get("security_settings.0.allow_security_opt").(bool) {
+		t.Errorf("security_settings: expected Portainer's values, got %v", d.Get("security_settings"))
+	}
+	if n := len(d.Get("gpus").([]interface{})); n != 0 {
+		t.Errorf("gpus: not configured, expected it left alone, got %d entries", n)
+	}
+}
+
+func TestEndpointSettingsRead_EnvironmentGone(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/42", RespondJSON(http.StatusNotFound, map[string]string{"message": "not found"}))
+	r := resourceEndpointSettings()
+	d := r.TestResourceData()
+	d.SetId("42")
+	_ = d.Set("endpoint_id", 42)
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected the resource dropped with its environment, got ID %q", d.Id())
+	}
+}
+
+func TestEndpointSettingsImport_FillsBlocks(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/5", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id":               5,
+		"Gpus":             []map[string]string{{"name": "gpu0", "value": "0"}},
+		"SecuritySettings": map[string]bool{"allowPrivilegedModeForRegularUsers": true},
+	}))
+	r := resourceEndpointSettings()
+	d := r.TestResourceData()
+	d.SetId("5")
+
+	out, err := r.Importer.StateContext(context.Background(), d, mock.Client())
+	if err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+	got := out[0]
+	if got.Get("endpoint_id").(int) != 5 || got.Get("gpus.0.name") != "gpu0" || !got.Get("security_settings.0.allow_privileged_mode").(bool) {
+		t.Errorf("import did not fill the settings: endpoint_id=%v gpus=%v security=%v", got.Get("endpoint_id"), got.Get("gpus"), got.Get("security_settings"))
 	}
 }
 

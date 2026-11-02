@@ -51,6 +51,8 @@ func TestDeployCov3_Swarm_HappyPath(t *testing.T) {
 	mock.On("GET", "/stacks/7/file", RespondJSON(http.StatusOK, map[string]interface{}{
 		"StackFileContent": "version: '3'\n",
 	}))
+	// waitForStackLockReleased polls the stack around the update.
+	mock.On("GET", "/stacks/7", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 7, "Status": 1}))
 	mock.On("PUT", "/stacks/7", RespondJSON(http.StatusOK, map[string]interface{}{}))
 
 	r := resourceDeploy()

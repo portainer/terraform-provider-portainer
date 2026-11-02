@@ -13,7 +13,7 @@ import (
 //   - EndpointCreate is POST /endpoints with Content-Type: multipart/form-data
 //     (NOT JSON). To assert the create payload we inspect raw form fields in
 //     the request body string, not DecodeJSON.
-//   - findExistingEnvironmentByName(...) always runs first and calls
+//   - findExistingEnvironmentByName(context.Background(), ...) always runs first and calls
 //     GET /endpoints. Every Create test must register this list mock.
 //   - EndpointInspect is GET /endpoints/{id} returning a flat JSON model
 //     with capitalized field names (Id, Name, Type, GroupId, URL, TagIds,
@@ -114,6 +114,7 @@ func TestEnvironmentCreate_TypeEdgeAgent_HappyPath(t *testing.T) {
 	_ = d.Set("name", "edge-prod")
 	_ = d.Set("environment_address", "")
 	_ = d.Set("type", 4)
+	_ = d.Set("container_engine", "docker")
 
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -156,6 +157,39 @@ func TestEnvironmentCreate_TypeEdgeAgent_HappyPath(t *testing.T) {
 	}
 	if got := d.Get("edge_key"); got != "edge-key-xyz" {
 		t.Errorf("edge_key: expected %q, got %v", "edge-key-xyz", got)
+	}
+}
+
+func TestEnvironmentCreate_TypeEdgeAgent_Podman(t *testing.T) {
+	mock := NewMockServer(t)
+
+	mock.On("GET", "/endpoints", RespondJSON(http.StatusOK, []map[string]interface{}{}))
+	mock.On("POST", "/endpoints", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 10, "Name": "edge-podman", "Type": 4,
+	}))
+	mock.On("GET", "/endpoints/10", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 10, "Name": "edge-podman", "Type": 4, "GroupId": 1,
+		"ContainerEngine": "podman", "TagIds": []int{},
+	}))
+
+	r := resourceEnvironment()
+	d := r.TestResourceData()
+	_ = d.Set("name", "edge-podman")
+	_ = d.Set("environment_address", "")
+	_ = d.Set("type", 4)
+	_ = d.Set("container_engine", "podman")
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	post := mock.FindRequest("POST", "/endpoints")
+	if post == nil {
+		t.Fatal("expected POST /endpoints to be sent")
+	}
+	body := string(post.Body)
+	if !strings.Contains(body, `name="ContainerEngine"`) || !strings.Contains(body, "\r\n\r\npodman\r\n") {
+		t.Errorf("expected ContainerEngine=podman in multipart body, body=%q", body)
 	}
 }
 
@@ -396,6 +430,9 @@ func TestEnvironmentDiffSuppressFunc_EdgeAgentTypes(t *testing.T) {
 		// Unrelated type changes must always surface.
 		{"1→2 (Docker → Agent)", "1", "2", false},
 		{"5→7 (Kubernetes → KubeEdge)", "5", "7", false},
+		// An Agent on Kubernetes is reported as type 6 once it connects.
+		{"6→2 (agent conversion masked)", "6", "2", true},
+		{"2→6 (real change reported)", "2", "6", false},
 		{"3→1 (Azure → Docker)", "3", "1", false},
 	}
 
@@ -678,9 +715,9 @@ func TestEnvironmentUpdate_NonEdgeSendsFullPayload(t *testing.T) {
 
 // TestEnvironmentUpdate_EdgeAgentSkipsConnectionFields verifies the
 // edge-agent guard in Update: when type is 4 or 7, the PUT body must NOT
-// carry name/url/tls fields (sending them triggers a proxy/tunnel
-// registration attempt that fails when the agent is not yet connected).
-// Only tag_ids / access-policies metadata fields are allowed through.
+// carry url/tls fields (sending them triggers a proxy/tunnel registration
+// attempt that fails when the agent is not yet connected). Metadata such as
+// name, group and tag_ids still goes through.
 func TestEnvironmentUpdate_EdgeAgentSkipsConnectionFields(t *testing.T) {
 	mock := NewMockServer(t)
 
@@ -721,8 +758,8 @@ func TestEnvironmentUpdate_EdgeAgentSkipsConnectionFields(t *testing.T) {
 	// The edge-agent branch must NOT include connection fields. The SDK
 	// uses `omitempty` on these JSON tags so an empty/zero value is
 	// elided from the body — that is exactly what we expect.
-	if _, present := payload["name"]; present {
-		t.Errorf("expected PUT body to OMIT 'name' for edge agent, but it was present: %v", payload["name"])
+	if payload["name"] != "edge-prod" {
+		t.Errorf("expected PUT body to carry name %q for edge agent, got %v", "edge-prod", payload["name"])
 	}
 	if _, present := payload["url"]; present {
 		t.Errorf("expected PUT body to OMIT 'url' for edge agent, but it was present: %v", payload["url"])
@@ -790,27 +827,36 @@ func TestEnvironmentRead_EdgeAgentAdoptsChangedURL(t *testing.T) {
 	}
 }
 
-// TestEnvironmentRead_NonEdgeUsesAPIURL verifies the scheme-preserving branch is
-// edge-agent-only: directly-connected environments keep the URL Portainer
-// reports verbatim.
-func TestEnvironmentRead_NonEdgeUsesAPIURL(t *testing.T) {
-	mock := NewMockServer(t)
-	mock.On("GET", "/endpoints/22", RespondJSON(http.StatusOK, map[string]interface{}{
-		"Id": 22, "Name": "docker", "Type": 1, "GroupId": 1,
-		"URL": "docker.example.com:2375",
-	}))
-
-	r := resourceEnvironment()
-	d := r.TestResourceData()
-	d.SetId("22")
-	_ = d.Set("type", 1)
-	_ = d.Set("environment_address", "https://docker.example.com:2375")
-
-	if err := rcRead(r, d, mock.Client()); err != nil {
-		t.Fatalf("Read failed: %v", err)
+// TestEnvironmentRead_AgentKeepsURLScheme is the regression test for an Agent
+// environment that planned "host:9001" -> "tcp://host:9001" on every run:
+// Portainer stores the agent URL without the scheme too. A host change still
+// comes through.
+func TestEnvironmentRead_AgentKeepsURLScheme(t *testing.T) {
+	cases := []struct{ apiURL, want string }{
+		{"172.20.0.3:9001", "tcp://172.20.0.3:9001"},
+		{"172.20.0.9:9001", "172.20.0.9:9001"},
 	}
-	if got := d.Get("environment_address"); got != "docker.example.com:2375" {
-		t.Errorf("environment_address: expected API value, got %v", got)
+	for _, tc := range cases {
+		t.Run(tc.apiURL, func(t *testing.T) {
+			mock := NewMockServer(t)
+			mock.On("GET", "/endpoints/22", RespondJSON(http.StatusOK, map[string]interface{}{
+				"Id": 22, "Name": "k8s", "Type": 6, "GroupId": 1,
+				"URL": tc.apiURL,
+			}))
+
+			r := resourceEnvironment()
+			d := r.TestResourceData()
+			d.SetId("22")
+			_ = d.Set("type", 2)
+			_ = d.Set("environment_address", "tcp://172.20.0.3:9001")
+
+			if err := rcRead(r, d, mock.Client()); err != nil {
+				t.Fatalf("Read failed: %v", err)
+			}
+			if got := d.Get("environment_address"); got != tc.want {
+				t.Errorf("environment_address: expected %q, got %v", tc.want, got)
+			}
+		})
 	}
 }
 
@@ -936,7 +982,7 @@ func TestEnvironmentRead_NonEdgeIgnoresEdgeKey(t *testing.T) {
 	d := r.TestResourceData()
 	d.SetId("26")
 	_ = d.Set("type", 1)
-	_ = d.Set("environment_address", "tcp://docker.example.com:2375")
+	_ = d.Set("environment_address", "tcp://old.example.com:2375")
 
 	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
@@ -1121,4 +1167,26 @@ func TestEnvironmentCreate_Type6_RemapsToAgent(t *testing.T) {
 	// And conversely, the literal value "6" should NOT appear as the
 	// EndpointCreationType value (it may appear elsewhere — group ID, etc. —
 	// so we only check that the value field is 2, not that "6" is absent).
+}
+
+// TestEnvironmentAddressDiffSuppress covers state written before Read kept the
+// scheme: it holds the scheme-less address Portainer stores for agents, which
+// must not plan the configured "tcp://" form again.
+func TestEnvironmentAddressDiffSuppress(t *testing.T) {
+	suppress := resourceEnvironment().Schema["environment_address"].DiffSuppressFunc
+	cases := []struct {
+		old, new string
+		want     bool
+	}{
+		{"172.20.0.3:9001", "tcp://172.20.0.3:9001", true},
+		{"portainer.example.com", "https://portainer.example.com", true},
+		{"172.20.0.3:9001", "tcp://172.20.0.9:9001", false},
+		{"tcp://172.20.0.3:9001", "https://172.20.0.3:9001", false},
+		{"", "tcp://172.20.0.3:9001", false},
+	}
+	for _, tc := range cases {
+		if got := suppress("environment_address", tc.old, tc.new, nil); got != tc.want {
+			t.Errorf("suppress(%q, %q) = %v, want %v", tc.old, tc.new, got, tc.want)
+		}
+	}
 }

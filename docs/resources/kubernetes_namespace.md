@@ -37,6 +37,8 @@ resource "portainer_kubernetes_namespace" "test" {
 - Resource quotas are applied differently depending on Portainer license:
   - **CE (Community Edition)**: only `cpu` and `memory` keys are applied.
   - **BE (Business/Enterprise Edition)**: full quota with `cpu_request`, `cpu_limit`, `memory_request`, and `memory_limit`.
+  - The quota is read back with the keys the configuration uses. On CE, Portainer applies `cpu`/`memory` as both the limit and the request.
+- Without `resource_quota` the namespace is created without a quota.
 - You can use `terraform destroy` to delete the namespace completely.
 
 ---

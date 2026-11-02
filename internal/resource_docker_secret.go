@@ -87,16 +87,15 @@ func resourceDockerSecret() *schema.Resource {
 	}
 }
 
-func findExistingDockerSecretByName(client *APIClient, endpointID int, name string) (string, error) {
+func findExistingDockerSecretByName(ctx context.Context, client *APIClient, endpointID int, name string) (string, error) {
 	url := fmt.Sprintf("%s/endpoints/%d/docker/secrets", client.Endpoint, endpointID)
 	var secrets []map[string]interface{}
-	if err := doJSON(context.Background(), client, http.MethodGet, url, nil, &secrets); err != nil {
+	if err := doJSON(ctx, client, http.MethodGet, url, nil, &secrets); err != nil {
 		return "", fmt.Errorf("failed to list secrets: %w", err)
 	}
 
 	for _, s := range secrets {
-		if s["Spec"] != nil {
-			spec := s["Spec"].(map[string]interface{})
+		if spec, ok := s["Spec"].(map[string]interface{}); ok {
 			if spec["Name"] == name {
 				if id, ok := s["ID"].(string); ok {
 					return id, nil
@@ -107,15 +106,16 @@ func findExistingDockerSecretByName(client *APIClient, endpointID int, name stri
 	return "", nil
 }
 
-func buildSecretPayload(d *schema.ResourceData) map[string]interface{} {
+func buildSecretPayload(d *schema.ResourceData) (map[string]interface{}, error) {
 	var dataValue string
 	if v, ok := d.GetOk("data_wo_version"); ok && v.(int) != 0 && d.HasChange("data_wo_version") {
 		raw, diags := d.GetRawConfigAt(cty.GetAttrPath("data_wo"))
 		if diags.HasError() {
-			fmt.Printf("[ERROR] Unable to read data_wo: %v\n", diags)
-		} else if raw.IsKnown() && !raw.IsNull() {
+			// Going on would store the secret without its data.
+			return nil, fmt.Errorf("unable to read data_wo: %v", diags)
+		}
+		if raw.IsKnown() && !raw.IsNull() {
 			dataValue = raw.AsString()
-			fmt.Printf("[DEBUG] Read write-only secret from raw config (len=%d)\n", len(dataValue))
 		}
 	}
 	if dataValue == "" {
@@ -148,8 +148,7 @@ func buildSecretPayload(d *schema.ResourceData) map[string]interface{} {
 		}
 	}
 
-	fmt.Printf("[DEBUG] Creating Docker secret %s with data length: %d\n", d.Get("name").(string), len(dataValue))
-	return payload
+	return payload, nil
 }
 
 type dockerSecretCreateResponse struct {
@@ -166,14 +165,17 @@ func resourceDockerSecretCreate(ctx context.Context, d *schema.ResourceData, met
 	endpointID := d.Get("endpoint_id").(int)
 	name := d.Get("name").(string)
 
-	if existingID, err := findExistingDockerSecretByName(client, endpointID, name); err != nil {
+	if existingID, err := findExistingDockerSecretByName(ctx, client, endpointID, name); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to check for existing secret: %w", err))
 	} else if existingID != "" {
 		d.SetId(existingID)
 		return resourceDockerSecretUpdate(ctx, d, meta)
 	}
 
-	payload := buildSecretPayload(d)
+	payload, err := buildSecretPayload(d)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	var response dockerSecretCreateResponse
 
@@ -281,7 +283,10 @@ func resourceDockerSecretUpdate(ctx context.Context, d *schema.ResourceData, met
 	endpointID := d.Get("endpoint_id").(int)
 	id := d.Id()
 
-	payload := buildSecretPayload(d)
+	payload, err := buildSecretPayload(d)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/docker/secrets/%s/update", client.Endpoint, endpointID, id)
 	if err := doJSON(ctx, client, http.MethodPost, url, payload, nil); err != nil {

@@ -51,3 +51,11 @@ resource "portainer_registry_access" "dev_team_access" {
 | Name | Description                |
 | ---- | -------------------------- |
 | `id` | ID of the resource control |
+
+## Import
+
+Access entries can be imported as `<registry_id>/<endpoint_id>/team/<team_id>` or `<registry_id>/<endpoint_id>/user/<user_id>`:
+
+```shell
+terraform import portainer_registry_access.example 3/1/team/7
+```

@@ -18,6 +18,7 @@ variable "environment_id" {
 }
 
 variable "controllers" {
+  # k3d, which the e2e tests run on, ships Traefik.
   description = "List of ingress controller configurations."
   type = list(object({
     name         = string
@@ -29,11 +30,11 @@ variable "controllers" {
   }))
   default = [
     {
-      name         = "nginx"
-      class_name   = "nginx"
-      type         = "ingress"
+      name         = "traefik"
+      class_name   = "traefik"
+      type         = "traefik"
       availability = true
-      used         = true
+      used         = false
       new          = false
     }
   ]

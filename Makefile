@@ -242,7 +242,7 @@ install-kubectl:
 
 ### Security
 .PHONY: sec
-sec: trivy trivy-iac govulncheck lint
+sec: trivy trivy-iac govulncheck
 
 .PHONY: trivy
 trivy:
@@ -269,7 +269,7 @@ lint:
 	# v2 module path, pinned: the v1 line cannot read Go 1.27 export data
 	# ("export data version 4 is greater than maximum supported version 2"),
 	# and @latest on the unversioned path resolves to the last v1 release.
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 	@echo "Running golangci-lint..."
 	$(GOBIN)/golangci-lint run ./internal/ .
 

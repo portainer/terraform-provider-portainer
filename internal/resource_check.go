@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -105,12 +106,14 @@ func resourceCheckCreate(ctx context.Context, d *schema.ResourceData, meta inter
 
 	if wait > 0 {
 		fmt.Fprintf(&out, "Waiting %d seconds before first check...\n", wait)
-		time.Sleep(time.Duration(wait) * time.Second)
+		if err := sleepCtx(ctx, time.Duration(wait)*time.Second); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	// Detect Swarm
 	swURL := fmt.Sprintf("%s/endpoints/%d/docker/swarm", client.Endpoint, endpointID)
-	swBody, swCode, err := apiGETWithCode(swURL, client.APIKey, client)
+	swBody, swCode, err := apiGETWithCodeCtx(ctx, swURL, client.APIKey, client)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -118,12 +121,12 @@ func resourceCheckCreate(ctx context.Context, d *schema.ResourceData, meta inter
 
 	if isSwarm {
 		out.WriteString("Docker Swarm detected — using swarm check logic.\n")
-		if err := checkSwarmServices(client, endpointID, revision, desiredState, fullServices, maxRetries, waitBetween, &out); err != nil {
+		if err := checkSwarmServices(ctx, client, endpointID, revision, desiredState, fullServices, maxRetries, waitBetween, &out); err != nil {
 			return diag.FromErr(err)
 		}
 	} else {
 		out.WriteString("Docker Standalone detected — using container check logic.\n")
-		if err := checkStandaloneContainers(client, endpointID, revision, desiredState, fullServices, maxRetries, waitBetween, &out); err != nil {
+		if err := checkStandaloneContainers(ctx, client, endpointID, revision, desiredState, fullServices, maxRetries, waitBetween, &out); err != nil {
 			return diag.FromErr(err)
 		}
 	}
@@ -135,7 +138,7 @@ func resourceCheckCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	return nil
 }
 
-func checkSwarmServices(client *APIClient, endpointID int, revision, desiredState string, fullServices []string, maxRetries, waitBetween int, out *strings.Builder) error {
+func checkSwarmServices(ctx context.Context, client *APIClient, endpointID int, revision, desiredState string, fullServices []string, maxRetries, waitBetween int, out *strings.Builder) error {
 	imgRe := regexp.MustCompile(`^(.+?):([^@]+)(?:@.*)?$`)
 
 	for _, service := range fullServices {
@@ -143,13 +146,15 @@ func checkSwarmServices(client *APIClient, endpointID int, revision, desiredStat
 		for attempt := 1; attempt <= maxRetries; attempt++ {
 			filter := fmt.Sprintf(`{"service":{"%s":true},"desired-state":{"%s":true}}`, service, desiredState)
 			tasksURL := fmt.Sprintf("%s/endpoints/%d/docker/tasks?filters=%s", client.Endpoint, endpointID, url.QueryEscape(filter))
-			tasksBody, code, err := apiGETWithCode(tasksURL, client.APIKey, client)
+			tasksBody, code, err := apiGETWithCodeCtx(ctx, tasksURL, client.APIKey, client)
 			if err != nil {
 				return fmt.Errorf("error fetching tasks for %s: %w", service, err)
 			}
 			if code != 200 {
 				fmt.Fprintf(out, "Attempt %d/%d: failed to fetch tasks (status %d)\n", attempt, maxRetries, code)
-				time.Sleep(time.Duration(waitBetween) * time.Second)
+				if err := sleepCtx(ctx, time.Duration(waitBetween)*time.Second); err != nil {
+					return err
+				}
 				continue
 			}
 
@@ -159,7 +164,9 @@ func checkSwarmServices(client *APIClient, endpointID int, revision, desiredStat
 			}
 			if len(tasks) == 0 {
 				fmt.Fprintf(out, "Attempt %d/%d: no tasks found for service %q\n", attempt, maxRetries, service)
-				time.Sleep(time.Duration(waitBetween) * time.Second)
+				if err := sleepCtx(ctx, time.Duration(waitBetween)*time.Second); err != nil {
+					return err
+				}
 				continue
 			}
 
@@ -168,7 +175,8 @@ func checkSwarmServices(client *APIClient, endpointID int, revision, desiredStat
 				spec := mustMap(t["Spec"])
 				cs := mustMap(spec["ContainerSpec"])
 				image, _ := cs["Image"].(string)
-				state := strings.ToLower(mustMap(t["Status"])["State"].(string))
+				taskState, _ := mustMap(t["Status"])["State"].(string)
+				state := strings.ToLower(taskState)
 
 				if m := imgRe.FindStringSubmatch(image); len(m) == 3 {
 					if m[2] == revision && state == desiredState {
@@ -185,7 +193,9 @@ func checkSwarmServices(client *APIClient, endpointID int, revision, desiredStat
 			} else {
 				fmt.Fprintf(out, "Attempt %d/%d: %d/%d tasks match revision %q and state %q\n",
 					attempt, maxRetries, okReplicas, len(tasks), revision, desiredState)
-				time.Sleep(time.Duration(waitBetween) * time.Second)
+				if err := sleepCtx(ctx, time.Duration(waitBetween)*time.Second); err != nil {
+					return err
+				}
 			}
 		}
 		if !success {
@@ -196,14 +206,17 @@ func checkSwarmServices(client *APIClient, endpointID int, revision, desiredStat
 	return nil
 }
 
-func checkStandaloneContainers(client *APIClient, endpointID int, revision, desiredState string, fullServices []string, maxRetries, waitBetween int, out *strings.Builder) error {
+func checkStandaloneContainers(ctx context.Context, client *APIClient, endpointID int, revision, desiredState string, fullServices []string, maxRetries, waitBetween int, out *strings.Builder) error {
 	for _, service := range fullServices {
 		success := false
 		for attempt := 1; attempt <= maxRetries; attempt++ {
 			containersURL := fmt.Sprintf("%s/endpoints/%d/docker/containers/json?all=1", client.Endpoint, endpointID)
-			containersBody, code, err := apiGETWithCode(containersURL, client.APIKey, client)
-			if err != nil || code != 200 {
-				return fmt.Errorf("failed to list containers (status %d): %w", code, err)
+			containersBody, code, err := apiGETWithCodeCtx(ctx, containersURL, client.APIKey, client)
+			if err != nil {
+				return fmt.Errorf("failed to list containers: %w", err)
+			}
+			if code != http.StatusOK {
+				return fmt.Errorf("failed to list containers: status %d", code)
 			}
 
 			var containers []map[string]interface{}
@@ -213,12 +226,14 @@ func checkStandaloneContainers(client *APIClient, endpointID int, revision, desi
 
 			for _, c := range containers {
 				nameList, _ := c["Names"].([]interface{})
-				state := strings.ToLower(c["State"].(string))
+				containerState, _ := c["State"].(string)
+				state := strings.ToLower(containerState)
 				image, _ := c["Image"].(string)
 				if len(nameList) == 0 {
 					continue
 				}
-				name := strings.TrimPrefix(nameList[0].(string), "/")
+				firstName, _ := nameList[0].(string)
+				name := strings.TrimPrefix(firstName, "/")
 
 				fmt.Fprintf(out, "DEBUG: checking container=%q (image=%q, state=%q)\n", name, image, state)
 
@@ -242,7 +257,9 @@ func checkStandaloneContainers(client *APIClient, endpointID int, revision, desi
 				break
 			} else {
 				fmt.Fprintf(out, "Attempt %d/%d: container %q not yet matching desired revision/state\n", attempt, maxRetries, service)
-				time.Sleep(time.Duration(waitBetween) * time.Second)
+				if err := sleepCtx(ctx, time.Duration(waitBetween)*time.Second); err != nil {
+					return err
+				}
 			}
 		}
 

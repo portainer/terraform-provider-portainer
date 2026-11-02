@@ -16,6 +16,7 @@ resource "portainer_endpoint_settings" "example" {
     allow_privileged_mode        = false
     allow_stack_management       = true
     allow_sysctl_setting         = true
+    allow_security_opt           = false
     allow_volume_browser         = true
     enable_host_management       = true
   }
@@ -81,6 +82,7 @@ terraform apply
 | `allow_privileged_mode`      | bool   | 🚫 optional | Allow privileged containers                                  |
 | `allow_stack_management`     | bool   | 🚫 optional | Allow stack management                                       |
 | `allow_sysctl_setting`       | bool   | 🚫 optional | Allow sysctl settings                                        |
+| `allow_security_opt`         | bool   | 🚫 optional | Allow security options (`--security-opt`) on containers      |
 | `allow_volume_browser`       | bool   | 🚫 optional | Allow volume browser                                         |
 | `enable_host_management`     | bool   | 🚫 optional | Enable host management in the UI                             |
 
@@ -89,3 +91,13 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` |ID of the resource (same as `endpoint_id`) |
+
+## Import
+
+Environment settings can be imported using the numeric environment ID:
+
+```shell
+terraform import portainer_endpoint_settings.example 3
+```
+
+The import fills in `enable_gpu_management`, `gpus` and `security_settings` from Portainer. Business Edition settings (`change_window`, `deployment_options`, `enable_image_notification`) are not returned by the API and stay as configured.

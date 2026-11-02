@@ -73,10 +73,15 @@ func TestWebhookCreate_HTTPError(t *testing.T) {
 	}
 }
 
-// TestWebhookRead_NoOp verifies that Read does not hit the network — the
-// resource declares Read as a no-op (Read returns nil with no work).
-func TestWebhookRead_NoOp(t *testing.T) {
+// TestWebhookRead_RefreshesFromPortainer verifies Read looks the webhook up in
+// GET /webhooks and writes back what Portainer has, so changes made outside
+// Terraform show up in the plan and an import fills in every attribute.
+func TestWebhookRead_RefreshesFromPortainer(t *testing.T) {
 	mock := NewMockServer(t)
+	mock.On("GET", "/webhooks", RespondJSON(http.StatusOK, []map[string]interface{}{
+		{"Id": 41, "Token": "other", "ResourceId": "x", "EndpointId": 1, "Type": 1},
+		{"Id": 42, "Token": "tok-42", "ResourceId": "svc-1", "EndpointId": 3, "RegistryId": 7, "Type": 1},
+	}))
 	r := resourceWebhook()
 	d := r.TestResourceData()
 	d.SetId("42")
@@ -84,8 +89,28 @@ func TestWebhookRead_NoOp(t *testing.T) {
 	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
-	if len(mock.Requests()) != 0 {
-		t.Errorf("expected zero HTTP requests for no-op Read, got %d", len(mock.Requests()))
+	want := map[string]interface{}{"endpoint_id": 3, "resource_id": "svc-1", "webhook_type": 1, "registry_id": 7, "token": "tok-42"}
+	for k, v := range want {
+		if got := d.Get(k); got != v {
+			t.Errorf("%s: expected %v, got %v", k, v, got)
+		}
+	}
+}
+
+// TestWebhookRead_DeletedOutsideTerraform drops a webhook Portainer no longer
+// lists, so the next apply recreates it instead of keeping a dead URL.
+func TestWebhookRead_DeletedOutsideTerraform(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/webhooks", RespondJSON(http.StatusOK, []map[string]interface{}{}))
+	r := resourceWebhook()
+	d := r.TestResourceData()
+	d.SetId("42")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected the webhook dropped from state, got ID %q", d.Id())
 	}
 }
 
@@ -95,6 +120,9 @@ func TestWebhookRead_NoOp(t *testing.T) {
 // — this confirms the guard.
 func TestWebhookUpdate_NoChangeIsNoOp(t *testing.T) {
 	mock := NewMockServer(t)
+	mock.On("GET", "/webhooks", RespondJSON(http.StatusOK, []map[string]interface{}{
+		{"Id": 9, "ResourceId": "abc", "EndpointId": 1, "RegistryId": 4, "Type": 1},
+	}))
 
 	r := resourceWebhook()
 	d := r.TestResourceData()
@@ -132,5 +160,21 @@ func TestWebhookDelete_HappyPath(t *testing.T) {
 	}
 	if d.Id() != "" {
 		t.Errorf("expected ID cleared after Delete, got %q", d.Id())
+	}
+}
+
+// TestWebhookDelete_NoContent is the regression test for every destroy
+// failing: Portainer answers DELETE /webhooks/{id} with 204, which the SDK
+// call rejected because it expects 202.
+func TestWebhookDelete_NoContent(t *testing.T) {
+	for _, status := range []int{http.StatusNoContent, http.StatusNotFound} {
+		mock := NewMockServer(t)
+		mock.On("DELETE", "/webhooks/12", RespondString(status, "", ""))
+		r := resourceWebhook()
+		d := r.TestResourceData()
+		d.SetId("12")
+		if err := rcDelete(r, d, mock.Client()); err != nil {
+			t.Errorf("status %d: expected Delete to succeed, got %v", status, err)
+		}
 	}
 }

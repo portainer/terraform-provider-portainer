@@ -32,13 +32,14 @@ variable "ingress_controller" {
     used         = bool
     new          = bool
   })
+  # k3d, which the e2e tests run on, ships Traefik.
   description = "Configuration for the Kubernetes ingress controller."
   default = {
-    name         = "nginx"
-    class_name   = "nginx"
-    type         = "ingress"
+    name         = "traefik"
+    class_name   = "traefik"
+    type         = "traefik"
     availability = true
-    used         = true
+    used         = false
     new          = false
   }
 }

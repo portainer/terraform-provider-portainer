@@ -103,6 +103,8 @@ func TestDeployCreate_Standalone_HappyPath(t *testing.T) {
 	}))
 
 	// The redeploy PUT.
+	// waitForStackLockReleased polls the stack around the update.
+	mock.On("GET", "/stacks/7", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 7, "Status": 1}))
 	mock.On("PUT", "/stacks/7", RespondJSON(http.StatusOK, map[string]interface{}{
 		"Id": 7,
 	}))
@@ -185,6 +187,8 @@ func TestDeployCreate_Standalone_AppendsMissingEnvVar(t *testing.T) {
 	mock.On("GET", "/stacks/3/file", RespondJSON(http.StatusOK, map[string]interface{}{
 		"StackFileContent": "content",
 	}))
+	// waitForStackLockReleased polls the stack around the update.
+	mock.On("GET", "/stacks/3", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 3, "Status": 1}))
 	mock.On("PUT", "/stacks/3", RespondJSON(http.StatusOK, map[string]interface{}{}))
 
 	r := resourceDeploy()

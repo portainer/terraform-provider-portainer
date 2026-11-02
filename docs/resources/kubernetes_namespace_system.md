@@ -14,8 +14,9 @@ resource "portainer_kubernetes_namespace_system" "system_flag" {
 
 ## Lifecycle & Behavior
 - This resource uses a `PUT` request to set the system state of a namespace.
-- Portainer does not provide a `GET` method to read the current state, so this resource is write-only.
-- Terraform will not detect drift, but you can re-apply to ensure idempotency.
+- The state is read back from the namespace, so a change made outside Terraform shows up as drift.
+- Portainer never marks the `default` namespace as a system namespace; `system = true` on it fails at plan time.
+- Destroying the resource sets `system = false`.
 
 ### Arguments Reference
 | Name             | Type   | Required | Description                                                          |

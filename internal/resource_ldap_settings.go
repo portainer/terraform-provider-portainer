@@ -34,12 +34,15 @@ func resourceLDAPSettings() *schema.Resource {
 				Description: "Automatically provision users and assign them to matching LDAP group names",
 			},
 			"password": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Computed:    true,
-				Sensitive:   true,
-				Description: "Password of the account used to search users",
+				Type:          schema.TypeString,
+				Optional:      true,
+				Computed:      true,
+				Sensitive:     true,
+				ConflictsWith: []string{"password_wo"},
+				Description:   "Password of the account used to search users. Stored in state; use `password_wo` to keep it out.",
 			},
+			"password_wo":         writeOnlySecretSchema("password", "password_wo_version", "password of the account used to search users"),
+			"password_wo_version": writeOnlyVersionSchema("password_wo", false),
 			"reader_dn": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -232,8 +235,10 @@ func resourceLDAPSettingsApply(ctx context.Context, d *schema.ResourceData, meta
 	if v, ok := d.GetOk("auto_create_users"); ok {
 		ldap["AutoCreateUsers"] = v.(bool)
 	}
-	if v, ok := d.GetOk("password"); ok {
-		ldap["Password"] = v.(string)
+	if password, err := secretValue(d, "password", "password_wo", "password_wo_version"); err != nil {
+		return diag.FromErr(err)
+	} else if password != "" {
+		ldap["Password"] = password
 	}
 	if v, ok := d.GetOk("reader_dn"); ok {
 		ldap["ReaderDN"] = v.(string)

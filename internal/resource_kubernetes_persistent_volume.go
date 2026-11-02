@@ -16,6 +16,9 @@ func resourceKubernetesPersistentVolume() *schema.Resource {
 		ReadContext:   resourceKubernetesPersistentVolumeRead,
 		UpdateContext: resourceKubernetesPersistentVolumeCreate,
 		DeleteContext: resourceKubernetesPersistentVolumeDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: importKubernetesPersistentVolume,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"environment_id": {

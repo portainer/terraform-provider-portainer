@@ -1,5 +1,7 @@
 # 🧬 **Resource Documentation: `portainer_open_amt_devices_features`**
 
+> ⚠️ **Deprecated.** Portainer deprecated OpenAMT in 2.36 and removed it in 2.42, so this resource only works against older Portainer versions. It will be removed in a future major release of the provider.
+
 ## Overview
 The `portainer_open_amt_devices_features` resource enables or configures remote management features (KVM, IDER, SOL, etc.) on a device managed via Intel AMT, through Portainer.
 

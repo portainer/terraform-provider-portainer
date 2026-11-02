@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -65,7 +66,7 @@ func resourceEndpointServiceUpdateExecute(ctx context.Context, d *schema.Resourc
 	}
 
 	if len(warnings.Warnings) > 0 {
-		fmt.Printf("[WARN] Service update warnings: %v\n", warnings.Warnings)
+		log.Printf("[WARN] Service update warnings: %v", warnings.Warnings)
 	}
 
 	d.SetId(strconv.Itoa(endpointID) + "-" + serviceID)

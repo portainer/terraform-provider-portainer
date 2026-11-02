@@ -20,7 +20,7 @@ variable "environment_id" {
 variable "namespace" {
   type        = string
   description = "Kubernetes namespace to toggle system state for"
-  default     = "default"
+  default     = "monitoring"
 }
 
 variable "system" {

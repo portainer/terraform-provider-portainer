@@ -52,6 +52,9 @@ func TestWebhookCov3_Update_RegistryChange_HappyPath(t *testing.T) {
 	mock.On("PUT", "/webhooks/9", RespondJSON(http.StatusOK, map[string]interface{}{
 		"Id": 9, "RegistryId": 5,
 	}))
+	mock.On("GET", "/webhooks", RespondJSON(http.StatusOK, []map[string]interface{}{
+		{"Id": 9, "RegistryId": 5, "Type": 1},
+	}))
 
 	r := resourceWebhook()
 	d := webhookDataWithRegistryChange(t, "9", "3", "5")

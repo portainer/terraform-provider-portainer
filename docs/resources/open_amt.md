@@ -1,6 +1,9 @@
 # 🛡️ **Resource Documentation: `portainer_open_amt`**
 
 # portainer_open_amt
+
+> ⚠️ **Deprecated.** Portainer deprecated OpenAMT in 2.36 and removed it in 2.42, so this resource only works against older Portainer versions. It will be removed in a future major release of the provider.
+
 The `portainer_open_amt` resource enables and configures Intel® OpenAMT capabilities in Portainer.
 
 ## Example Usage
