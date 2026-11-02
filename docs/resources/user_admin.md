@@ -54,7 +54,7 @@ You typically run this **once**, as part of bootstrap (e.g., after deploying Por
 | ---------- | ------ | -------- | -------------------------------------------------- |
 | `username` | string | ✅ yes    | Username for the admin user (typically `"admin"`). |
 | `password` | string | ✅ yes    | Password for the admin user. Sensitive value.      |
-| `setup_token` | string | 🚫 no | Sent as the `X-Setup-Token` header. Portainer 2.45+ requires it to initialize a fresh instance unless started with `--no-setup-token`; it is printed in the Portainer log (`setup_token=...`) or set with `--setup-token` / `PORTAINER_SETUP_TOKEN`. Sensitive value. |
+| `setup_token` | string | 🚫 no (write-only) | Sent as the `X-Setup-Token` header and never stored in state (Terraform 1.11+). Portainer 2.45+ requires it to initialize a fresh instance unless started with `--no-setup-token`; it is printed in the Portainer log (`setup_token=...`) or set with `--setup-token` / `PORTAINER_SETUP_TOKEN`. |
 
 > 💡 In practice, Portainer expects this to initialize the built-in `admin` account, so using `username = "admin"` is recommended.
 

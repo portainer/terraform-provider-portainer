@@ -30,6 +30,22 @@ jobs:
       - name: Show Terraform version
         run: terraform version
 
+      # Validate the examples and e2e configurations against the provider of
+      # this commit, not the one released on the registry: a new attribute or
+      # resource would otherwise fail validation until it is released, and a
+      # broken example for it would only show up after the release.
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Build and install the provider of this commit
+        run: |
+          make build
+          make install-plugin
+          find examples e2e-tests -name "main.tf" -exec sed -i 's|source *= *"portainer/portainer"|source = "localdomain/local/portainer"|' {} +
+
       - name: Initialize Terraform
         run: make init
 

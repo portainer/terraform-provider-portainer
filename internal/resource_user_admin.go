@@ -37,10 +37,13 @@ func resourceUserAdmin() *schema.Resource {
 				Description: "Password for the admin account. Only used during initial bootstrap.",
 			},
 			"setup_token": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Sensitive:   true,
-				Description: "Value sent as the `X-Setup-Token` header. Portainer 2.45 and later require it to initialize a fresh instance unless started with `--no-setup-token`; the token is printed in the Portainer log (`setup_token=...`) or set with `--setup-token` / `PORTAINER_SETUP_TOKEN`.",
+				Type:      schema.TypeString,
+				Optional:  true,
+				Sensitive: true,
+				// A bootstrap credential only the init call needs, so it is
+				// never kept in state.
+				WriteOnly:   true,
+				Description: "Write-only value sent as the `X-Setup-Token` header (never stored in Terraform state; requires Terraform 1.11 or later). Portainer 2.45 and later require it to initialize a fresh instance unless started with `--no-setup-token`; the token is printed in the Portainer log (`setup_token=...`) or set with `--setup-token` / `PORTAINER_SETUP_TOKEN`.",
 			},
 			"initialized": {
 				Type:        schema.TypeBool,
@@ -79,8 +82,14 @@ func resourceUserAdminCreate(ctx context.Context, d *schema.ResourceData, meta i
 	}
 
 	var opts []users.ClientOption
-	if token := d.Get("setup_token").(string); token != "" {
-		opts = append(opts, withHeader("X-Setup-Token", token))
+	if !d.GetRawConfig().IsNull() {
+		token, err := writeOnlyString(d, "setup_token")
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		if token != "" {
+			opts = append(opts, withHeader("X-Setup-Token", token))
+		}
 	}
 
 	resp, err := client.Client.Users.UserAdminInit(params, opts...)

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -57,6 +58,9 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		resp, err := t.roundTripOnce(r)
+		if err == nil && attempt < t.maxRetries && isSafeMethod(req.Method) {
+			resp, err = bufferBody(resp)
+		}
 		if !replayable || attempt >= t.maxRetries || req.Context().Err() != nil || !shouldRetry(req.Method, resp, err) {
 			return resp, err
 		}
@@ -102,8 +106,28 @@ func (c *cancelOnClose) Close() error {
 	return err
 }
 
+func isSafeMethod(method string) bool {
+	return method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions
+}
+
+// bufferBody reads the response body of a safe request while a retry is
+// still possible. A connection dropped after the headers only fails while the
+// body is read, which would happen in the caller, past any retry; here it
+// becomes the attempt's error, which shouldRetry judges like any dropped
+// connection.
+func bufferBody(resp *http.Response) (*http.Response, error) {
+	data, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(data))
+	resp.ContentLength = int64(len(data))
+	return resp, nil
+}
+
 func shouldRetry(method string, resp *http.Response, err error) bool {
-	safe := method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions
+	safe := isSafeMethod(method)
 	idempotent := safe || method == http.MethodPut || method == http.MethodDelete
 
 	if err != nil {

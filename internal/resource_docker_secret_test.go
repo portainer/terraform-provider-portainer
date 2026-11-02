@@ -190,3 +190,47 @@ func TestDockerSecretCreate_HTTPError(t *testing.T) {
 		t.Errorf("expected empty ID after error, got %q", d.Id())
 	}
 }
+
+// TestDockerSecretUpdate_SendsVersionAndOnlyLabels is the regression test for
+// an update Docker always rejected with "invalid secret version": the call
+// needs the secret's current version, and Docker only lets the labels change.
+// The current spec goes back with the configured labels and without data, so
+// a write-only secret keeps its data on a label change.
+func TestDockerSecretUpdate_SendsVersionAndOnlyLabels(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/endpoints/1/docker/secrets/sec_1", RespondJSON(http.StatusOK, map[string]interface{}{
+		"ID":      "sec_1",
+		"Version": map[string]interface{}{"Index": 42},
+		"Spec":    map[string]interface{}{"Name": "db", "Labels": map[string]interface{}{"env": "old"}},
+	}))
+	mock.On("POST", "/endpoints/1/docker/secrets/sec_1/update", RespondJSON(http.StatusOK, map[string]interface{}{}))
+
+	r := resourceDockerSecret()
+	d := r.TestResourceData()
+	d.SetId("sec_1")
+	_ = d.Set("endpoint_id", 1)
+	_ = d.Set("name", "db")
+	_ = d.Set("data_wo_version", 1)
+	_ = d.Set("labels", map[string]interface{}{"env": "prod"})
+
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+	req := mock.FindRequest("POST", "/endpoints/1/docker/secrets/sec_1/update")
+	if req == nil {
+		t.Fatal("expected the update call")
+	}
+	if req.Query != "version=42" {
+		t.Errorf("expected version=42, got %q", req.Query)
+	}
+	var spec map[string]interface{}
+	if err := req.DecodeJSON(&spec); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if _, ok := spec["Data"]; ok {
+		t.Errorf("Data must not be sent on update, got %v", spec)
+	}
+	if labels, _ := spec["Labels"].(map[string]interface{}); labels["env"] != "prod" || spec["Name"] != "db" {
+		t.Errorf("expected the current spec with the new labels, got %v", spec)
+	}
+}

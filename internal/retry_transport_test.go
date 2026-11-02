@@ -303,3 +303,58 @@ func TestValidateDuration(t *testing.T) {
 		}
 	}
 }
+
+// failingBody returns its data, then fails like a connection dropped mid-body.
+type failingBody struct {
+	r   io.Reader
+	err error
+}
+
+func (b *failingBody) Read(p []byte) (int, error) {
+	n, err := b.r.Read(p)
+	if err == io.EOF {
+		return n, b.err
+	}
+	return n, err
+}
+
+func (b *failingBody) Close() error { return nil }
+
+// TestRetryTransport_RetriesBodyReadFailure covers a connection dropped after
+// the response headers: RoundTrip itself succeeded, so the failure used to
+// surface in the caller, past any retry. A safe request is retried; a POST is
+// left alone, since Portainer may have acted on it.
+func TestRetryTransport_RetriesBodyReadFailure(t *testing.T) {
+	fastRetries(t)
+	reset := fmt.Errorf("read tcp: %w", syscall.ECONNRESET)
+	for _, tc := range []struct {
+		method    string
+		wantCalls int
+	}{{http.MethodGet, 2}, {http.MethodPost, 1}} {
+		t.Run(tc.method, func(t *testing.T) {
+			calls := 0
+			rt := &retryTransport{maxRetries: 3, next: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				calls++
+				body := io.NopCloser(strings.NewReader(`{"ok":true}`))
+				if calls == 1 {
+					body = &failingBody{r: strings.NewReader(`{"ok":`), err: reset}
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: body}, nil
+			})}
+			req, _ := http.NewRequestWithContext(context.Background(), tc.method, "http://portainer.invalid/api", nil)
+			resp, err := rt.RoundTrip(req)
+			if err != nil {
+				t.Fatalf("RoundTrip failed: %v", err)
+			}
+			defer resp.Body.Close()
+			if calls != tc.wantCalls {
+				t.Errorf("expected %d calls, got %d", tc.wantCalls, calls)
+			}
+			if tc.method == http.MethodGet {
+				if body, _ := io.ReadAll(resp.Body); string(body) != `{"ok":true}` {
+					t.Errorf("expected the retried body, got %q", body)
+				}
+			}
+		})
+	}
+}

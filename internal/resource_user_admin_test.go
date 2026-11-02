@@ -3,6 +3,8 @@ package internal
 import (
 	"net/http"
 	"testing"
+
+	"github.com/hashicorp/go-cty/cty"
 )
 
 // TestUserAdminCreate_HappyPath verifies that POST /users/admin/init is sent
@@ -174,11 +176,11 @@ func TestUserAdminCreate_SendsSetupToken(t *testing.T) {
 	mock := NewMockServer(t)
 	mock.On("POST", "/users/admin/init", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 1, "Username": "admin"}))
 
+	// setup_token is write-only: it only exists in the configuration.
 	r := resourceUserAdmin()
-	d := r.TestResourceData()
-	_ = d.Set("username", "admin")
-	_ = d.Set("password", "pw-123456789")
-	_ = d.Set("setup_token", "tok-abc")
+	d := dataWithRawConfig(r, map[string]string{
+		"username": "admin", "password": "pw-123456789",
+	}, map[string]cty.Value{"setup_token": cty.StringVal("tok-abc")})
 
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -189,6 +191,9 @@ func TestUserAdminCreate_SendsSetupToken(t *testing.T) {
 	}
 	if got := req.Headers.Get("X-Setup-Token"); got != "tok-abc" {
 		t.Errorf("X-Setup-Token: expected %q, got %q", "tok-abc", got)
+	}
+	if got := d.Get("setup_token"); got != "" {
+		t.Errorf("setup_token must not be kept in state, got %v", got)
 	}
 	var body map[string]interface{}
 	if err := req.DecodeJSON(&body); err != nil || body["username"] != "admin" {

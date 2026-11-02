@@ -35,7 +35,7 @@ func resourceDockerSecret() *schema.Resource {
 		},
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {Type: schema.TypeInt, Required: true, Description: "ID of the Portainer environment (Docker Swarm) where the secret is created."},
-			"name":        {Type: schema.TypeString, Required: true, Description: "Name of the Docker Swarm secret."},
+			"name":        {Type: schema.TypeString, Required: true, ForceNew: true, Description: "Name of the Docker Swarm secret. Docker cannot rename a secret, so changing it replaces the secret."},
 			"data": {
 				Type:          schema.TypeString,
 				Optional:      true,
@@ -70,13 +70,15 @@ func resourceDockerSecret() *schema.Resource {
 				Type:        schema.TypeMap,
 				Optional:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
-				Description: "External secret driver configuration used to fetch the secret value at runtime.",
+				ForceNew:    true,
+				Description: "External secret driver configuration used to fetch the secret value at runtime. Docker cannot change it on an existing secret, so changing it replaces the secret.",
 			},
 			"templating": {
 				Type:        schema.TypeMap,
 				Optional:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
-				Description: "Templating driver configuration applied to the secret payload at runtime.",
+				ForceNew:    true,
+				Description: "Templating driver configuration applied to the secret payload at runtime. Docker cannot change it on an existing secret, so changing it replaces the secret.",
 			},
 			"resource_control_id": {
 				Type:        schema.TypeInt,
@@ -283,13 +285,28 @@ func resourceDockerSecretUpdate(ctx context.Context, d *schema.ResourceData, met
 	endpointID := d.Get("endpoint_id").(int)
 	id := d.Id()
 
-	payload, err := buildSecretPayload(d)
-	if err != nil {
-		return diag.FromErr(err)
+	// Docker only lets the labels of a secret change (everything else forces
+	// a new one) and rejects an update without the secret's current version
+	// ("invalid secret version"), so the update always failed. The current
+	// spec is sent back with the configured labels.
+	var current struct {
+		Version struct {
+			Index int `json:"Index"`
+		} `json:"Version"`
+		Spec map[string]interface{} `json:"Spec"`
 	}
+	secretURL := fmt.Sprintf("%s/endpoints/%d/docker/secrets/%s", client.Endpoint, endpointID, id)
+	if err := doJSON(ctx, client, http.MethodGet, secretURL, nil, &current); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to read docker secret before updating it: %w", err))
+	}
+	spec := current.Spec
+	if spec == nil {
+		spec = map[string]interface{}{"Name": d.Get("name").(string)}
+	}
+	spec["Labels"] = d.Get("labels").(map[string]interface{})
 
-	url := fmt.Sprintf("%s/endpoints/%d/docker/secrets/%s/update", client.Endpoint, endpointID, id)
-	if err := doJSON(ctx, client, http.MethodPost, url, payload, nil); err != nil {
+	url := fmt.Sprintf("%s/update?version=%d", secretURL, current.Version.Index)
+	if err := doJSON(ctx, client, http.MethodPost, url, spec, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update docker secret: %w", err))
 	}
 
