@@ -385,7 +385,7 @@ func TestStackCreate_WithOwnership_UpdatesAccessControl(t *testing.T) {
 	}))
 	mock.On("PUT", "/stacks/80", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 80}))
 
-	// updateStackAccessControl -> lookupResourceControlID(client, 6, "80")
+	// updateStackAccessControl -> lookupResourceControlID(context.Background(), client, 6, "80")
 	// performs GET /stacks/80 and reads ResourceControl.ID. The same handler
 	// also serves the later Read (which decodes Portainer.ResourceControl.ID),
 	// so the response carries both shapes.

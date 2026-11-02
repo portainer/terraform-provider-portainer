@@ -140,12 +140,15 @@ terraform apply
 ### For Repository-based Edge Stack
 | Name                        | Type   | Required    | Description                                                          |
 | --------------------------- | ------ | ----------- | -------------------------------------------------------------------- |
-| `repository_url`            | string | ✅ yes       | Git repository URL                                                  |
+| `repository_url`            | string | ✅ yes¹      | Git repository URL                                                  |
+| `source_id`                 | number | 🚫 no        | ID of a Portainer Source (Git source) providing the URL and credentials (Portainer 2.43+). ¹ When set, `repository_url` and the credentials can be left out. Changing it forces recreation |
 | `repository_reference_name` | string | 🚫 optional | Git reference (default: `refs/heads/main`)                           |
 | `file_path_in_repository`   | string | 🚫 optional | Path to the manifest inside the repo (default: `docker-compose.yml`) |
 | `git_repository_authentication` | bool   | 🚫 optional | Enable auth for Git repo (default: `false`)                      |
 | `repository_username`       | string | 🚫 optional | Git username (if auth is enabled)                                    |
 | `repository_password`       | string | 🚫 optional | Git password/token (if auth is enabled)                              |
+| `repository_password_wo`    | string | 🚫 optional | Write-only, never stored in state (Terraform 1.11+). Conflicts with `repository_password`; requires `repository_password_wo_version` |
+| `repository_password_wo_version` | number | 🚫 optional | Version of `repository_password_wo`. Increment it to send a new value; forces recreation, like `repository_password` |
 | `stack_webhook`             | bool   | 🚫 optional | Enable GitOps webhook (default: `false`)                             |
 | `update_interval`           | string | 🚫 optional | Polling interval (enables GitOps polling, e.g. `30m`, `1h`)          |
 | `force_update`              | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                         |

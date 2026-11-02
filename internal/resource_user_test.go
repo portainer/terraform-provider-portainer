@@ -3,6 +3,9 @@ package internal
 import (
 	"net/http"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
 // TestUserCreate_HappyPath exercises the create path for a brand new user.
@@ -153,7 +156,6 @@ func TestUserRead_HappyPath(t *testing.T) {
 		"Username": "charlie",
 		"Role":     2,
 	}))
-	// Role==2 triggers a team_memberships scan; return a membership for user 7.
 	mock.On("GET", "/team_memberships", RespondJSON(http.StatusOK, []map[string]interface{}{
 		{"Id": 1, "Role": 2, "TeamID": 33, "UserID": 7},
 	}))
@@ -161,6 +163,7 @@ func TestUserRead_HappyPath(t *testing.T) {
 	r := resourceUser()
 	d := r.TestResourceData()
 	d.SetId("7")
+	_ = d.Set("team_id", 33)
 
 	if err := rcRead(r, d, mock.Client()); err != nil {
 		t.Fatalf("Read failed: %v", err)
@@ -173,6 +176,86 @@ func TestUserRead_HappyPath(t *testing.T) {
 	}
 	if got := d.Get("team_id"); got != 33 {
 		t.Errorf("team_id: expected 33, got %v", got)
+	}
+}
+
+// TestUserRead_TeamIDTracksOnlyManagedTeam is the regression test for a
+// team_id picked up from any membership: a user added to a team with
+// portainer_team_membership planned "team_id = 1 -> null" on every run.
+func TestUserRead_TeamIDTracksOnlyManagedTeam(t *testing.T) {
+	cases := []struct {
+		name  string
+		state int
+		want  int
+	}{
+		{"not managed", 0, 0},
+		{"managed and present", 33, 33},
+		{"managed and removed outside Terraform", 44, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := NewMockServer(t)
+			mock.On("GET", "/users/7", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 7, "Username": "charlie", "Role": 2}))
+			mock.On("GET", "/team_memberships", RespondJSON(http.StatusOK, []map[string]interface{}{
+				{"Id": 1, "Role": 1, "TeamID": 33, "UserID": 7},
+			}))
+
+			r := resourceUser()
+			d := r.TestResourceData()
+			d.SetId("7")
+			_ = d.Set("team_id", tc.state)
+
+			if err := rcRead(r, d, mock.Client()); err != nil {
+				t.Fatalf("Read failed: %v", err)
+			}
+			if got := d.Get("team_id"); got != tc.want {
+				t.Errorf("team_id: expected %d, got %v", tc.want, got)
+			}
+		})
+	}
+}
+
+// TestUserUpdate_MovesTeam verifies a team_id change, which Update used to
+// ignore, removes the old membership and adds the new one.
+func TestUserUpdate_MovesTeam(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("PUT", "/users/7", RespondJSON(http.StatusOK, map[string]interface{}{}))
+	mock.On("GET", "/users/7", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 7, "Username": "charlie", "Role": 2}))
+	mock.On("GET", "/team_memberships", RespondJSON(http.StatusOK, []map[string]interface{}{
+		{"Id": 5, "Role": 2, "TeamID": 33, "UserID": 7},
+	}))
+	mock.On("DELETE", "/team_memberships/5", RespondString(http.StatusNoContent, "", ""))
+	mock.On("POST", "/team_memberships", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 6}))
+
+	r := resourceUser()
+	state := &terraform.InstanceState{ID: "7", Attributes: map[string]string{
+		"id": "7", "username": "charlie", "role": "2", "team_id": "33",
+	}}
+	diff := &terraform.InstanceDiff{Attributes: map[string]*terraform.ResourceAttrDiff{
+		"team_id": {Old: "33", New: "44"},
+	}}
+	d, err := schema.InternalMap(r.SchemaMap()).Data(state, diff)
+	if err != nil {
+		t.Fatalf("build data: %v", err)
+	}
+
+	// Read after Update no longer finds team 44 in the static mock; only the
+	// requests matter here.
+	_ = rcUpdate(r, d, mock.Client())
+
+	if mock.FindRequest("DELETE", "/team_memberships/5") == nil {
+		t.Error("expected the membership in team 33 to be removed")
+	}
+	post := mock.FindRequest("POST", "/team_memberships")
+	if post == nil {
+		t.Fatal("expected a membership in team 44 to be created")
+	}
+	var payload map[string]int
+	if err := post.DecodeJSON(&payload); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if payload["userID"] != 7 || payload["teamID"] != 44 || payload["role"] != 2 {
+		t.Errorf("payload: expected user 7 in team 44 as member, got %v", payload)
 	}
 }
 

@@ -24,10 +24,11 @@ type EnableAMTFeaturesRequest struct {
 
 func resourcePortainerOpenAMTDevicesFeatures() *schema.Resource {
 	return &schema.Resource{
-		CreateContext: resourcePortainerOpenAMTDevicesFeaturesCreate,
-		ReadContext:   schema.NoopContext,
-		UpdateContext: schema.NoopContext,
-		DeleteContext: removeFromStateContext,
+		DeprecationMessage: openAMTDeprecation,
+		CreateContext:      resourcePortainerOpenAMTDevicesFeaturesCreate,
+		ReadContext:        schema.NoopContext,
+		UpdateContext:      schema.NoopContext,
+		DeleteContext:      removeFromStateContext,
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
 				Type:        schema.TypeInt,

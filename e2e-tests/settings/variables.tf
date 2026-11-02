@@ -17,12 +17,6 @@ variable "authentication_method" {
   default     = 1
 }
 
-variable "enable_telemetry" {
-  type        = bool
-  description = "Enable Portainer telemetry"
-  default     = false
-}
-
 variable "logo_url" {
   type        = string
   description = "Custom logo URL"

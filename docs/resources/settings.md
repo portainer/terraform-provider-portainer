@@ -7,7 +7,6 @@ The `portainer_settings` resource allows you to manage global Portainer settings
 ```hcl
 resource "portainer_settings" "example" {
   authentication_method = 1
-  enable_telemetry      = false
   logo_url              = "https://www.portainer.io/hubfs/portainer-logo-black.svg"
   snapshot_interval     = "15m"
   user_session_timeout  = "8h"
@@ -38,7 +37,7 @@ terraform apply
 | Name                           | Type     | Required | Description                                                                  |
 |--------------------------------|----------|----------|------------------------------------------------------------------------------|
 | `authentication_method`        | number   | ✅ yes   | Type of authentication (e.g., `1` = internal, `2` = LDAP, `3` = OAuth)       |
-| `enable_telemetry`             | bool     | 🚫 no    | Enable Portainer telemetry                                                   |
+| `enable_telemetry`             | bool     | 🚫 no    | **Deprecated**, no effect: current Portainer has no telemetry setting        |
 | `logo_url`                     | string   | 🚫 no    | URL to custom logo                                                           |
 | `snapshot_interval`            | string   | 🚫 no    | How often to run container snapshots (e.g., `"15m"`)                         |
 | `templates_url`                | string   | 🚫 no    | URL to the template list JSON                                                |
@@ -50,13 +49,18 @@ terraform apply
 | `enable_edge_compute_features` | bool     | 🚫 no    | Enable Edge compute management support                                       |
 | `enforce_edge_id`              | bool     | 🚫 no    | Enforce the use of Portainer Edge ID                                         |
 | `trust_on_first_connect`       | bool     | 🚫 no    | Automatically trust TLS fingerprint on first connection                      |
+| `force_secure_cookies`         | bool     | 🚫 no    | Always set the Secure attribute on auth cookies (behind a TLS-terminating proxy). Portainer 2.45+ |
+| `ldap_password_wo`             | string   | 🚫 no    | Write-only LDAP reader password used instead of `ldap_settings.password`, never stored in state (Terraform 1.11+). Requires `ldap_password_wo_version` and an `ldap_settings` block |
+| `ldap_password_wo_version`     | number   | 🚫 no    | Version of `ldap_password_wo`. Increment it to send a new password |
+| `oauth_client_secret_wo`       | string   | 🚫 no    | Write-only OAuth client secret used instead of `oauth_settings.client_secret`, never stored in state (Terraform 1.11+). Requires `oauth_client_secret_wo_version` and an `oauth_settings` block |
+| `oauth_client_secret_wo_version` | number | 🚫 no    | Version of `oauth_client_secret_wo`. Increment it to send a new secret |
 | `edge_agent_checkin_interval`  | number   | 🚫 no    | Interval (in seconds) for Edge Agent check-ins                               |
-| `disable_kube_roles_sync`      | bool     | ❌ no    | Disable Kubernetes role sync from RBAC                                       |
-| `disable_kube_shell`           | bool     | ❌ no    | Disable the Kubectl Shell feature                                            |
-| `disable_kubeconfig_download`  | bool     | ❌ no    | Disable downloading of Kubeconfig files                                      |
-| `display_donation_header`      | bool     | ❌ no    | Show the donation header in UI                                               |
-| `display_external_contributors`| bool     | ❌ no    | Show the list of external contributors in the UI                             |
-| `is_docker_desktop_extension`  | bool     | ❌ no    | Whether Portainer is running as Docker Desktop extension                     |
+| `disable_kube_roles_sync`      | bool     | ❌ no    | Disable Kubernetes role sync from RBAC (Business Edition only)               |
+| `disable_kube_shell`           | bool     | ❌ no    | Disable the Kubectl Shell feature (Business Edition only)                    |
+| `disable_kubeconfig_download`  | bool     | ❌ no    | Disable downloading of Kubeconfig files (Business Edition only)              |
+| `display_donation_header`      | bool     | ❌ no    | **Deprecated**, no effect: Portainer does not accept it through the API      |
+| `display_external_contributors`| bool     | ❌ no    | **Deprecated**, no effect: Portainer does not accept it through the API      |
+| `is_docker_desktop_extension`  | bool     | ❌ no    | **Deprecated**, no effect: Portainer detects it at startup                   |
 | `edge_portainer_url`           | string   | 🚫 no    | Public URL of the Portainer instance that edge agents use to reach back for polling and tunneling |
 | `black_listed_labels`          | list(object) | 🚫 no | Container labels (`name`/`value` pairs) that Portainer should hide from the UI |
 

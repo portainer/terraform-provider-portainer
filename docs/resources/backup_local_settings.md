@@ -32,3 +32,11 @@ resource "portainer_backup_local_settings" "nightly" {
 | `last_run_path` | string | Path on the Portainer host of the most recent archive. |
 
 Removing the resource stops managing the settings; Portainer has no endpoint to clear them.
+
+## Import
+
+The local backup settings are instance-wide, so any import ID works:
+
+```shell
+terraform import portainer_backup_local_settings.example portainer-backup-local-settings
+```

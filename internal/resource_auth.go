@@ -50,7 +50,7 @@ func resourceAuthCreate(ctx context.Context, d *schema.ResourceData, meta interf
 		"password": d.Get("password").(string),
 	}
 
-	resp, err := client.DoRequest("POST", "/auth", nil, creds)
+	resp, err := client.DoRequest(ctx, "POST", "/auth", nil, creds)
 	if err != nil {
 		return diag.FromErr(err)
 	}

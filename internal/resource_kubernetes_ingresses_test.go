@@ -96,10 +96,12 @@ func TestKubernetesIngressUpdate_HappyPath(t *testing.T) {
 	}
 }
 
-// TestKubernetesIngressDelete_NoOp verifies Delete is a no-op (API not yet supported)
-// and does not error or send any request.
-func TestKubernetesIngressDelete_NoOp(t *testing.T) {
+// TestKubernetesIngressDelete_DeletesIngress is the regression test for a
+// no-op Delete that left the ingress in the cluster, so the next create
+// failed with 409. Portainer takes the names to delete per namespace.
+func TestKubernetesIngressDelete_DeletesIngress(t *testing.T) {
 	mock := NewMockServer(t)
+	mock.On("POST", "/kubernetes/1/ingresses/delete", RespondString(http.StatusNoContent, "", ""))
 
 	r := resourceKubernetesNamespaceIngress()
 	d := r.TestResourceData()
@@ -108,8 +110,16 @@ func TestKubernetesIngressDelete_NoOp(t *testing.T) {
 	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
-	if reqs := mock.Requests(); len(reqs) != 0 {
-		t.Errorf("expected no requests for no-op Delete, got %d", len(reqs))
+	req := mock.FindRequest("POST", "/kubernetes/1/ingresses/delete")
+	if req == nil {
+		t.Fatal("expected POST /kubernetes/1/ingresses/delete")
+	}
+	var payload map[string][]string
+	if err := req.DecodeJSON(&payload); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if names := payload["default"]; len(names) != 1 || names[0] != "my-ingress" {
+		t.Errorf("payload: expected {default: [my-ingress]}, got %v", payload)
 	}
 }
 

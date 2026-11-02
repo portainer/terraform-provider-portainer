@@ -15,10 +15,11 @@ type OpenAMTDeviceActionRequest struct {
 
 func resourcePortainerOpenAMTDeviceAction() *schema.Resource {
 	return &schema.Resource{
-		CreateContext: resourcePortainerOpenAMTDeviceActionCreate,
-		ReadContext:   schema.NoopContext,
-		UpdateContext: schema.NoopContext,
-		DeleteContext: removeFromStateContext,
+		DeprecationMessage: openAMTDeprecation,
+		CreateContext:      resourcePortainerOpenAMTDeviceActionCreate,
+		ReadContext:        schema.NoopContext,
+		UpdateContext:      schema.NoopContext,
+		DeleteContext:      removeFromStateContext,
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
 				Type:        schema.TypeInt,

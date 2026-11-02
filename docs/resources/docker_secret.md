@@ -51,9 +51,9 @@ resource "portainer_docker_secret" "example_secret_wo" {
 ```
 
 ## Lifecycle & Behavior
-Docker secrets are **immutable**. Updating them (changing `data, labels`, etc.) will **force recreation**.
+Docker secrets are **immutable**: changing `name`, `data`, `data_wo_version`, `driver` or `templating` destroys and re-creates the secret.
 
-Terraform will automatically destroy and re-create secrets on change.
+Only `labels` change in place; the secret's data is kept.
 
 Use `terraform destroy` to remove the secret.
 

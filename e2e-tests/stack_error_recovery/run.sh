@@ -48,11 +48,23 @@ echo "   stack id: ${STACK_ID}"
 await_stack_status 1 "the stack is running, so the starting point is sound"
 
 echo "▶️ Step 2: break it with an image tag that cannot be pulled"
-# Portainer 2.45 deploys asynchronously, so this apply usually returns before
-# the deployment fails. Whether the failure surfaces here at all depends on the
-# Portainer version and is not what this test is about, so the exit status is
-# deliberately not asserted — the status check below is what matters.
-terraform apply -auto-approve -var="stack_image=${BROKEN_IMAGE}" || true
+# The apply has to fail: Portainer 2.39 rejects the update itself, and on 2.45,
+# which deploys asynchronously, the provider reads the failure from the
+# stack's deployment history. It used to report a successful apply for a
+# stack that never came up.
+#
+# The daily workflow tests the provider released on the registry, which may
+# predate that fix; it sets E2E_RELEASED_PROVIDER=1 to only warn here.
+if terraform apply -auto-approve -var="stack_image=${BROKEN_IMAGE}"; then
+  if [ "${E2E_RELEASED_PROVIDER:-0}" = 1 ]; then
+    echo "⚠️ The apply succeeded although the redeploy failed (released provider without the fix)"
+  else
+    echo "❌ The apply succeeded although the redeploy failed"
+    exit 1
+  fi
+else
+  echo "   the failed redeploy failed the apply"
+fi
 
 echo "▶️ Step 3: Portainer must report the stack as failed (status 4)"
 if ! await_stack_status 4 "the stack is in Error, as the issue describes"; then

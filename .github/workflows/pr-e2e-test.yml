@@ -3,13 +3,16 @@ name: PR E2E Tests
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   docker-k8s:
     name: Docker + Kubernetes + Swarm
     runs-on: ubuntu-latest
     steps:
       - name: ⬇️ Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: 🧰 E2E setup (with Kubernetes)
         uses: ./.github/actions/e2e-setup
@@ -17,7 +20,10 @@ jobs:
           kubernetes: "true"
 
       - name: 🔍 Validate formatting (terraform fmt)
-        run: terraform fmt -check -recursive
+        # Only the Terraform directories: portainer_data/ is Portainer's data
+        # directory, which the running container fills with root-only folders
+        # that Terraform 1.11+ refuses to walk.
+        run: terraform fmt -check -recursive e2e-tests examples
 
       - name: 🧪 Convert docker-compose.yml to K8S yaml
         run: |
@@ -33,6 +39,7 @@ jobs:
           terraform init -input=false
           terraform fmt -check
           terraform apply -auto-approve
+          bash ../lib/expect-converged.sh
 
       - name: 🧽 Apply Portainer settings
         run: |
@@ -40,12 +47,16 @@ jobs:
           terraform init -input=false
           terraform fmt -check
           terraform apply -auto-approve
+          bash ../lib/expect-converged.sh
 
       - name: 🧪 Run Terraform E2E tests
         run: |
           APPLY_ONLY_DIRS=("deployment" "stack_standalone_string" "webhook" "container_exec" "backup" "auth" "open_amt" "kubernetes_role" "kubernetes_delete_object" "endpoint_snapshot" "endpoint_settings" "kubernetes_namespace" "user_admin" "kubernetes_manifest_dry_run" "data_kubernetes_workloads" "data_portainer_readonly" "data_kubernetes_cluster_readonly" "data_docker_readonly" "data_connection_checks" "data_templates_catalogue" "data_endpoint_registries" "endpoint_relations" "stack_delete_by_name")
           FULL_CYCLE_DIRS=("edge_string" "edge_file" "edge_repository" "kubernetes_application" "kubernetes_deployment_scale" "user_api_key" "endpoint_group_membership" "data_team_memberships" "custom_template_file" "kubernetes_clusterrole" "kubernetes_clusterrolebinding" "kubernetes_configmaps" "kubernetes_cronjob" "kubernetes_helm" "kubernetes_ingress" "kubernetes_ingresscontrollers" "kubernetes_job" "kubernetes_namespace_ingresscontrollers" "kubernetes_namespace_system" "kubernetes_role" "kubernetes_rolebinding" "kubernetes_secret" "kubernetes_service" "kubernetes_serviceaccounts" "kubernetes_storage" "kubernetes_volume"
           "custom_template_string" "custom_template_file" "custom_template_repository" "docker_image" "docker_network" "docker_plugin" "docker_volume" "stack_standalone_string" "stack_standalone_file" "stack_standalone_repository" "endpoint_group" "tag" "user-team-teammembership" "registry" "environment_tags")
+          # portainer_deploy in "deployment" moves the stack to another image
+          # revision on purpose, so its plan is never empty.
+          NOT_CONVERGING_DIRS=("deployment")
 
           for dir in "${FULL_CYCLE_DIRS[@]}"; do
             if [ -d "e2e-tests/$dir" ]; then
@@ -55,6 +66,7 @@ jobs:
               terraform fmt -check
               terraform validate
               terraform apply -auto-approve
+              bash ../lib/expect-converged.sh
               terraform destroy -auto-approve
               cd -
             fi
@@ -68,6 +80,10 @@ jobs:
               terraform fmt -check
               terraform validate
               terraform apply -auto-approve
+              case " ${NOT_CONVERGING_DIRS[*]} " in
+                *" $dir "*) ;;
+                *) bash ../lib/expect-converged.sh ;;
+              esac
               cd -
             fi
           done
@@ -76,6 +92,9 @@ jobs:
         run: |
           cd e2e-tests/stack_error_recovery
           bash run.sh
+
+      - name: 🧪 Kubernetes environment configuration (drift and import)
+        run: bash e2e-tests/kubernetes_environment_config/run.sh
 
       - name: 🧽 Destroy Kubernetes Environment
         run: |
@@ -98,6 +117,7 @@ jobs:
               terraform fmt -check
               terraform validate
               terraform apply -auto-approve
+              bash ../lib/expect-converged.sh
               terraform destroy -auto-approve
               cd -
             fi
@@ -111,6 +131,7 @@ jobs:
               terraform fmt -check
               terraform validate
               terraform apply -auto-approve
+              bash ../lib/expect-converged.sh
               cd -
               sleep 20
             fi
@@ -121,7 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: ⬇️ Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: 🧰 E2E setup (Docker only)
         uses: ./.github/actions/e2e-setup
@@ -157,7 +178,7 @@ jobs:
           EDGE_ID=$(terraform output -raw edge_id)
           EDGE_KEY=$(terraform output -raw edge_key)
           export EDGE_ID EDGE_KEY
-          cd $GITHUB_WORKSPACE
+          cd "$GITHUB_WORKSPACE"
           make up-edge-agent
 
       - name: ✅ Verify Edge Agent connection
@@ -177,7 +198,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: ⬇️ Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: 🧰 E2E setup (Docker only)
         uses: ./.github/actions/e2e-setup
@@ -188,3 +209,32 @@ jobs:
           terraform init -input=false
           terraform fmt -check
           terraform apply -auto-approve
+
+  regressions:
+    # Scripted tests for what one apply cannot show: drift made outside
+    # Terraform, imports, secrets kept out of state, failed deployments and the
+    # admin bootstrap on a fresh instance. Each run.sh asserts plan exit codes
+    # and Portainer's own state; see e2e-tests/lib/e2e.sh.
+    name: Scripted regressions
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: 🧰 E2E setup (Docker only)
+        uses: ./.github/actions/e2e-setup
+
+      - name: 🧪 Webhook drift, import and destroy
+        run: bash e2e-tests/webhook_drift_import/run.sh
+
+      - name: 🧪 Endpoint settings drift and import
+        run: bash e2e-tests/endpoint_settings_drift_import/run.sh
+
+      - name: 🧪 Registry password_wo stays out of state
+        run: bash e2e-tests/registry_password_wo/run.sh
+
+      - name: 🧪 Custom template from a Portainer Source
+        run: bash e2e-tests/custom_template_source/run.sh
+
+      - name: 🧪 Admin bootstrap with the setup token (own Portainer instance)
+        run: bash e2e-tests/user_admin_setup_token/run.sh

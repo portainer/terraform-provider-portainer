@@ -13,7 +13,8 @@ The `portainer_endpoints_edge_generate_key` resource allows administrators to ge
 resource "portainer_endpoints_edge_generate_key" "generated" {}
 
 output "edge_key" {
-  value = portainer_endpoints_edge_generate_key.generated.edge_key
+  value     = portainer_endpoints_edge_generate_key.generated.edge_key
+  sensitive = true
 }
 ```
 

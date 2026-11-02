@@ -52,7 +52,8 @@ resource "portainer_environment" "edge_env" {
 }
 
 output "edge_key" {
-  value = portainer_environment.edge_env.edge_key
+  value     = portainer_environment.edge_env.edge_key
+  sensitive = true
 }
 
 output "edge_id" {
@@ -100,18 +101,21 @@ resource "meu_portainer_environment" "docker_tls" {
 | ------------------------ | ----------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `name`                   | string                        | ✅ yes                       | Display name of the environment in Portainer.                                                                           |
 | `environment_address`    | string                        | ✅ yes                       | Target environment address (e.g. `tcp://host:9001`).                                                                    |
-| `public_ip`              | string                        | 🚫 optional                  | Public URL/IP shown in Portainer UI (maps to `PublicURL` field). Useful for correct Published Ports rendering.          |
-| `type`                   | int                           | ✅ yes                       | Environment type: `1` = Docker, `2` = Agent, `3` = Azure, `4` = Edge Agent, `5` = Kubernetes, `6` = Kubernetes via Agent, `7` = Kubernetes Edge Agent. Note: when using type `4` for Kubernetes Edge Agent, Portainer may automatically change the type to `7` after the agent connects. This is expected behavior and will not cause Terraform drift. |
+| `public_ip`              | string                        | 🚫 optional                  | Public URL/IP shown in Portainer UI (maps to `PublicURL` field). Useful for correct Published Ports rendering. When unset, Portainer uses the environment address. |
+| `type`                   | int                           | ✅ yes                       | Environment type: `1` = Docker, `2` = Agent, `3` = Azure, `4` = Edge Agent, `5` = Kubernetes, `6` = Kubernetes via Agent, `7` = Kubernetes Edge Agent. Note: when using type `4` for Kubernetes Edge Agent, Portainer may automatically change the type to `7` after the agent connects, and an Agent (`2`) on Kubernetes becomes `6`. This is expected behavior and will not cause Terraform drift. Portainer also stores agent addresses without the `tcp://` scheme; that difference is not planned either. |
 | `group_id`               | int                           | 🚫 optional (default `1`)    | ID of the Portainer endpoint group. Default is `1` (Unassigned).                                                        |
 | `tag_ids`                | list(int)                     | 🚫 optional                  | List of Portainer tag IDs to assign to the environment. Only used during creation.                                      |
 | `tls_enabled`            | bool                          | 🚫 optional (default `true`) | Enable TLS for connection to the agent. Must be `true` for agent-based environments. **Ignored for Edge Agent types (`4`, `7`)** — Portainer rejects TLS for them, so the provider does not send it. |
 | `tls_skip_verify`        | bool                          | 🚫 optional (default `true`) | Skip server certificate verification. Useful for self-signed certificates.                                              |
 | `tls_skip_client_verify` | bool                          | 🚫 optional (default `true`) | Skip client certificate verification. Used when mutual TLS is not required.                                             |
 | `tls_ca_cert`            | string                        | 🚫 optional (sensitive)      | PEM-encoded CA certificate. Uploaded as `TLSCACertFile` when `tls_enabled = true` and `tls_skip_verify = false`.        |
-| `tls_cert`               | string                        | 🚫 optional (sensitive)      | PEM-encoded client certificate. Uploaded as `TLSCertFile` when `tls_enabled = true` and `tls_skip_verify = false`.      |
-| `tls_key`                | string                        | 🚫 optional (sensitive)      | PEM-encoded client private key. Uploaded as `TLSKeyFile` when `tls_enabled = true` and `tls_skip_verify = false`.       |
+| `tls_cert`               | string                        | 🚫 optional (sensitive)      | PEM-encoded client certificate. Uploaded when `tls_enabled = true` and `tls_skip_client_verify = false`. A changed certificate is uploaded in place. |
+| `tls_key`                | string                        | 🚫 optional (sensitive)      | PEM-encoded client private key. Uploaded when `tls_enabled = true` and `tls_skip_client_verify = false`.       |
+| `tls_key_wo`             | string                        | 🚫 optional (write-only)     | Write-only client private key, never stored in state (Terraform 1.11+). Conflicts with `tls_key`; requires `tls_key_wo_version` |
+| `tls_key_wo_version`     | number                        | 🚫 optional                  | Version of `tls_key_wo`. Increment it to upload a new key |
 | `user_access_policies`   | map(object({ RoleId = int })) | 🚫 optional                  | Access control for users (applies to environments only).                                                                |
 | `team_access_policies`   | map(object({ RoleId = int })) | 🚫 optional                  | Access control for teams (applies to environments only).                                                                |
+| `container_engine`       | string                        | 🚫 optional (default `docker`) | Container engine sent when creating an Edge Agent environment (`type = 4`). Value must be one of: `docker` or `podman`. Changing it forces replacement. |
 
 ---
 

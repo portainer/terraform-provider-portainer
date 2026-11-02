@@ -62,8 +62,13 @@ func TestDockerPluginCreate_EnableTrue(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	if mock.FindRequest("POST", "/endpoints/1/docker/plugins/sshfs/enable") == nil {
-		t.Error("expected enable POST to be sent")
+	enable := mock.FindRequest("POST", "/endpoints/1/docker/plugins/sshfs/enable")
+	if enable == nil {
+		t.Fatal("expected enable POST to be sent")
+	}
+	// Docker rejects the enable call without a timeout.
+	if enable.Query != "timeout=0" {
+		t.Errorf("expected timeout=0, got %q", enable.Query)
 	}
 }
 
@@ -73,13 +78,11 @@ func TestDockerPluginRead_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 
 	mock.On("GET", "/endpoints/1/docker/plugins/sshfs/json", RespondJSON(http.StatusOK, map[string]interface{}{
-		"Enabled": true,
-		"Config": map[string]interface{}{
-			"Remote": "vieux/sshfs:latest",
-			"Settings": map[string]interface{}{
-				"Env": []interface{}{"DEBUG=1"},
-			},
-		},
+		"Enabled":         true,
+		"PluginReference": "docker.io/vieux/sshfs:latest",
+	}))
+	mock.On("GET", "/endpoints/1/docker/plugins/privileges", RespondJSON(http.StatusOK, []map[string]interface{}{
+		{"Name": "network", "Description": "permissions to access a network", "Value": []string{"host"}},
 	}))
 
 	r := resourceDockerPlugin()
@@ -94,8 +97,17 @@ func TestDockerPluginRead_HappyPath(t *testing.T) {
 	if got := d.Get("enable"); got != true {
 		t.Errorf("enable: expected true, got %v", got)
 	}
-	if got := d.Get("remote"); got != "vieux/sshfs:latest" {
-		t.Errorf("remote: expected %q, got %v", "vieux/sshfs:latest", got)
+	// An import has no remote yet; it comes from the plugin reference, and
+	// the settings from the privileges the plugin requires.
+	if got := d.Get("remote"); got != "vieux/sshfs" {
+		t.Errorf("remote: expected %q, got %v", "vieux/sshfs", got)
+	}
+	if req := mock.FindRequest("GET", "/endpoints/1/docker/plugins/privileges"); req == nil || req.Query != "remote=vieux%2Fsshfs" {
+		t.Errorf("expected the privileges of vieux/sshfs to be read, got %+v", req)
+	}
+	settings := d.Get("settings").([]interface{})
+	if len(settings) != 1 || settings[0].(map[string]interface{})["name"] != "network" {
+		t.Errorf("settings: expected the network privilege, got %v", settings)
 	}
 }
 
@@ -136,8 +148,13 @@ func TestDockerPluginDelete_HappyPath(t *testing.T) {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
-	if mock.FindRequest("DELETE", "/endpoints/1/docker/plugins/sshfs") == nil {
-		t.Error("expected DELETE /endpoints/1/docker/plugins/sshfs")
+	del := mock.FindRequest("DELETE", "/endpoints/1/docker/plugins/sshfs")
+	if del == nil {
+		t.Fatal("expected DELETE /endpoints/1/docker/plugins/sshfs")
+	}
+	// Docker refuses to remove an enabled plugin without force.
+	if del.Query != "force=true" {
+		t.Errorf("expected force=true, got %q", del.Query)
 	}
 	if d.Id() != "" {
 		t.Errorf("expected ID cleared, got %q", d.Id())

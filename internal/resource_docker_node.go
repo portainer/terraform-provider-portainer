@@ -23,6 +23,9 @@ func resourceDockerNode() *schema.Resource {
 		ReadContext:   resourceDockerNodeRead,
 		UpdateContext: resourceDockerNodeUpdate,
 		DeleteContext: resourceDockerNodeDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: importDockerNode,
+		},
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,

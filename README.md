@@ -71,6 +71,10 @@ provider "portainer" {
   #   "CF-Access-Client-Id"     = "..."
   #   "CF-Access-Client-Secret" = "..."
   # }
+
+  # Optional: retries for transient failures and a per-request time limit
+  # max_retries     = 3    # default
+  # request_timeout = "5m" # default: no limit
 }
 ```
 
@@ -125,6 +129,25 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 
 > These variables are a no-op when unset, so existing setups are unaffected. Lowercase variants (`http_proxy`, `https_proxy`, `no_proxy`) are also recognized.
 
+### Retries and Timeouts
+Requests that fail transiently are retried up to `max_retries` times (default 3) with exponential backoff, honoring a `Retry-After` header. Only retries that cannot apply a change twice are made:
+
+| Failure | Retried for |
+| ------- | ----------- |
+| Connection refused (the request never reached Portainer) | every method |
+| `429 Too Many Requests`, `503 Service Unavailable` | `GET`, `PUT`, `DELETE` |
+| `502 Bad Gateway`, `504 Gateway Timeout`, dropped connection | `GET` only, because a proxy can answer this while Portainer still applies the change |
+
+`request_timeout` limits a single request, including reading the response. It is unset by default: pulling a large image or installing a Helm chart is one request that can legitimately take minutes. Every request is still cancelled when the Terraform operation times out or is interrupted.
+
+```hcl
+provider "portainer" {
+  endpoint        = "https://portainer.example.com"
+  max_retries     = 5
+  request_timeout = "5m"
+}
+```
+
 ## Arguments Reference
 | Name              | Type    | Required | Description                                                                                         |
 | ----------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------|
@@ -134,6 +157,8 @@ $ export NO_PROXY="localhost,127.0.0.1,.internal.example.com"
 | `api_password`    | string  | ❌ no    | Password for authentication (must be used with `api_user`). Mutually exclusive with `api_key`.      |
 | `skip_ssl_verify` | boolean | ❌ no    | Skip TLS certificate verification (useful for self-signed certs). Default: `false`.                 |
 | `custom_headers`  | map(string) | ❌ no | Custom headers added to all requests (e.g. Cloudflare Access / security proxy headers).            |
+| `max_retries`     | number  | ❌ no    | Retries for transient failures, with exponential backoff (1s, 2s, 4s, ...). `0` disables. Default: `3`. Env: `PORTAINER_MAX_RETRIES`. |
+| `request_timeout` | string  | ❌ no    | Time limit for one HTTP request, as a duration such as `"2m"`. Default: no limit. Env: `PORTAINER_REQUEST_TIMEOUT`. |
 
 
 ## Usage

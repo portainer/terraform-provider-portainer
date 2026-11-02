@@ -490,3 +490,88 @@ func TestWaitForStackWrappers_DifferOnlyOnFailedDeployments(t *testing.T) {
 		t.Errorf("a deployment that failed earlier must not block our mutation (issue #147): %v", err)
 	}
 }
+
+// TestStackUpdate_WaitsForAsyncRedeploy guards the drift Portainer 2.45 caused:
+// Update returned while the redeploy was still running, so Read saw status 3
+// (Deploying), stored active = false and the next plan wanted active = true.
+func TestStackUpdate_WaitsForAsyncRedeploy(t *testing.T) {
+	withFastStackPolling(t)
+
+	mock := NewMockServer(t)
+	// Free before the PUT, deploying for two polls after it, then running.
+	mock.On("GET", "/stacks/3", respondStackStatuses(1, stackStatusDeploying, stackStatusDeploying, 1))
+	mock.On("PUT", "/stacks/3", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 3, "Name": "app"}))
+	mock.On("GET", "/stacks/3/file", RespondJSON(http.StatusOK, map[string]interface{}{
+		"StackFileContent": "version: '3'",
+	}))
+
+	r, d := stackUpdateResourceData(t, "3", true)
+	if err := rcUpdate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+	if got := d.Get("active").(bool); !got {
+		t.Error("Update returned before the redeploy finished: Read stored active = false")
+	}
+}
+
+// TestStackCreate_RepositoryWaitsForDeployment is the regression test for a
+// git stack created while Portainer was still deploying it: the create
+// returned at once, so a failed deployment went unreported and the Read saw
+// the stack as not active, which planned active = true on the next run.
+func TestStackCreate_RepositoryWaitsForDeployment(t *testing.T) {
+	withFastStackPolling(t)
+
+	for _, tc := range []struct {
+		name     string
+		statuses []int
+		wantErr  string
+	}{
+		{"deployed", []int{stackStatusDeploying, stackStatusDeploying, 1}, ""},
+		{"failed", []int{stackStatusDeploying, stackStatusError}, "mounts denied"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := NewMockServer(t)
+			mockEmptyStackList(mock)
+			mock.On("POST", "/stacks/create/standalone/repository", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 5, "Name": "web"}))
+			var calls int64
+			mock.On("GET", "/stacks/5", func(w http.ResponseWriter, _ *http.Request) {
+				i := int(atomic.AddInt64(&calls, 1)) - 1
+				if i >= len(tc.statuses) {
+					i = len(tc.statuses) - 1
+				}
+				stack := map[string]interface{}{"Id": 5, "Name": "web", "Status": tc.statuses[i], "Type": 2, "EndpointId": 1}
+				if tc.statuses[i] == stackStatusError {
+					stack["DeploymentStatus"] = []map[string]interface{}{
+						{"Status": stackStatusDeploying, "Time": 1},
+						{"Status": stackStatusError, "Time": 2, "Message": "compose up operation failed: mounts denied"},
+					}
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(stack)
+			})
+
+			r := resourcePortainerStack()
+			d := r.TestResourceData()
+			_ = d.Set("deployment_type", "standalone")
+			_ = d.Set("method", "repository")
+			_ = d.Set("name", "web")
+			_ = d.Set("endpoint_id", 1)
+			_ = d.Set("repository_url", "https://github.com/acme/app.git")
+			_ = d.Set("active", true)
+
+			err := rcCreate(r, d, mock.Client())
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Create failed: %v", err)
+				}
+				if got := d.Get("active"); got != true {
+					t.Errorf("active: expected true once deployed, got %v", got)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected the deployment failure with Portainer's message, got %v", err)
+			}
+		})
+	}
+}

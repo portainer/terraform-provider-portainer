@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -74,7 +73,7 @@ func resourceCloudCredentialsCreate(ctx context.Context, d *schema.ResourceData,
 func resourceCloudCredentialsDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/cloud/credentials/%s", client.Endpoint, d.Id()), nil, nil); err != nil {
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/cloud/credentials/%s", client.Endpoint, d.Id()), nil, nil); err != nil && !isAPINotFound(err) {
 		return diag.FromErr(fmt.Errorf("failed to delete cloud credential: %w", err))
 	}
 
@@ -93,6 +92,10 @@ func resourceCloudCredentialsRead(ctx context.Context, d *schema.ResourceData, m
 		Credentials map[string]interface{} `json:"credentials"`
 	}
 	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/cloud/credentials/%s", client.Endpoint, id), nil, &result); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
 		return diag.FromErr(fmt.Errorf("failed to read cloud credential: %w", err))
 	}
 
@@ -111,27 +114,17 @@ func resourceCloudCredentialsRead(ctx context.Context, d *schema.ResourceData, m
 
 func resourceCloudCredentialsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
-	id := d.Id()
 
-	credentialsJSON, err := json.Marshal(mapStringInterface(d.Get("credentials").(map[string]interface{})))
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to encode credentials to JSON: %w", err))
+	// The form used to go out as request headers with an empty body, so the
+	// update never reached Portainer and the credentials were exposed in the
+	// headers instead.
+	payload := CloudCredentialPayload{
+		Provider:    d.Get("cloud_provider").(string),
+		Name:        d.Get("name").(string),
+		Credentials: mapStringInterface(d.Get("credentials").(map[string]interface{})),
 	}
-
-	form := map[string]string{
-		"provider":    d.Get("cloud_provider").(string),
-		"name":        d.Get("name").(string),
-		"credentials": string(credentialsJSON),
-	}
-
-	resp, err := client.DoRequest(http.MethodPut, fmt.Sprintf("/cloud/credentials/%s", id), form, nil)
-	if err != nil {
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/cloud/credentials/%s", client.Endpoint, d.Id()), payload, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update cloud credential: %w", err))
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return diag.FromErr(fmt.Errorf("failed to update cloud credential: HTTP %d", resp.StatusCode))
 	}
 
 	return nil

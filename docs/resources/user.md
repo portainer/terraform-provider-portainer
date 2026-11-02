@@ -91,7 +91,8 @@ terraform apply
 | `api_key_raw`       | string  | 🔄 computed (sensitive)    | The raw API key value. Only available at creation time.                    |
 
 > ⚠️ If `ldap_user = true`, the `password` must be omitted.  
-> ⚠️ `team_id` is ignored for admin users (`role = 1`).
+> ⚠️ `team_id` is ignored for admin users (`role = 1`).  
+> ℹ️ `team_id` tracks only the membership it creates: memberships managed with `portainer_team_membership` do not show up in it. Changing `team_id` moves the user to the new team.
 
 ## Attributes Reference
 

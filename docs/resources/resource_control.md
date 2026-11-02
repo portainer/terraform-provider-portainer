@@ -123,6 +123,7 @@ This forces recreation of the Terraform resource.
 | --------------------- | ------------ | -------- | ----------------------------------------------------------------------- |
 | `resource_control_id` | number       | optional | Direct ID of the existing Portainer ResourceControl                     |
 | `resource_id`         | string       | optional | ID of the Portainer-managed resource (stack ID)                         |
+| `endpoint_id`         | number       | optional | ID of the Docker environment holding a container, service, volume, network, secret or config (types 1-5, 7). With it, the control is read back from Portainer and changes made there show up in the plan |
 |`type`                 |number        | optional | Resource type. See full list below.                                     |
 | `administrators_only` | bool         | optional | Restrict access to administrators only. Default: `false`                |
 | `public`              | bool         | optional | Make the resource public. Default: `false`                              |
@@ -175,3 +176,14 @@ Portainer has no `GET /resource_controls/{id}`, so a control created by step 3 c
 | --------------------- | ------------------------------------------------- |
 | `id`                  | ID of the ResourceControl                         |
 | `resource_control_id` | Same ID stored as attribute (useful for chaining) |
+
+## Reading the control back
+
+Portainer has no endpoint to read a resource control by its ID, so the provider reads it from the object it protects:
+
+- **Stack deployed through Portainer** (`type = 6`, numeric `resource_id`): from the stack.
+- **Stack deployed outside Portainer** (`type = 6`, `resource_id = "<endpoint_id>_<compose project>"`): from the project's containers, which Portainer marks with the stack's control. A container with a control of its own shows that one instead, so while every container has one, or the project has no containers, the control is kept as configured.
+- **Container, service, volume, network, secret or config** (`type` 1-5, 7): from the Docker object, when `endpoint_id` is set. Without it the control is kept as configured.
+
+A control that is gone (or whose resource is gone) is removed from state and recreated on the next apply.
+

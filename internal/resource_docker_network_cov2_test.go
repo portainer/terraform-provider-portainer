@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"net/http"
 	"testing"
 )
@@ -221,7 +222,7 @@ func TestDockerNetworkCov2_FindFallback_MultiMatchReturnsNil(t *testing.T) {
 	_ = d.Set("driver", "bridge")
 	_ = d.Set("scope", "local")
 
-	net, err := findDockerNetworkFallback(d, mock.Client(), 1, map[string]string{})
+	net, err := findDockerNetworkFallback(context.Background(), d, mock.Client(), 1, map[string]string{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -246,7 +247,7 @@ func TestDockerNetworkCov2_FindFallback_ListErrors(t *testing.T) {
 	_ = d.Set("driver", "bridge")
 	_ = d.Set("scope", "local")
 
-	if _, err := findDockerNetworkFallback(d, mock.Client(), 1, map[string]string{}); err == nil {
+	if _, err := findDockerNetworkFallback(context.Background(), d, mock.Client(), 1, map[string]string{}); err == nil {
 		t.Fatal("expected error from failing list endpoint, got nil")
 	}
 }

@@ -52,3 +52,13 @@ resource "portainer_backup_azure_settings" "nightly" {
 Credentials are **not** read back from Portainer into state, even though the API returns them: state keeps what the configuration set. Removing the resource stops managing the settings — Portainer has no endpoint to clear them, so the schedule stays as last configured.
 
 Validate the credentials first with the `portainer_backup_azure_connection` data source.
+
+## Import
+
+The Azure Blob backup settings are instance-wide, so any import ID works:
+
+```shell
+terraform import portainer_backup_azure_settings.example portainer-backup-azure-settings
+```
+
+Secrets (the storage account key or client secret) are not read back; set them in the configuration after the import.

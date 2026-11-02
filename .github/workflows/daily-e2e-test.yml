@@ -5,16 +5,37 @@ on:
     - cron: "0 7 * * *" # Every day at 07:00 UTC
   workflow_dispatch: # Allow manual trigger
 
+permissions:
+  contents: read
+
+# This workflow tests the provider released on the registry against the
+# current Portainer, as a smoke test of what users run. The PR workflow tests
+# the branch itself, including the convergence checks and scripted regression
+# tests, which need provider fixes a release may not have yet.
 jobs:
   e2e:
+    name: E2E (${{ matrix.cli }} ${{ matrix.version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 1.11 is the oldest Terraform with write-only attribute support.
+          - cli: terraform
+            version: "~1.11.0"
+          - cli: terraform
+            version: latest
+          - cli: opentofu
+            version: latest
+    env:
+      PORTAINER_VERSION: "2.45.3"
 
     steps:
       - name: ⬇️ Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: ⚙️ Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
@@ -50,12 +71,31 @@ jobs:
           sudo mv ./kompose /usr/local/bin/kompose
 
       - name: ⬇️ Install Terraform
-        uses: hashicorp/setup-terraform@v3
+        if: matrix.cli == 'terraform'
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: 1.6.6
+          terraform_version: ${{ matrix.version }}
+          # Like OpenTofu below: the wrapper turns exit code 2 of
+          # `plan -detailed-exitcode` into 0, which hides plan checks.
+          terraform_wrapper: false
+
+      - name: ⬇️ Install OpenTofu
+        if: matrix.cli == 'opentofu'
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: ${{ matrix.version }}
+          tofu_wrapper: false
+
+      # The test steps below call `terraform`; run them with OpenTofu unchanged.
+      - name: 🔗 Expose OpenTofu as terraform
+        if: matrix.cli == 'opentofu'
+        run: sudo ln -sf "$(command -v tofu)" /usr/local/bin/terraform && terraform version
 
       - name: 🔍 Validate formatting (terraform fmt)
-        run: terraform fmt -check -recursive
+        # Only the Terraform directories: portainer_data/ is Portainer's data
+        # directory, which the running container fills with root-only folders
+        # that Terraform 1.11+ refuses to walk.
+        run: terraform fmt -check -recursive e2e-tests examples
 
       - name: 🧪 Run Terraform E2E tests - Convert docker-compose.yml to K8S yaml
         run: |
@@ -111,6 +151,10 @@ jobs:
           done
 
       - name: 🧪 Recover a stack left in Error
+        # This workflow tests the released provider, which may not report a
+        # failed redeploy yet; the PR workflow asserts that on the branch.
+        env:
+          E2E_RELEASED_PROVIDER: "1"
         run: |
           cd e2e-tests/stack_error_recovery
           bash run.sh
@@ -185,7 +229,7 @@ jobs:
           EDGE_ID=$(terraform output -raw edge_id)
           EDGE_KEY=$(terraform output -raw edge_key)
           export EDGE_ID EDGE_KEY
-          cd $GITHUB_WORKSPACE
+          cd "$GITHUB_WORKSPACE"
           make up-edge-agent
 
       - name: ✅ Verify Edge Agent connection

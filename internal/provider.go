@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -64,6 +65,20 @@ func Provider() *schema.Provider {
 				Optional:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
 				Description: "Custom headers to add to all requests (e.g. for Cloudflare Access or other security proxies).",
+			},
+			"max_retries": {
+				Type:         schema.TypeInt,
+				Optional:     true,
+				DefaultFunc:  schema.EnvDefaultFunc("PORTAINER_MAX_RETRIES", 3),
+				ValidateFunc: validation.IntBetween(0, 10),
+				Description:  "How many times a request that failed transiently is retried, with exponential backoff (1s, 2s, 4s, ...). Only retries that cannot apply a change twice are made: a refused connection for any method, 429/503 for GET/PUT/DELETE, and 502/504 or a dropped connection for GET only. 0 disables retries. Defaults to 3.",
+			},
+			"request_timeout": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				DefaultFunc:  schema.EnvDefaultFunc("PORTAINER_REQUEST_TIMEOUT", ""),
+				ValidateFunc: validateDuration,
+				Description:  "Time limit for a single HTTP request to Portainer, including reading the response, as a Go duration (e.g. \"2m\"). Empty (the default) sets no per-request limit; requests are still cancelled when the Terraform operation times out. Avoid short values when pulling large images or installing Helm charts, which Portainer handles in one request.",
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
@@ -126,6 +141,7 @@ func Provider() *schema.Provider {
 			"portainer_kubernetes_namespace":                    resourceKubernetesNamespace(),
 			"portainer_kubernetes_helm":                         resourceKubernetesHelm(),
 			"portainer_kubernetes_ingresscontrollers":           resourceKubernetesIngressControllers(),
+			"portainer_kubernetes_environment_config":           resourceKubernetesEnvironmentConfig(),
 			"portainer_kubernetes_namespace_ingresscontrollers": resourceKubernetesNamespaceIngressControllers(),
 			"portainer_kubernetes_ingresses":                    resourceKubernetesNamespaceIngress(),
 			"portainer_kubernetes_application":                  resourceKubernetesApplication(),
@@ -351,7 +367,7 @@ func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // DoRequest is a reusable method for making API requests
-func (c *APIClient) DoRequest(method, path string, headers map[string]string, body interface{}) (*http.Response, error) {
+func (c *APIClient) DoRequest(ctx context.Context, method, path string, headers map[string]string, body interface{}) (*http.Response, error) {
 	var buf io.Reader
 	if body != nil {
 		jsonBody, err := json.Marshal(body)
@@ -361,7 +377,7 @@ func (c *APIClient) DoRequest(method, path string, headers map[string]string, bo
 		buf = bytes.NewBuffer(jsonBody)
 	}
 
-	req, err := http.NewRequest(method, fmt.Sprintf("%s%s", c.Endpoint, path), buf)
+	req, err := http.NewRequestWithContext(ctx, method, fmt.Sprintf("%s%s", c.Endpoint, path), buf)
 	if err != nil {
 		return nil, err
 	}
@@ -381,39 +397,6 @@ func (c *APIClient) DoRequest(method, path string, headers map[string]string, bo
 	}
 
 	return c.HTTPClient.Do(req)
-}
-
-func (c *APIClient) DoMultipartRequest(method, url string, body *bytes.Buffer, headers map[string]string, out interface{}) error {
-	req, err := http.NewRequest(method, url, body)
-	if err != nil {
-		return err
-	}
-
-	if c.APIKey != "" {
-		req.Header.Set("X-API-Key", c.APIKey)
-	} else if c.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.JWTToken)
-	}
-
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("status %d: %s", resp.StatusCode, data)
-	}
-
-	if out != nil {
-		return json.NewDecoder(resp.Body).Decode(out)
-	}
-	return nil
 }
 
 // configureProvider sets up the API client and appends '/api' if missing from the endpoint.
@@ -465,8 +448,20 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	// the generated SDK placeholder messages.
 	transportWithErrCapture := &errorCaptureTransport{next: transportWithTagRewrite}
 
+	// Outermost, so every attempt runs the whole chain again: the multipart
+	// rewrite on a fresh body, and the error capture on the latest response.
+	var requestTimeout time.Duration
+	if v := d.Get("request_timeout").(string); v != "" {
+		requestTimeout, _ = time.ParseDuration(v) // validated by validateDuration
+	}
+	transportWithRetry := &retryTransport{
+		next:       transportWithErrCapture,
+		maxRetries: d.Get("max_retries").(int),
+		timeout:    requestTimeout,
+	}
+
 	httpClient := &http.Client{
-		Transport: transportWithErrCapture,
+		Transport: transportWithRetry,
 	}
 
 	// Prepare SDK transport
@@ -485,7 +480,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	schemes := []string{u.Scheme}
 
 	sdkTransport := httptransport.New(host, basePath, schemes)
-	sdkTransport.Transport = transportWithErrCapture
+	sdkTransport.Transport = transportWithRetry
 
 	if !strings.HasSuffix(endpoint, "/api") {
 		endpoint = strings.TrimRight(endpoint, "/") + "/api"
@@ -507,7 +502,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 			"Password": password,
 		}
 		payload, _ := json.Marshal(authBody)
-		req, err := http.NewRequest(http.MethodPost, endpoint+"/auth", bytes.NewBuffer(payload))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+"/auth", bytes.NewBuffer(payload))
 		if err != nil {
 			return nil, diag.FromErr(fmt.Errorf("failed to create auth request: %w", err))
 		}

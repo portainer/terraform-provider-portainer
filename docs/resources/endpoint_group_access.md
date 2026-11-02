@@ -46,3 +46,11 @@ resource "portainer_endpoint_group_access" "dev_team_access" {
 | Name | Description                |
 | ---- | -------------------------- |
 | `id` | ID of the resource control |
+
+## Import
+
+Access entries can be imported as `<endpoint_group_id>/team/<team_id>` or `<endpoint_group_id>/user/<user_id>`:
+
+```shell
+terraform import portainer_endpoint_group_access.example 2/team/4
+```

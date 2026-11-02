@@ -217,3 +217,20 @@ func TestGitopsSourceDelete_404IsSuccess(t *testing.T) {
 		t.Fatalf("Delete should treat a missing source as success: %v", err)
 	}
 }
+
+func TestGitopsSourceURL_SuppressesPortainerNormalization(t *testing.T) {
+	suppress := resourceGitopsSource().Schema["url"].DiffSuppressFunc
+	same := [][2]string{
+		{"https://github.com/acme/infra", "https://github.com/acme/infra.git"},
+		{"https://github.com/acme/infra", "https://GitHub.com/acme/infra/"},
+		{"https://github.com/acme/infra", "https://bot@github.com/acme/infra.git"},
+	}
+	for _, c := range same {
+		if !suppress("url", c[0], c[1], nil) {
+			t.Errorf("%q vs %q: expected no diff", c[0], c[1])
+		}
+	}
+	if suppress("url", "https://github.com/acme/infra", "https://github.com/acme/apps.git", nil) {
+		t.Error("a different repository must still show as a change")
+	}
+}

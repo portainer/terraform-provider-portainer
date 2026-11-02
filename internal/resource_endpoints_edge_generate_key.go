@@ -23,6 +23,7 @@ func resourcePortainerEdgeGenerateKey() *schema.Resource {
 				Type:        schema.TypeString,
 				Computed:    true,
 				ForceNew:    true,
+				Sensitive:   true,
 				Description: "The generated general edge key.",
 			},
 		},

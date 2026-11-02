@@ -74,6 +74,12 @@ func resourceEdgeStack() *schema.Resource {
 				ForceNew:    true,
 				Description: "Git repository URL containing the Edge stack definition. Changing this value forces resource recreation.",
 			},
+			"source_id": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "ID of a Portainer Source (Git source) providing the repository URL and credentials. Portainer 2.43 and later. When set, `repository_url` and the repository credentials can be left out; `repository_reference_name` and `file_path_in_repository` still apply. Changing this value forces resource recreation.",
+			},
 			"git_repository_authentication": {
 				Type:        schema.TypeBool,
 				Optional:    true,
@@ -87,12 +93,15 @@ func resourceEdgeStack() *schema.Resource {
 				Description: "Username used to authenticate against the Git repository. Changing this value forces resource recreation.",
 			},
 			"repository_password": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "Password or personal access token used to authenticate against the Git repository. Stored in state as sensitive value. Changing this value forces resource recreation.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				ConflictsWith: []string{"repository_password_wo"},
+				Description:   "Password or personal access token used to authenticate against the Git repository. Stored in state as sensitive value; use `repository_password_wo` to keep it out. Changing this value forces resource recreation.",
 			},
+			"repository_password_wo":         writeOnlySecretSchema("repository_password", "repository_password_wo_version", "Git password or personal access token"),
+			"repository_password_wo_version": writeOnlyVersionSchema("repository_password_wo", true),
 			"repository_reference_name": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -160,7 +169,8 @@ func resourceEdgeStack() *schema.Resource {
 			"webhook_url": {
 				Type:        schema.TypeString,
 				Computed:    true,
-				Description: "Full URL of the webhook trigger",
+				Sensitive:   true,
+				Description: "Full URL of the webhook trigger. Sensitive: anyone with the URL can redeploy the stack.",
 			},
 			"environment": {
 				Type:        schema.TypeMap,
@@ -424,9 +434,12 @@ func resourceEdgeStackCreate(ctx context.Context, d *schema.ResourceData, meta i
 		return nil
 	}
 
-	// Method: repository
-	if repoURLRaw, ok := d.GetOk("repository_url"); ok {
-		repoURL := repoURLRaw.(string)
+	// Method: repository (an inline URL or a Portainer Source)
+	if repoURL, sourceID := d.Get("repository_url").(string), d.Get("source_id").(int); repoURL != "" || sourceID != 0 {
+		repoPassword, err := secretValue(d, "repository_password", "repository_password_wo", "repository_password_wo_version")
+		if err != nil {
+			return diag.FromErr(err)
+		}
 		payload := map[string]interface{}{
 			"name":                      name,
 			"deploymentType":            deployType,
@@ -434,12 +447,15 @@ func resourceEdgeStackCreate(ctx context.Context, d *schema.ResourceData, meta i
 			"repositoryURL":             repoURL,
 			"repositoryAuthentication":  d.Get("git_repository_authentication").(bool),
 			"repositoryUsername":        d.Get("repository_username").(string),
-			"repositoryPassword":        d.Get("repository_password").(string),
+			"repositoryPassword":        repoPassword,
 			"repositoryReferenceName":   d.Get("repository_reference_name").(string),
 			"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
 			"filePathInRepository":      d.Get("file_path_in_repository").(string),
 			"useManifestNamespaces":     useManifest,
 			"registries":                registries,
+		}
+		if sourceID != 0 {
+			payload["sourceID"] = sourceID
 		}
 
 		if relPath, ok := d.GetOk("relative_path"); ok && relPath.(string) != "" {
@@ -486,7 +502,7 @@ func resourceEdgeStackCreate(ctx context.Context, d *schema.ResourceData, meta i
 		return diag.FromErr(createEdgeStackFromJSON(ctx, client, d, payload, "/edge_stacks/create/repository"))
 	}
 
-	return diag.FromErr(fmt.Errorf("one of 'stack_file_content', 'stack_file_path', 'repository_url', or 'helm_config' must be provided"))
+	return diag.FromErr(fmt.Errorf("one of 'stack_file_content', 'stack_file_path', 'repository_url', 'source_id', or 'helm_config' must be provided"))
 }
 
 func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -541,7 +557,7 @@ func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta i
 	// `refName` and the authentication block are honored. Changing the source
 	// URL or in-repo file path requires recreating the stack (enforced via
 	// ForceNew on the matching schema attributes).
-	if repoURL, ok := d.GetOk("repository_url"); ok && repoURL.(string) != "" {
+	if d.Get("repository_url").(string) != "" || d.Get("source_id").(int) != 0 {
 		payload := map[string]interface{}{
 			"deploymentType": deploymentType,
 			"groupIds":       toIntSlice(d.Get("edge_groups").([]interface{})),
@@ -561,17 +577,26 @@ func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta i
 		}
 
 		if d.Get("git_repository_authentication").(bool) {
+			password, err := secretValue(d, "repository_password", "repository_password_wo", "repository_password_wo_version")
+			if err != nil {
+				return diag.FromErr(err)
+			}
 			payload["authentication"] = map[string]interface{}{
 				"username":        d.Get("repository_username").(string),
-				"password":        d.Get("repository_password").(string),
+				"password":        password,
 				"gitCredentialID": d.Get("repository_git_credential_id").(int),
 			}
 		}
 
 		if d.Get("stack_webhook").(bool) || d.Get("update_interval").(string) != "" {
+			// Keep the existing webhook: a new ID on every update broke every
+			// CI job that had been given the old URL.
 			webhookID := ""
 			if d.Get("stack_webhook").(bool) {
-				webhookID = uuid.New().String()
+				webhookID = d.Get("webhook_id").(string)
+				if webhookID == "" {
+					webhookID = uuid.New().String()
+				}
 			}
 			autoUpdate := map[string]interface{}{
 				"forcePullImage": d.Get("pull_image").(bool),
@@ -600,7 +625,7 @@ func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta i
 		return resourceEdgeStackRead(ctx, d, meta)
 	}
 
-	return diag.FromErr(fmt.Errorf("one of 'stack_file_content', 'stack_file_path', 'repository_url', or 'helm_config' must be provided for update"))
+	return diag.FromErr(fmt.Errorf("one of 'stack_file_content', 'stack_file_path', 'repository_url', 'source_id', or 'helm_config' must be provided for update"))
 }
 
 func createEdgeStackFromJSON(ctx context.Context, client *APIClient, d *schema.ResourceData, payload map[string]interface{}, endpoint string) error {

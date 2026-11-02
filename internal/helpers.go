@@ -9,8 +9,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gopkg.in/yaml.v3"
@@ -219,23 +222,6 @@ func toIntSlice(raw []interface{}) []int {
 	return res
 }
 
-func apiGET(url string, apiKey string, client *APIClient) ([]byte, error) {
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	if client.APIKey != "" {
-		req.Header.Set("X-API-Key", client.APIKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return nil, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
-}
-
 func splitAndTrimCSV(s string) []string {
 	parts := strings.Split(s, ",")
 	out := make([]string, 0, len(parts))
@@ -266,24 +252,6 @@ func mustMap(v interface{}) map[string]interface{} {
 		return m
 	}
 	return map[string]interface{}{}
-}
-
-func apiGETWithCode(url string, apiKey string, client *APIClient) ([]byte, int, error) {
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	if apiKey != "" {
-		req.Header.Set("X-API-Key", apiKey)
-	} else if client.JWTToken != "" {
-		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
-	} else {
-		return nil, 0, fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	return body, resp.StatusCode, nil
 }
 
 // Context-aware API helpers (used by resources that support timeouts).
@@ -392,4 +360,131 @@ func apiPUTWithCodeCtx(ctx context.Context, url string, apiKey string, client *A
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	return body, resp.StatusCode, nil
+}
+
+// sleepCtx waits for d, or returns early with the context's error once ctx is
+// done, so a user-configured wait does not outlive a cancelled or timed-out
+// apply.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// validateDuration accepts an empty string or a non-negative Go duration such
+// as "90s" or "2m".
+func validateDuration(v interface{}, key string) ([]string, []error) {
+	s, _ := v.(string)
+	if s == "" {
+		return nil, nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return nil, []error{fmt.Errorf("%q must be a duration such as \"90s\" or \"2m\": %w", key, err)}
+	}
+	if d < 0 {
+		return nil, []error{fmt.Errorf("%q must not be negative", key)}
+	}
+	return nil, nil
+}
+
+// writeOnlyString returns the configured value of a write-only attribute,
+// which never reaches state and so can only be read from the raw
+// configuration. An unset or unknown value is returned as "".
+func writeOnlyString(d *schema.ResourceData, key string) (string, error) {
+	return writeOnlyStringAt(d, cty.GetAttrPath(key))
+}
+
+// writeOnlyStringAt is writeOnlyString for a write-only attribute inside a
+// block, e.g. cty.GetAttrPath("ldap_settings").IndexInt(0).GetAttr("password_wo").
+func writeOnlyStringAt(d *schema.ResourceData, path cty.Path) (string, error) {
+	raw, diags := d.GetRawConfigAt(path)
+	if diags.HasError() {
+		return "", fmt.Errorf("unable to read %s: %v", formatCtyPath(path), diags)
+	}
+	if !raw.IsKnown() || raw.IsNull() {
+		return "", nil
+	}
+	return raw.AsString(), nil
+}
+
+// writeOnlySecretSchema is the write-only twin of the secret attribute
+// secretKey: same value, never stored in state. versionKey has to be set
+// alongside it, because Terraform cannot see a change of a value it never
+// stores.
+func writeOnlySecretSchema(secretKey, versionKey, what string) *schema.Schema {
+	return &schema.Schema{
+		Type:          schema.TypeString,
+		Optional:      true,
+		Sensitive:     true,
+		WriteOnly:     true,
+		ConflictsWith: []string{secretKey},
+		RequiredWith:  []string{versionKey},
+		Description:   fmt.Sprintf("Write-only %s (supports ephemeral values; never stored in Terraform state). Conflicts with `%s`. Requires Terraform 1.11 or later.", what, secretKey),
+	}
+}
+
+// writeOnlyVersionSchema is the version attribute of the write-only woKey.
+// With forceNew the resource is replaced when it changes, matching a secret
+// attribute that is ForceNew itself.
+func writeOnlyVersionSchema(woKey string, forceNew bool) *schema.Schema {
+	desc := fmt.Sprintf("Version of `%s`. Increment it to send a new value.", woKey)
+	if forceNew {
+		desc += " Changing it forces resource recreation."
+	}
+	return &schema.Schema{
+		Type:        schema.TypeInt,
+		Optional:    true,
+		ForceNew:    forceNew,
+		Description: desc,
+	}
+}
+
+// secretValue returns the secret in key, or the one in its write-only twin
+// woKey when versionKey is set. The write-only value is only in the
+// configuration, which every apply carries.
+//
+// A configured write-only value wins over key: when a configuration moves
+// from key to woKey, an optional-computed key still holds the old secret from
+// state, which used to be sent instead of the new one. That old value is
+// cleared from state then, which is the point of moving to woKey.
+func secretValue(d *schema.ResourceData, key, woKey, versionKey string) (string, error) {
+	if d.Get(versionKey).(int) != 0 {
+		wo, err := writeOnlyString(d, woKey)
+		if err != nil {
+			return "", err
+		}
+		if wo != "" {
+			if d.Get(key).(string) != "" {
+				if err := d.Set(key, ""); err != nil {
+					return "", err
+				}
+			}
+			return wo, nil
+		}
+	}
+	return d.Get(key).(string), nil
+}
+
+// formatCtyPath renders a cty path the way Terraform names attributes
+// (ldap_settings.0.password_wo) for error messages.
+func formatCtyPath(path cty.Path) string {
+	parts := make([]string, 0, len(path))
+	for _, step := range path {
+		switch s := step.(type) {
+		case cty.GetAttrStep:
+			parts = append(parts, s.Name)
+		case cty.IndexStep:
+			if s.Key.Type() == cty.Number {
+				i, _ := s.Key.AsBigFloat().Int64()
+				parts = append(parts, strconv.FormatInt(i, 10))
+			}
+		}
+	}
+	return strings.Join(parts, ".")
 }

@@ -1,6 +1,5 @@
 resource "portainer_settings" "example" {
   authentication_method        = var.authentication_method
-  enable_telemetry             = var.enable_telemetry
   logo_url                     = var.logo_url
   snapshot_interval            = var.snapshot_interval
   user_session_timeout         = var.user_session_timeout

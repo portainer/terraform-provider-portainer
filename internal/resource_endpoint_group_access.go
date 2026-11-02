@@ -19,6 +19,9 @@ func resourceEndpointGroupAccess() *schema.Resource {
 		ReadContext:   resourceEndpointGroupAccessRead,
 		UpdateContext: resourceEndpointGroupAccessUpdate,
 		DeleteContext: resourceEndpointGroupAccessDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: importEndpointGroupAccess,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"endpoint_group_id": {

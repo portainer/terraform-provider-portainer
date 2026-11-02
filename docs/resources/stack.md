@@ -70,6 +70,7 @@ resource "portainer_stack" "standalone_repo" {
 output "webhook_url" {
   description = "GitOps webhook trigger URL"
   value       = portainer_stack.standalone_repo.webhook_url
+  sensitive   = true
 }
 ```
 
@@ -106,6 +107,41 @@ resource "portainer_stack" "standalone_repo_ephemeral" {
   }
 }
 ```
+
+### Deploy Stack with Write-only (Ephemeral) Environment Variables
+Values in `env_wo` are sent to Portainer but never stored in the Terraform state or plan, so they can come from ephemeral resources (e.g. `ephemeral "vault_kv_secret_v2"`). Requires Terraform 1.11+ or OpenTofu 1.11+.
+```hcl
+ephemeral "vault_kv_secret_v2" "db" {
+  mount = "secret"
+  name  = "app/db"
+}
+
+resource "portainer_stack" "app" {
+  name               = "app"
+  deployment_type    = "standalone"
+  method             = "string"
+  endpoint_id        = 1
+  stack_file_content = file("docker-compose.yml")
+
+  env {
+    name  = "TZ"
+    value = "Europe/Prague"
+  }
+
+  env_wo {
+    name  = "DB_PASSWORD"
+    value = ephemeral.vault_kv_secret_v2.db.data["password"]
+  }
+
+  # Write-only values cannot be compared: bump this to redeploy with new values.
+  env_wo_version = 1
+}
+```
+
+- The `env_wo` values are sent on every deploy together with `env`, because Portainer replaces the whole variable list on each deploy.
+- Only the names of `env_wo` variables are stored in state; Read keeps them out of `env`. After `terraform import`, all variables land in `env` until `env_wo` is configured and applied.
+- A name may appear only once across `env` and `env_wo`.
+- The values are still stored in Portainer's database and are visible to users who can see the stack in Portainer.
 
 ### Deploy with Specific Registries
 ```hcl
@@ -419,7 +455,7 @@ From Portainer 2.45 a stack deploy is asynchronous: the create call returns as s
 The provider waits for the deployment to settle before it sends anything else to that stack, so no configuration change is needed. Two consequences worth knowing:
 
 - **A create can take as long as the deployment does.** Image pulls are the usual reason. The wait is bounded by the resource's `create`/`update` timeout (30 minutes by default), so raise that rather than expecting the apply to return early.
-- **A deployment that fails is reported as a failure.** Portainer releases the lock either way, so the provider checks the resulting status instead of assuming success: a stack that ends in `Error` fails the apply with a pointer to the stack's logs, rather than reporting a healthy apply for a stack that never came up.
+- **A deployment that fails is reported as a failure.** Portainer releases the lock either way, so the provider checks the resulting status instead of assuming success: a stack that ends in `Error` fails the apply with Portainer's error message (or a pointer to the stack's logs), rather than reporting a healthy apply for a stack that never came up. This covers creates and, through the deployment history Portainer keeps since 2.45, updates and `portainer_deploy` redeploys as well.
 
 On Portainer 2.39 and other pre-2.45 versions deployment is synchronous and no lock exists, so nothing changes.
 
@@ -427,7 +463,7 @@ On Portainer 2.39 and other pre-2.45 versions deployment is synchronous and no l
 
 Portainer does not clear the `Error` status by itself - it stays until something deploys the stack again — and it only persists a new compose file once a deploy has succeeded. A stack whose deployment failed therefore sits in `Error` with its previous definition still on disk.
 
-The check above applies only to a deployment this provider started. Before an update, a start or a stop, the provider waits out a deployment that is still running but does **not** treat an earlier failure as fatal: that call is exactly what replaces the broken definition. Fixing the compose file and re-applying recovers the stack, with no manual step in the Portainer UI.
+The check above applies only to a deployment this provider started: an update is blamed only for a deployment that started with or after it (Portainer 2.45+ keeps that history; an older version is never blamed for an earlier failure). Before an update, a start or a stop, the provider waits out a deployment that is still running but does **not** treat an earlier failure as fatal: that call is exactly what replaces the broken definition. Fixing the compose file and re-applying recovers the stack, with no manual step in the Portainer UI.
 
 Note that a stack can be reported as failed for reasons that have nothing to do with your configuration - see [portainer/portainer#13281](https://github.com/portainer/portainer/issues/13281), where a historical failed Swarm task makes a successful update report `deployment failed`. Being able to re-apply matters more in that case, not less.
 
@@ -442,6 +478,8 @@ Note that a stack can be reported as failed for reasons that have nothing to do 
 | `method`          | string       | ✅ yes       | Creation method: `string`, `file`, `repository`, or `url` (K8s only)|
 | `endpoint_id`     | int          | ✅ yes       | ID of the environment where the stack will be deployed              |
 | `env`             | list(object) | 🚫 optional | List of environment variables (`name`, `value`)                      |
+| `env_wo`          | list(object) | 🚫 optional | Environment variables with a **write-only** `value` (supports ephemeral values; only `name` is stored in state) |
+| `env_wo_version`  | int          | 🚫 optional | Version flag for `env_wo`; change it to redeploy the stack with the current `env_wo` values |
 | `prune`           | bool         | 🚫 optional | Remove services no longer in stack definition (default: `false`)     |
 | `pull_image`      | bool         | 🚫 optional | Pull latest image during update (default: `false`)                   |
 | `registries`      | list(int)    | 🚫 optional | List of registry IDs allowed for this stack                          |
@@ -467,7 +505,7 @@ Note that a stack can be reported as failed for reasons that have nothing to do 
 | ----------------------------------- | ------ | ----------- | ------------------------------------------------------------------------------------------------------- |
 | `repository_url`                    | string | ✅ yes       | Git repository URL                                                                                     |
 | `repository_reference_name`         | string | ✅ yes       | Git reference (default: `refs/heads/main`)                                                             |
-| `file_path_in_repository`           | string | ✅ yes       | Path to Compose file (default: `docker-compose.yml`)                                                   |
+| `file_path_in_repository`           | string | ✅ yes       | Path to Compose file (default: `docker-compose.yml`). Changed in place on Portainer 2.42+; older versions report an error and the stack has to be replaced |
 | `tlsskip_verify`                    | bool   | 🚫 optional | Skip TLS verification                                                                                   |
 | `git_repository_authentication`     | bool   | 🚫 optional | Enable authentication for Git repo (default: `false`)                                                   |
 | `repository_username`               | string | 🚫 optional | Git username (if auth is enabled)                                                                       |
@@ -475,7 +513,7 @@ Note that a stack can be reported as failed for reasons that have nothing to do 
 | `repository_url_wo`                 | string | 🚫 optional | **Write-only** repository URL (supports ephemeral values; not stored in Terraform state).               |
 | `repository_username_wo`            | string | 🚫 optional | **Write-only** repository username (supports ephemeral values; not stored in Terraform state).          |
 | `repository_password_wo`            | string | 🚫 optional | **Write-only** repository password or token (supports ephemeral values; not stored in Terraform state). |
-| `repository_credentials_wo_version` | int    | 🚫 optional | Version flag for write-only credentials; must be set when using `_wo` fields to trigger redeployment.   |
+| `repository_wo_version`             | int    | 🚫 optional | Version flag for write-only credentials; must be set when using `_wo` fields. Changing it recreates the stack. |
 | `stack_webhook`                     | bool   | 🚫 optional | Enable GitOps webhook (default: `false`)                                                                |
 | `update_interval`                   | string | 🚫 optional | Polling interval (enables GitOps polling, e.g. `30m`, `1h`)                                             |
 | `force_update`                      | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                                                            |
@@ -514,7 +552,7 @@ Note that a stack can be reported as failed for reasons that have nothing to do 
 | `repository_url_wo`                 | string | 🚫 optional | **Write-only** repository URL (supports ephemeral values; not stored in Terraform state).               |
 | `repository_username_wo`            | string | 🚫 optional | **Write-only** repository username (supports ephemeral values; not stored in Terraform state).          |
 | `repository_password_wo`            | string | 🚫 optional | **Write-only** repository password or token (supports ephemeral values; not stored in Terraform state). |
-| `repository_credentials_wo_version` | int    | 🚫 optional | Version flag for write-only credentials; must be set when using `_wo` fields to trigger redeployment.   |
+| `repository_wo_version`             | int    | 🚫 optional | Version flag for write-only credentials; must be set when using `_wo` fields. Changing it recreates the stack. |
 | `stack_webhook`                     | bool   | 🚫 optional | Enable GitOps webhook (default: `false`)                                                                |
 | `update_interval`                   | string | 🚫 optional | Polling interval (enables GitOps polling, e.g. `30m`, `1h`)                                             |
 | `force_update`                      | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                                                            |

@@ -74,29 +74,7 @@ func resourceKubernetesNamespaceCreate(ctx context.Context, d *schema.ResourceDa
 		}
 	}
 
-	quota := map[string]string{}
-	if raw, ok := d.GetOk("resource_quota"); ok {
-		for k, v := range raw.(map[string]interface{}) {
-			quota[k] = v.(string)
-		}
-	}
-
-	var rq map[string]interface{}
-	if licensed {
-		rq = map[string]interface{}{
-			"enabled":       true,
-			"cpuRequest":    quota["cpu_request"],
-			"cpuLimit":      quota["cpu_limit"],
-			"memoryRequest": quota["memory_request"],
-			"memoryLimit":   quota["memory_limit"],
-		}
-	} else {
-		rq = map[string]interface{}{
-			"enabled": true,
-			"cpu":     quota["cpu"],
-			"memory":  quota["memory"],
-		}
-	}
+	rq := namespaceResourceQuota(d, licensed)
 
 	body := map[string]interface{}{
 		"Name":          d.Get("name").(string),
@@ -177,19 +155,7 @@ func resourceKubernetesNamespaceRead(ctx context.Context, d *schema.ResourceData
 	// state and does not generate permanent drift on over-commit environments.
 	quota := map[string]string{}
 	if ns.ResourceQuota != nil {
-		hard := ns.ResourceQuota.Spec.Hard
-		if v, ok := hard["limits.cpu"]; ok {
-			quota["cpu_limit"] = v
-		}
-		if v, ok := hard["limits.memory"]; ok {
-			quota["memory_limit"] = v
-		}
-		if v, ok := hard["requests.cpu"]; ok {
-			quota["cpu_request"] = v
-		}
-		if v, ok := hard["requests.memory"]; ok {
-			quota["memory_request"] = v
-		}
+		quota = namespaceQuotaFromHard(ns.ResourceQuota.Spec.Hard, d.Get("resource_quota").(map[string]interface{}))
 	}
 	if len(quota) > 0 {
 		if err := d.Set("resource_quota", quota); err != nil {
@@ -223,29 +189,7 @@ func resourceKubernetesNamespaceUpdate(ctx context.Context, d *schema.ResourceDa
 		}
 	}
 
-	quota := map[string]string{}
-	if raw, ok := d.GetOk("resource_quota"); ok {
-		for k, v := range raw.(map[string]interface{}) {
-			quota[k] = v.(string)
-		}
-	}
-
-	var rq map[string]interface{}
-	if licensed {
-		rq = map[string]interface{}{
-			"enabled":       true,
-			"cpuRequest":    quota["cpu_request"],
-			"cpuLimit":      quota["cpu_limit"],
-			"memoryRequest": quota["memory_request"],
-			"memoryLimit":   quota["memory_limit"],
-		}
-	} else {
-		rq = map[string]interface{}{
-			"enabled": true,
-			"cpu":     quota["cpu"],
-			"memory":  quota["memory"],
-		}
-	}
+	rq := namespaceResourceQuota(d, licensed)
 
 	body := map[string]interface{}{
 		"Name":          newName,
@@ -276,17 +220,78 @@ func resourceKubernetesNamespaceDelete(ctx context.Context, d *schema.ResourceDa
 	envID, _ := strconv.Atoi(idParts[0])
 	name := idParts[1]
 
-	body := map[string]string{
-		"Name": name,
-	}
+	// Portainer takes a list of namespace names (since 2.27 at least); the
+	// object this used to send was rejected with 400 on every destroy.
+	body := []string{name}
 
 	url := fmt.Sprintf("%s/kubernetes/%d/namespaces", client.Endpoint, envID)
-	if err := doJSON(ctx, client, http.MethodDelete, url, body, nil); err != nil {
+	if err := doJSON(ctx, client, http.MethodDelete, url, body, nil); err != nil && !isAPINotFound(err) {
 		return diag.FromErr(fmt.Errorf("failed to delete namespace: %w", err))
 	}
 
 	d.SetId("")
 	return nil
+}
+
+// namespaceResourceQuota builds the ResourceQuota payload. Without
+// resource_quota the quota is disabled: an enabled quota with empty values
+// made Portainer reject the namespace ("Error parsing memory quota value").
+func namespaceResourceQuota(d *schema.ResourceData, licensed bool) map[string]interface{} {
+	quota := map[string]string{}
+	if raw, ok := d.GetOk("resource_quota"); ok {
+		for k, v := range raw.(map[string]interface{}) {
+			quota[k] = v.(string)
+		}
+	}
+	if len(quota) == 0 {
+		return map[string]interface{}{"enabled": false}
+	}
+	if licensed {
+		return map[string]interface{}{
+			"enabled":       true,
+			"cpuRequest":    quota["cpu_request"],
+			"cpuLimit":      quota["cpu_limit"],
+			"memoryRequest": quota["memory_request"],
+			"memoryLimit":   quota["memory_limit"],
+		}
+	}
+	return map[string]interface{}{
+		"enabled": true,
+		"cpu":     quota["cpu"],
+		"memory":  quota["memory"],
+	}
+}
+
+// namespaceQuotaFromHard maps the quota's spec.hard back to the keys the
+// configuration uses. Without a license Portainer takes one cpu/memory value
+// and sets it as both the limit and the request, so those keys come back as
+// cpu/memory rather than as the *_limit/*_request pair, which planned a change
+// on every run. An import, which has no keys yet, uses cpu/memory when the
+// limits equal the requests.
+func namespaceQuotaFromHard(hard map[string]string, configured map[string]interface{}) map[string]string {
+	_, cpu := configured["cpu"]
+	_, memory := configured["memory"]
+	combined := cpu || memory
+	if len(configured) == 0 {
+		combined = hard["limits.cpu"] == hard["requests.cpu"] && hard["limits.memory"] == hard["requests.memory"]
+	}
+
+	quota := map[string]string{}
+	keys := map[string]string{
+		"limits.cpu":      "cpu_limit",
+		"limits.memory":   "memory_limit",
+		"requests.cpu":    "cpu_request",
+		"requests.memory": "memory_request",
+	}
+	if combined {
+		keys = map[string]string{"limits.cpu": "cpu", "limits.memory": "memory"}
+	}
+	for hardKey, key := range keys {
+		if v, ok := hard[hardKey]; ok {
+			quota[key] = v
+		}
+	}
+	return quota
 }
 
 func hasLicense(ctx context.Context, client *APIClient) (bool, error) {

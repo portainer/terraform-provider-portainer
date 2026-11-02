@@ -1,6 +1,7 @@
 services:
   portainer:
-    image: portainer/portainer-ce
+    # Pinned so local runs and e2e test a known release; override with PORTAINER_VERSION.
+    image: portainer/portainer-ce:${PORTAINER_VERSION:-2.45.3}
     pull_policy: always
     container_name: portainer
     restart: unless-stopped

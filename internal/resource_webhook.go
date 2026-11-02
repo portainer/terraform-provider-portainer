@@ -19,6 +19,9 @@ func resourceWebhook() *schema.Resource {
 		DeleteContext: resourceWebhookDelete,
 		UpdateContext: resourceWebhookUpdate,
 		CustomizeDiff: resourceWebhookCustomizeDiff,
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
 		Schema: map[string]*schema.Schema{
 			"endpoint_id": {
 				Type:        schema.TypeInt,
@@ -43,7 +46,7 @@ func resourceWebhook() *schema.Resource {
 			"webhook_type": {
 				Type:        schema.TypeInt,
 				Required:    true,
-				Description: "Type of webhook in Portainer (e.g. 1 = service webhook, 2 = container webhook). Changing this value replaces the webhook unless `reassign_on_change` is set.",
+				Description: "Type of webhook in Portainer: 1 = service webhook, 2 = container webhook (Business Edition only; Community Edition accepts only 1). Changing this value replaces the webhook unless `reassign_on_change` is set.",
 			},
 			"reassign_on_change": {
 				Type:     schema.TypeBool,
@@ -91,7 +94,43 @@ func resourceWebhookCreate(ctx context.Context, d *schema.ResourceData, meta int
 	return nil
 }
 
+// webhookRecord is a webhook as GET /webhooks lists it. Portainer has no
+// endpoint to read a single webhook, so Read looks it up in the list.
+type webhookRecord struct {
+	ID         int    `json:"Id"`
+	Token      string `json:"Token"`
+	ResourceID string `json:"ResourceId"`
+	EndpointID int    `json:"EndpointId"`
+	RegistryID int    `json:"RegistryId"`
+	Type       int    `json:"Type"`
+}
+
+// resourceWebhookRead used to do nothing, so a webhook deleted in Portainer
+// stayed in state and its old URL kept being handed out.
 func resourceWebhookRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*APIClient)
+	id, err := strconv.Atoi(d.Id())
+	if err != nil {
+		return diag.Errorf("invalid webhook ID %q: expected the numeric Portainer webhook ID", d.Id())
+	}
+
+	var webhooks []webhookRecord
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/webhooks", nil, &webhooks); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to list webhooks: %w", err))
+	}
+	for _, w := range webhooks {
+		if w.ID != id {
+			continue
+		}
+		return diag.FromErr(setFields(d, map[string]interface{}{
+			"endpoint_id":  w.EndpointID,
+			"resource_id":  w.ResourceID,
+			"webhook_type": w.Type,
+			"registry_id":  w.RegistryID,
+			"token":        w.Token,
+		}))
+	}
+	d.SetId("")
 	return nil
 }
 
@@ -134,16 +173,11 @@ func resourceWebhookUpdate(ctx context.Context, d *schema.ResourceData, meta int
 
 func resourceWebhookDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
-	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := webhooks.NewDeleteWebhooksIDParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	_, err := client.Client.Webhooks.DeleteWebhooksID(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to delete webhook: %w", decorateSDKError(err, errBody)))
+	// Not through the SDK: it expects 202, while Portainer answers 204, so
+	// every destroy failed although the webhook was gone.
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/webhooks/%s", client.Endpoint, d.Id()), nil, nil); err != nil && !isAPINotFound(err) {
+		return diag.FromErr(fmt.Errorf("failed to delete webhook: %w", err))
 	}
 
 	d.SetId("")

@@ -187,7 +187,7 @@ func TestApiGET_Cov(t *testing.T) {
 	mock.On("GET", "/things", RespondString(http.StatusOK, "application/json", `{"ok":true}`))
 
 	client := mock.Client()
-	body, err := apiGET(mock.URL+"/api/things", client.APIKey, client)
+	body, err := apiGETCtx(context.Background(), mock.URL+"/api/things", client.APIKey, client)
 	if err != nil {
 		t.Fatalf("apiGET failed: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestApiGET_NoAuth_Cov(t *testing.T) {
 	client.APIKey = ""
 	client.JWTToken = ""
 
-	_, err := apiGET(mock.URL+"/api/things", "", client)
+	_, err := apiGETCtx(context.Background(), mock.URL+"/api/things", "", client)
 	if err == nil {
 		t.Fatal("expected error when no auth method provided")
 	}
@@ -225,7 +225,7 @@ func TestApiGET_JWT_Cov(t *testing.T) {
 	client.APIKey = ""
 	client.JWTToken = "jwt-token-123"
 
-	if _, err := apiGET(mock.URL+"/api/things", "", client); err != nil {
+	if _, err := apiGETCtx(context.Background(), mock.URL+"/api/things", "", client); err != nil {
 		t.Fatalf("apiGET with JWT failed: %v", err)
 	}
 	req := mock.FindRequest("GET", "/things")
@@ -239,7 +239,7 @@ func TestApiGETWithCode_Cov(t *testing.T) {
 	mock.On("GET", "/items", RespondString(http.StatusTeapot, "application/json", `boom`))
 
 	client := mock.Client()
-	body, code, err := apiGETWithCode(mock.URL+"/api/items", client.APIKey, client)
+	body, code, err := apiGETWithCodeCtx(context.Background(), mock.URL+"/api/items", client.APIKey, client)
 	if err != nil {
 		t.Fatalf("apiGETWithCode failed: %v", err)
 	}
@@ -256,7 +256,7 @@ func TestApiGETWithCode_NoAuth_Cov(t *testing.T) {
 	client := mock.Client()
 	client.JWTToken = ""
 
-	_, _, err := apiGETWithCode(mock.URL+"/api/items", "", client)
+	_, _, err := apiGETWithCodeCtx(context.Background(), mock.URL+"/api/items", "", client)
 	if err == nil {
 		t.Fatal("expected error when no auth method provided")
 	}

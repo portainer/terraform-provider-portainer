@@ -93,13 +93,16 @@ terraform apply
 ### For `Repository-based` Template
 | Name                        | Type   | Required    | Description                                                          |
 | --------------------------- | ------ | ----------- | -------------------------------------------------------------------- |
-| `repository_url`            | string | ✅ required  | Git repository URL                                                  |
+| `repository_url`            | string | ✅ required¹ | Git repository URL                                                  |
+| `source_id`                 | number | 🚫 optional  | ID of a Portainer Source (Git source) providing the URL and credentials (Portainer 2.43+). ¹ When set, `repository_url` and the credentials can be left out |
 | `repository_reference`      | string | ✅ required | Git reference (branch/tag), default: `refs/heads/main`               |
 | `compose_file_path`         | string | ✅ required | Path to Compose file inside repo, default: `docker-compose.yml`      |
 | `tlsskip_verify`            | bool   | 🚫 optional | Skip TLS verification for Git repo (default: `false`)                |
 | `repository_authentication` | bool   | 🚫 optional | Whether to enable authentication for the Git repo (default: `false`) |
 | `repository_username`       | string | 🚫 optional | Git username (required if `repository_authentication = true`)        |
 | `repository_password`       | string | 🚫 optional | Git password/token (required if `repository_authentication = true`)  |
+| `repository_password_wo`    | string | 🚫 optional | Write-only, never stored in state (Terraform 1.11+). Conflicts with `repository_password`; requires `repository_password_wo_version` |
+| `repository_password_wo_version` | number | 🚫 optional | Version of `repository_password_wo`. Increment it to send a new value; forces recreation, like `repository_password` |
 
 ## Attributes Reference
 

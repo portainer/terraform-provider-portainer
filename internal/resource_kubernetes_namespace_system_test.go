@@ -1,8 +1,11 @@
 package internal
 
 import (
+	"context"
 	"net/http"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
 // TestKubernetesNamespaceSystemCreate_HappyPath verifies that Create PUTs to
@@ -136,5 +139,30 @@ func TestKubernetesNamespaceSystemRead_404ClearsID(t *testing.T) {
 	}
 	if d.Id() != "" {
 		t.Errorf("expected ID cleared on 404, got %q", d.Id())
+	}
+}
+
+// TestKubernetesNamespaceSystemDiff_RejectsDefault is the regression test for
+// a config marking "default" as a system namespace: Portainer silently skips
+// it, so every plan proposed system = true again.
+func TestKubernetesNamespaceSystemDiff_RejectsDefault(t *testing.T) {
+	r := resourceKubernetesNamespaceSystem()
+	cases := []struct {
+		namespace string
+		system    bool
+		wantErr   bool
+	}{
+		{"default", true, true},
+		{"default", false, false},
+		{"team-a", true, false},
+	}
+	for _, tc := range cases {
+		cfg := terraform.NewResourceConfigRaw(map[string]interface{}{
+			"environment_id": 1, "namespace": tc.namespace, "system": tc.system,
+		})
+		_, err := r.Diff(context.Background(), nil, cfg, nil)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("%s system=%v: expected error %v, got %v", tc.namespace, tc.system, tc.wantErr, err)
+		}
 	}
 }

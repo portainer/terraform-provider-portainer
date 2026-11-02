@@ -24,6 +24,9 @@ resource "portainer_kubernetes_ingresscontrollers" "test" {
 ## Lifecycle & Behavior
 - This resource updates ingress controller configurations via the Portainer API.
 - You can enable, disable or modify ingress controllers declaratively via Terraform.
+- Portainer only takes `class_name` and `availability`; it fills `name`, `type`, `used` and `new` in itself, so they are informational and a difference in them is not planned once the controller is in state.
+- Only the listed classes are managed; other controllers in the cluster are left alone. Every `class_name` must exist in the cluster, otherwise the apply fails.
+- Destroying the resource makes the listed controllers available again (Portainer's default).
 
 ### Arguments Reference
 | Name             | Type   | Required | Description                                                     |
@@ -34,12 +37,12 @@ resource "portainer_kubernetes_ingresscontrollers" "test" {
 #### `controllers` block
 | Field         | Type    | Required | Description                                                                 |
 |---------------|---------|----------|-----------------------------------------------------------------------------|
-| `name`        | string  | ✅ yes   | Name of the ingress controller.                                             |
-| `class_name`  | string  | ✅ yes   | Class name used by the ingress controller (e.g. `"nginx"`).                |
-| `type`        | string  | ✅ yes   | Type of the ingress controller (e.g. `"nginx"`).                           |
+| `name`        | string  | ✅ yes   | Name of the ingress controller. Informational.                              |
+| `class_name`  | string  | ✅ yes   | Class name used by the ingress controller (e.g. `"nginx"`). Must exist in the cluster. |
+| `type`        | string  | ✅ yes   | Type of the ingress controller (e.g. `"nginx"`). Informational.            |
 | `availability`| bool    | ✅ yes   | Whether the controller is available.                                        |
-| `used`        | bool    | ✅ yes   | Whether the controller is actively used.                                    |
-| `new`         | bool    | ✅ yes   | Marks the controller as newly created.                                     |
+| `used`        | bool    | ✅ yes   | Whether the controller is actively used. Informational.                     |
+| `new`         | bool    | ✅ yes   | Marks the controller as newly created. Informational.                      |
 
 ---
 
@@ -48,3 +51,11 @@ resource "portainer_kubernetes_ingresscontrollers" "test" {
 | Name | Description                               |
 |------|-------------------------------------------|
 | `id` | Unique identifier for the kubernetes ingresscontrollers    |
+
+## Import
+
+Ingress controller settings can be imported using the numeric environment ID:
+
+```shell
+terraform import portainer_kubernetes_ingresscontrollers.example 5
+```

@@ -85,7 +85,7 @@ func (m *MockServer) Requests() []*RecordedRequest {
 //
 // Two flavors of resources coexist in this provider:
 //
-//  1. Direct-HTTP resources call client.DoRequest("POST", "/cloud/...", ...).
+//  1. Direct-HTTP resources call client.DoRequest(context.Background(), "POST", "/cloud/...", ...).
 //     The Endpoint here is m.URL (no "/api" suffix), so the final URL has no
 //     prefix and the dispatcher sees paths like "/cloud/gitcredentials".
 //

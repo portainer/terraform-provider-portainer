@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -204,7 +205,7 @@ func resourceDockerNetworkCreate(ctx context.Context, d *schema.ResourceData, me
 	}
 
 	path := fmt.Sprintf("/endpoints/%d/docker/networks/create", endpointID)
-	resp, err := client.DoRequest(http.MethodPost, path, headers, payload)
+	resp, err := client.DoRequest(ctx, http.MethodPost, path, headers, payload)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to create docker network: %w", err))
 	}
@@ -243,7 +244,7 @@ type dockerNetworkSummary struct {
 
 // findDockerNetworkFallback tries to locate a network by name/driver/scope
 // via /networks?filters=... when a lookup by ID failed (e.g. transient 404).
-func findDockerNetworkFallback(d *schema.ResourceData, client *APIClient, endpointID int, headers map[string]string) (*dockerNetworkSummary, error) {
+func findDockerNetworkFallback(ctx context.Context, d *schema.ResourceData, client *APIClient, endpointID int, headers map[string]string) (*dockerNetworkSummary, error) {
 	name := d.Get("name").(string)
 	driver := d.Get("driver").(string)
 	scope := d.Get("scope").(string)
@@ -265,7 +266,7 @@ func findDockerNetworkFallback(d *schema.ResourceData, client *APIClient, endpoi
 		url.QueryEscape(string(filtersJSON)),
 	)
 
-	resp, err := client.DoRequest(http.MethodGet, path, headers, nil)
+	resp, err := client.DoRequest(ctx, http.MethodGet, path, headers, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list docker networks for fallback lookup: %w", err)
 	}
@@ -299,14 +300,14 @@ func resourceDockerNetworkRead(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	path := fmt.Sprintf("/endpoints/%d/docker/networks/%s", endpointID, networkID)
-	resp, err := client.DoRequest(http.MethodGet, path, headers, nil)
+	resp, err := client.DoRequest(ctx, http.MethodGet, path, headers, nil)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to read docker network: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		network, err := findDockerNetworkFallback(d, client, endpointID, headers)
+		network, err := findDockerNetworkFallback(ctx, d, client, endpointID, headers)
 		if err != nil {
 			return diag.FromErr(err)
 		}
@@ -397,7 +398,7 @@ func resourceDockerNetworkRead(ctx context.Context, d *schema.ResourceData, meta
 			fields["options"] = v
 		}
 	} else {
-		fields["options"] = result.Options
+		fields["options"] = dockerNetworkOptions(result.Options, d.Get("options").(map[string]interface{}))
 	}
 
 	// labels
@@ -448,6 +449,27 @@ func resourceDockerNetworkRead(ctx context.Context, d *schema.ResourceData, meta
 	return nil
 }
 
+// dockerNetworkDerivedOptions are the options Docker (28+) adds to every
+// network from EnableIPv4/EnableIPv6, which enable_ipv4/enable_ipv6 already
+// track.
+var dockerNetworkDerivedOptions = []string{
+	"com.docker.network.enable_ipv4",
+	"com.docker.network.enable_ipv6",
+}
+
+// dockerNetworkOptions drops the options Docker derives itself, unless they
+// were configured, so a network nobody touched does not plan a replacement.
+func dockerNetworkOptions(actual, configured map[string]interface{}) map[string]interface{} {
+	options := make(map[string]interface{}, len(actual))
+	for k, v := range actual {
+		if _, ok := configured[k]; !ok && slices.Contains(dockerNetworkDerivedOptions, k) {
+			continue
+		}
+		options[k] = v
+	}
+	return options
+}
+
 func resourceDockerNetworkDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	endpointID := d.Get("endpoint_id").(int)
@@ -459,7 +481,7 @@ func resourceDockerNetworkDelete(ctx context.Context, d *schema.ResourceData, me
 	}
 
 	path := fmt.Sprintf("/endpoints/%d/docker/networks/%s", endpointID, id)
-	resp, err := client.DoRequest(http.MethodDelete, path, headers, nil)
+	resp, err := client.DoRequest(ctx, http.MethodDelete, path, headers, nil)
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("failed to delete docker network: %w", err))
 	}

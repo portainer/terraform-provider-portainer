@@ -9,11 +9,7 @@ import (
 //   - Create POSTs /cloud/credentials with JSON {provider, name, credentials}
 //     and expects {"id": <int>} in the response.
 //   - Read GETs /cloud/credentials/{id} and hydrates provider/name/credentials.
-//   - Update PUTs /cloud/credentials/{id} but the resource passes a `form`
-//     map as the headers argument and a nil body — i.e. the request body is
-//     empty and DoRequest defaults Content-Type to application/json. We only
-//     assert the PUT was sent at the right path; the wire shape is an
-//     implementation quirk worth noting but not validating in a behavior test.
+//   - Update PUTs /cloud/credentials/{id} with the same JSON body as Create.
 //   - Delete DELETEs /cloud/credentials/{id}.
 
 // TestCloudCredentialsCreate_HappyPath verifies the POST payload and that the
@@ -96,10 +92,8 @@ func TestCloudCredentialsRead_HappyPath(t *testing.T) {
 	}
 }
 
-// TestCloudCredentialsUpdate_HappyPath confirms PUT is sent at the right path.
-// (The resource currently passes the form data via the headers parameter and
-// a nil body — verifying that exact wire shape is out of scope here; we only
-// validate the method+path round-trip.)
+// TestCloudCredentialsUpdate_HappyPath confirms the PUT carries the new values
+// in its JSON body and none of them in the request headers.
 func TestCloudCredentialsUpdate_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 
@@ -117,8 +111,46 @@ func TestCloudCredentialsUpdate_HappyPath(t *testing.T) {
 	if err := rcUpdate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
-	if mock.FindRequest("PUT", "/cloud/credentials/3") == nil {
-		t.Error("expected PUT /cloud/credentials/3 to be sent")
+	put := mock.FindRequest("PUT", "/cloud/credentials/3")
+	if put == nil {
+		t.Fatal("expected PUT /cloud/credentials/3 to be sent")
+	}
+	var payload CloudCredentialPayload
+	if err := put.DecodeJSON(&payload); err != nil {
+		t.Fatalf("decode PUT body: %v", err)
+	}
+	if payload.Name != "updated" || payload.Provider != "aws" || payload.Credentials["accessKey"] != "AKIA-NEW" {
+		t.Errorf("unexpected PUT body: %+v", payload)
+	}
+	if put.Headers.Get("Credentials") != "" {
+		t.Error("credentials must not be sent as a request header")
+	}
+}
+
+func TestCloudCredentialsRead_NotFoundDropsState(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/cloud/credentials/3", RespondJSON(http.StatusNotFound, map[string]string{"message": "not found"}))
+
+	r := resourceCloudCredentials()
+	d := r.TestResourceData()
+	d.SetId("3")
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if d.Id() != "" {
+		t.Errorf("expected the deleted credential dropped from state, got ID %q", d.Id())
+	}
+}
+
+func TestCloudCredentialsDelete_AlreadyGone(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("DELETE", "/cloud/credentials/3", RespondJSON(http.StatusNotFound, map[string]string{"message": "not found"}))
+
+	r := resourceCloudCredentials()
+	d := r.TestResourceData()
+	d.SetId("3")
+	if err := rcDelete(r, d, mock.Client()); err != nil {
+		t.Fatalf("expected Delete to succeed for a credential that is already gone, got %v", err)
 	}
 }
 

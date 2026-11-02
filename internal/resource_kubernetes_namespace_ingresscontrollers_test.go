@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"net/http"
 	"testing"
 )
@@ -126,9 +127,9 @@ func TestKubernetesNamespaceIngressControllersRead_HappyPath(t *testing.T) {
 	}
 }
 
-// TestKubernetesNamespaceIngressControllersDelete_DisablesViaPUT verifies
-// Delete re-PUTs the controllers with Availability=false.
-func TestKubernetesNamespaceIngressControllersDelete_DisablesViaPUT(t *testing.T) {
+// TestKubernetesNamespaceIngressControllersDelete_RestoresViaPUT verifies
+// Delete re-PUTs the controllers with Availability=true, Portainer's default.
+func TestKubernetesNamespaceIngressControllersDelete_RestoresViaPUT(t *testing.T) {
 	mock := NewMockServer(t)
 
 	mock.On("PUT", "/kubernetes/2/namespaces/prod/ingresscontrollers",
@@ -165,7 +166,33 @@ func TestKubernetesNamespaceIngressControllersDelete_DisablesViaPUT(t *testing.T
 	if len(payload) != 1 {
 		t.Fatalf("expected 1 controller in payload, got %d", len(payload))
 	}
-	if payload[0]["Availability"] != false {
-		t.Errorf("expected Availability=false on delete, got %v", payload[0]["Availability"])
+	if payload[0]["Availability"] != true {
+		t.Errorf("expected Availability=true on delete, got %v", payload[0]["Availability"])
+	}
+}
+
+// TestKubernetesNamespaceIngressControllers_UpdateAndImport covers what the
+// resource lacked: a changed controller failed with "doesn't support update",
+// and the resource could not be imported.
+func TestKubernetesNamespaceIngressControllers_UpdateAndImport(t *testing.T) {
+	r := resourceKubernetesNamespaceIngressControllers()
+	if r.UpdateContext == nil {
+		t.Fatal("expected an UpdateContext: the PUT replaces the namespace's list")
+	}
+	if r.Schema["controllers"].ForceNew {
+		t.Error("controllers must not force a new resource")
+	}
+
+	d := r.TestResourceData()
+	d.SetId("4:team-a")
+	imported, err := r.Importer.StateContext(context.Background(), d, nil)
+	if err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+	if got := imported[0].Get("environment_id"); got != 4 {
+		t.Errorf("environment_id: expected 4, got %v", got)
+	}
+	if got := imported[0].Get("namespace"); got != "team-a" {
+		t.Errorf("namespace: expected team-a, got %v", got)
 	}
 }

@@ -3,6 +3,8 @@ package internal
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -233,6 +235,24 @@ func resourceKubernetesNamespaceIngressRead(ctx context.Context, d *schema.Resou
 	return nil
 }
 
+// resourceKubernetesNamespaceIngressDelete used to do nothing, so destroy
+// left the ingress in the cluster and the next create failed with 409.
+// Portainer deletes ingresses through POST /kubernetes/{id}/ingresses/delete,
+// which takes the names to delete per namespace.
 func resourceKubernetesNamespaceIngressDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	return nil // Not yet supported by API
+	client := meta.(*APIClient)
+	parts := strings.SplitN(d.Id(), ":", 3)
+	envID, err := strconv.Atoi(parts[0])
+	if len(parts) != 3 || err != nil || parts[1] == "" || parts[2] == "" {
+		return diag.FromErr(fmt.Errorf("invalid ID format, expected 'envID:namespace:name': %s", d.Id()))
+	}
+	namespace, name := parts[1], parts[2]
+
+	body := map[string][]string{namespace: {name}}
+	url := fmt.Sprintf("%s/kubernetes/%d/ingresses/delete", client.Endpoint, envID)
+	if err := doJSON(ctx, client, http.MethodPost, url, body, nil); err != nil && !isAPINotFound(err) {
+		return diag.FromErr(fmt.Errorf("failed to delete ingress %s/%s: %w", namespace, name, err))
+	}
+	d.SetId("")
+	return nil
 }

@@ -16,6 +16,7 @@ func resourceKubernetesNamespaceSystem() *schema.Resource {
 		ReadContext:   resourceKubernetesNamespaceSystemRead,
 		UpdateContext: resourceKubernetesNamespaceSystemToggle,
 		DeleteContext: resourceKubernetesNamespaceSystemUnset,
+		CustomizeDiff: kubernetesNamespaceSystemDiff,
 
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
@@ -39,6 +40,16 @@ func resourceKubernetesNamespaceSystem() *schema.Resource {
 			},
 		},
 	}
+}
+
+// kubernetesNamespaceSystemDiff rejects marking the default namespace as a
+// system namespace: Portainer answers 204 but never changes it, so the plan
+// asked for it again on every run.
+func kubernetesNamespaceSystemDiff(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	if d.NewValueKnown("namespace") && d.Get("namespace").(string) == "default" && d.Get("system").(bool) {
+		return fmt.Errorf("the default namespace cannot be a system namespace: Portainer never marks it as one; use another namespace")
+	}
+	return nil
 }
 
 func resourceKubernetesNamespaceSystemToggle(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {

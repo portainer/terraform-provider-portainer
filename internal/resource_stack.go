@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -26,6 +27,7 @@ func resourcePortainerStack() *schema.Resource {
 		ReadContext:   resourcePortainerStackRead,
 		DeleteContext: resourcePortainerStackDelete,
 		UpdateContext: resourcePortainerStackUpdate,
+		CustomizeDiff: resourcePortainerStackCustomizeDiff,
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(30 * time.Minute),
 			Update: schema.DefaultTimeout(30 * time.Minute),
@@ -156,7 +158,8 @@ func resourcePortainerStack() *schema.Resource {
 			"webhook_url": {
 				Type:        schema.TypeString,
 				Computed:    true,
-				Description: "Full URL of the webhook trigger",
+				Sensitive:   true,
+				Description: "Full URL of the webhook trigger. Sensitive: anyone with the URL can redeploy the stack.",
 			},
 			"repository_url": {
 				Type:          schema.TypeString,
@@ -248,6 +251,22 @@ func resourcePortainerStack() *schema.Resource {
 						"value": {Type: schema.TypeString, Required: true, Description: "Value of the environment variable."},
 					},
 				},
+			},
+			"env_wo": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Environment variables whose values are write-only (supports ephemeral values; the values are not stored in Terraform state, the names are). Sent together with env on every deploy. Write-only values cannot be compared, so increment env_wo_version to redeploy the stack with changed values.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"name":  {Type: schema.TypeString, Required: true, Description: "Name of the environment variable."},
+						"value": {Type: schema.TypeString, Required: true, WriteOnly: true, Sensitive: true, Description: "Write-only value of the environment variable."},
+					},
+				},
+			},
+			"env_wo_version": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "Version flag for env_wo; change it to redeploy the stack with the current env_wo values.",
 			},
 			"tlsskip_verify": {Type: schema.TypeBool, Optional: true, Computed: true, ForceNew: true, Description: "Whether to skip TLS verification when Portainer connects to the Git repository. Changing this value forces resource recreation."},
 			"prune": {
@@ -473,7 +492,7 @@ func resourcePortainerStackCreate(ctx context.Context, d *schema.ResourceData, m
 		}
 
 		payload := map[string]interface{}{
-			"env":              flattenEnvList(d.Get("env").([]interface{})),
+			"env":              stackEnvPayload(d),
 			"stackFileContent": d.Get("stack_file_content").(string),
 			"prune":            d.Get("prune").(bool),
 			"pullImage":        d.Get("pull_image").(bool),
@@ -538,8 +557,17 @@ func resourcePortainerStackCreate(ctx context.Context, d *schema.ResourceData, m
 		}
 	}
 
+	// Wait out the deployment the create (or, for the other methods, the
+	// update above) started. A git stack used to return while Portainer was
+	// still deploying it: a deployment that failed went unreported, and the
+	// Read below saw the stack as not active yet, so the next plan proposed
+	// active = true.
+	if err := waitForStackDeployment(ctx, client, d.Id()); err != nil {
+		return diag.FromErr(err)
+	}
+
 	// ACCESS CONTROL UPDATE
-	if err := updateStackAccessControl(d, client, d.Id()); err != nil {
+	if err := updateStackAccessControl(ctx, d, client, d.Id()); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update stack access control: %w", err))
 	}
 
@@ -691,9 +719,17 @@ func resourcePortainerStackRead(ctx context.Context, d *schema.ResourceData, met
 		}
 	}
 
-	// Env → Terraform
+	// Env → Terraform. Portainer returns the env_wo variables with the rest;
+	// they stay out of env so their values never reach the state.
+	writeOnlyNames := map[string]bool{}
+	for _, name := range envNames(d.Get("env_wo").([]interface{})) {
+		writeOnlyNames[name] = true
+	}
 	tfEnvs := make([]map[string]interface{}, 0, len(stack.Env))
 	for _, env := range stack.Env {
+		if writeOnlyNames[env.Name] {
+			continue
+		}
 		tfEnvs = append(tfEnvs, map[string]interface{}{
 			"name":  env.Name,
 			"value": env.Value,
@@ -746,7 +782,7 @@ func resourcePortainerStackRead(ctx context.Context, d *schema.ResourceData, met
 	if stack.Portainer.ResourceControl.ID != 0 {
 		// Read Access Control
 		rcID := strconv.Itoa(stack.Portainer.ResourceControl.ID)
-		if err := readStackAccessControl(d, client, rcID); err != nil {
+		if err := readStackAccessControl(ctx, d, client, rcID); err != nil {
 			return diag.FromErr(fmt.Errorf("failed to read stack access control: %w", err))
 		}
 	}
@@ -857,7 +893,8 @@ const maxStackConflictRetries = 3
 // (Error) is the outcome of that very deployment, and reporting success for a
 // stack that did not come up would be a lie.
 func waitForStackDeployment(ctx context.Context, client *APIClient, stackID string) error {
-	return waitForStackSettled(ctx, client, stackID, true)
+	_, err := waitForStackSettled(ctx, client, stackID, true)
+	return err
 }
 
 // waitForStackLockReleased waits only while a deployment is in flight, so that
@@ -870,7 +907,68 @@ func waitForStackDeployment(ctx context.Context, client *APIClient, stackID stri
 // Terraform, because Portainer keeps the status until something deploys the
 // stack again (issue #147).
 func waitForStackLockReleased(ctx context.Context, client *APIClient, stackID string) error {
-	return waitForStackSettled(ctx, client, stackID, false)
+	_, err := waitForStackSettled(ctx, client, stackID, false)
+	return err
+}
+
+// waitForStackIdle is waitForStackLockReleased for a call that redeploys the
+// stack: it also returns when the stack's last deployment started, for
+// waitForStackRedeployed to tell that deployment from the one the call starts.
+func waitForStackIdle(ctx context.Context, client *APIClient, stackID string) (int64, error) {
+	stack, err := waitForStackSettled(ctx, client, stackID, false)
+	return stack.deploymentStart(), err
+}
+
+// waitForStackRedeployed waits out the redeploy started by a call of ours and
+// reports it if it failed. A stack in Error is only blamed on that redeploy
+// when its deployment history did not start before before, as returned by
+// waitForStackIdle. Portainer resets the history at the start of every
+// deployment and every call this guards starts one, so an Error left over from
+// an earlier deployment (issue #147) cannot survive it; the comparison only
+// has to allow for the history's one-second resolution, which lets a quick
+// redeploy start in the same second as the deployment before it. Versions
+// before 2.45 keep no history and are never reported here.
+func waitForStackRedeployed(ctx context.Context, client *APIClient, stackID string, before int64) error {
+	stack, err := waitForStackSettled(ctx, client, stackID, false)
+	if err != nil {
+		return err
+	}
+	start := stack.deploymentStart()
+	if stack.Status != stackStatusError || start == 0 || start < before {
+		return nil
+	}
+	if msg := stack.failureMessage(); msg != "" {
+		return fmt.Errorf("redeploying stack %s failed in Portainer: %s", stackID, msg)
+	}
+	return fmt.Errorf("redeploying stack %s failed in Portainer (status %d); check the stack's logs in Portainer", stackID, stack.Status)
+}
+
+// stackDeployState is the part of a stack the deployment waits look at.
+type stackDeployState struct {
+	Status int `json:"Status"`
+	// DeploymentStatus is the history of the current deployment, oldest first
+	// (Portainer 2.45 and later).
+	DeploymentStatus []struct {
+		Status  int    `json:"Status"`
+		Time    int64  `json:"Time"`
+		Message string `json:"Message"`
+	} `json:"DeploymentStatus"`
+}
+
+func (s stackDeployState) deploymentStart() int64 {
+	if len(s.DeploymentStatus) == 0 {
+		return 0
+	}
+	return s.DeploymentStatus[0].Time
+}
+
+func (s stackDeployState) failureMessage() string {
+	for i := len(s.DeploymentStatus) - 1; i >= 0; i-- {
+		if entry := s.DeploymentStatus[i]; entry.Status == stackStatusError && entry.Message != "" {
+			return entry.Message
+		}
+	}
+	return ""
 }
 
 // waitForStackSettled blocks until Portainer reports that the stack is no
@@ -894,7 +992,7 @@ func waitForStackLockReleased(ctx context.Context, client *APIClient, stackID st
 //
 // Portainer versions older than 2.45 never report status 3, so this returns
 // after the first poll and behaves exactly as before.
-func waitForStackSettled(ctx context.Context, client *APIClient, stackID string, failOnFailedDeployment bool) error {
+func waitForStackSettled(ctx context.Context, client *APIClient, stackID string, failOnFailedDeployment bool) (stackDeployState, error) {
 	url := fmt.Sprintf("%s/stacks/%s", client.Endpoint, stackID)
 	timedOut := func(cause error) error {
 		return fmt.Errorf("gave up waiting for stack %s to finish deploying (raise the resource's create/update timeout if the deployment is simply slow): %w", stackID, cause)
@@ -902,19 +1000,17 @@ func waitForStackSettled(ctx context.Context, client *APIClient, stackID string,
 
 	for {
 		if err := ctx.Err(); err != nil {
-			return timedOut(err)
+			return stackDeployState{}, timedOut(err)
 		}
 
-		var stack struct {
-			Status int `json:"Status"`
-		}
+		var stack stackDeployState
 		if err := doJSON(ctx, client, http.MethodGet, url, nil, &stack); err != nil {
 			// The deadline can expire during the request as easily as between
 			// two polls; either way it is a timeout, not a broken stack.
 			if ctxErr := ctx.Err(); ctxErr != nil {
-				return timedOut(ctxErr)
+				return stack, timedOut(ctxErr)
 			}
-			return fmt.Errorf("failed to read stack %s while waiting for its deployment to settle: %w", stackID, err)
+			return stack, fmt.Errorf("failed to read stack %s while waiting for its deployment to settle: %w", stackID, err)
 		}
 
 		switch stack.Status {
@@ -925,16 +1021,19 @@ func waitForStackSettled(ctx context.Context, client *APIClient, stackID string,
 				// A deployment that failed earlier still holds no lock, so the
 				// mutation about to be sent can go ahead - and is what fixes
 				// the stack.
-				return nil
+				return stack, nil
 			}
-			return fmt.Errorf("stack %s was deployed but Portainer reports its deployment failed (status %d); check the stack's logs in Portainer", stackID, stack.Status)
+			if msg := stack.failureMessage(); msg != "" {
+				return stack, fmt.Errorf("stack %s was deployed but Portainer reports its deployment failed: %s", stackID, msg)
+			}
+			return stack, fmt.Errorf("stack %s was deployed but Portainer reports its deployment failed (status %d); check the stack's logs in Portainer", stackID, stack.Status)
 		default:
-			return nil
+			return stack, nil
 		}
 
 		select {
 		case <-ctx.Done():
-			return timedOut(ctx.Err())
+			return stack, timedOut(ctx.Err())
 		case <-time.After(stackSettlePollInterval):
 		}
 	}
@@ -1036,7 +1135,7 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 	if method == "repository" {
 		payload := map[string]interface{}{
 			"supportRelativePath":       d.Get("support_relative_path").(bool),
-			"env":                       flattenEnvList(d.Get("env").([]interface{})),
+			"env":                       stackEnvPayload(d),
 			"prune":                     d.Get("prune").(bool),
 			"pullImage":                 d.Get("pull_image").(bool),
 			"repositoryAuthentication":  d.Get("git_repository_authentication").(bool),
@@ -1052,6 +1151,13 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 
 		if v, ok := d.GetOk("filesystem_path"); ok {
 			payload["filesystemPath"] = v.(string)
+		}
+		// Portainer 2.42 and later move the stack to another compose file in
+		// place. An older version ignores the field, which the response check
+		// below turns into an error instead of a plan that never settles.
+		configFilePath := d.Get("file_path_in_repository").(string)
+		if configFilePath != "" {
+			payload["configFilePath"] = configFilePath
 		}
 
 		webhookID := ""
@@ -1114,9 +1220,18 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 			body, _ := io.ReadAll(resp.Body)
 			return diag.FromErr(fmt.Errorf("failed to update git stack settings: %s", string(body)))
 		}
+		var updated struct {
+			GitConfig *struct {
+				ConfigFilePath string `json:"ConfigFilePath"`
+			} `json:"GitConfig"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&updated); err == nil && updated.GitConfig != nil &&
+			configFilePath != "" && updated.GitConfig.ConfigFilePath != configFilePath {
+			return diag.Errorf("Portainer kept the stack on %q instead of %q: this Portainer version cannot change file_path_in_repository in place (2.42 or later can). Replace the stack instead, e.g. terraform apply -replace=<address>.", updated.GitConfig.ConfigFilePath, configFilePath)
+		}
 
 		redeployPayload := map[string]interface{}{
-			"env":                       flattenEnvList(d.Get("env").([]interface{})),
+			"env":                       stackEnvPayload(d),
 			"prune":                     d.Get("prune").(bool),
 			"pullImage":                 d.Get("pull_image").(bool),
 			"repositoryAuthentication":  d.Get("git_repository_authentication").(bool),
@@ -1139,7 +1254,8 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 		// (issue #145) — a webhook or another apply can leave one in flight.
 		// Only the lock is waited out here: a deployment that already failed is
 		// exactly what this call replaces (issue #147).
-		if err := waitForStackLockReleased(ctx, client, stackID); err != nil {
+		before, err := waitForStackIdle(ctx, client, stackID)
+		if err != nil {
 			return diag.FromErr(err)
 		}
 
@@ -1164,6 +1280,13 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 			return diag.FromErr(fmt.Errorf("failed to redeploy git stack: %s", string(data)))
 		}
 
+		// Portainer 2.45 redeploys asynchronously. Waiting here keeps Read from
+		// seeing the stack mid-deployment, which showed as active = false in
+		// the next plan, and reports a redeploy that failed.
+		if err := waitForStackRedeployed(ctx, client, stackID, before); err != nil {
+			return diag.FromErr(err)
+		}
+
 		// Apply the desired running state AFTER the git redeploy (which restarts
 		// the stack), so active = false actually persists for repository stacks.
 		if err := enforceStackActive(ctx, client, d, endpointID); err != nil {
@@ -1173,14 +1296,17 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 		return resourcePortainerStackRead(ctx, d, meta)
 	}
 
-	if err := updateStackAccessControl(d, client, stackID); err != nil {
+	if err := updateStackAccessControl(ctx, d, client, stackID); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to update stack access control: %w", err))
 	}
 
 	// ---------------- NON-REPOSITORY STACKS ----------------
+	// before marks the deployment that preceded this update, so that only a
+	// redeploy started here is reported as failed.
+	var before int64
 	if method != "repository" {
 		payload := map[string]interface{}{
-			"env":              flattenEnvList(d.Get("env").([]interface{})),
+			"env":              stackEnvPayload(d),
 			"stackFileContent": d.Get("stack_file_content").(string),
 			"prune":            d.Get("prune").(bool),
 			"pullImage":        d.Get("pull_image").(bool),
@@ -1195,7 +1321,8 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 		// (issue #145) — a webhook or another apply can leave one in flight.
 		// Only the lock is waited out here: a deployment that already failed is
 		// exactly what this call replaces (issue #147).
-		if err := waitForStackLockReleased(ctx, client, stackID); err != nil {
+		before, err = waitForStackIdle(ctx, client, stackID)
+		if err != nil {
 			return diag.FromErr(err)
 		}
 
@@ -1228,7 +1355,7 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 		}
 
 		payload := map[string]interface{}{
-			"env":              flattenEnvList(d.Get("env").([]interface{})),
+			"env":              stackEnvPayload(d),
 			"stackFileContent": d.Get("stack_file_content").(string),
 			"prune":            d.Get("prune").(bool),
 			"pullImage":        d.Get("pull_image").(bool),
@@ -1280,6 +1407,12 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 		}
 	}
 
+	// Same as for repository stacks above: wait for the asynchronous redeploy
+	// and report it if it failed.
+	if err := waitForStackRedeployed(ctx, client, stackID, before); err != nil {
+		return diag.FromErr(err)
+	}
+
 	// Apply the desired running state AFTER the stack (re)deploy above, so
 	// active = false persists instead of being undone by the update.
 	if err := enforceStackActive(ctx, client, d, endpointID); err != nil {
@@ -1301,13 +1434,73 @@ func flattenEnvList(envList []interface{}) []map[string]string {
 	return out
 }
 
+// stackEnvPayload returns env followed by env_wo. The env_wo values are
+// write-only, so they are taken from the raw configuration, which carries them
+// on every apply. Portainer replaces the whole list on each deploy, so they
+// have to be sent every time, not only when env_wo_version changes.
+func stackEnvPayload(d *schema.ResourceData) []map[string]string {
+	out := flattenEnvList(d.Get("env").([]interface{}))
+
+	raw, diags := d.GetRawConfigAt(cty.GetAttrPath("env_wo"))
+	if diags.HasError() || !raw.IsKnown() || raw.IsNull() || !raw.CanIterateElements() {
+		return out
+	}
+	for it := raw.ElementIterator(); it.Next(); {
+		_, item := it.Element()
+		if !item.IsKnown() || item.IsNull() {
+			continue
+		}
+		name, value := item.GetAttr("name"), item.GetAttr("value")
+		if !name.IsKnown() || name.IsNull() || !value.IsKnown() || value.IsNull() {
+			continue
+		}
+		out = append(out, map[string]string{
+			"name":  name.AsString(),
+			"value": value.AsString(),
+		})
+	}
+	return out
+}
+
+// envNames returns the non-empty variable names of an env or env_wo list.
+func envNames(list []interface{}) []string {
+	names := make([]string, 0, len(list))
+	for _, v := range list {
+		if item, ok := v.(map[string]interface{}); ok {
+			if name, _ := item["name"].(string); name != "" {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
+
+// resourcePortainerStackCustomizeDiff rejects a variable declared in both env
+// and env_wo, or twice in env_wo: the stack would get both values and Read
+// could not tell which one belongs in state.
+func resourcePortainerStackCustomizeDiff(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	writeOnly := map[string]bool{}
+	for _, name := range envNames(d.Get("env_wo").([]interface{})) {
+		if writeOnly[name] {
+			return fmt.Errorf("env_wo: variable %q is declared more than once", name)
+		}
+		writeOnly[name] = true
+	}
+	for _, name := range envNames(d.Get("env").([]interface{})) {
+		if writeOnly[name] {
+			return fmt.Errorf("variable %q is declared in both env and env_wo", name)
+		}
+	}
+	return nil
+}
+
 // --------------------- STANDALONE ----------------------
 
 func createStackStandaloneString(ctx context.Context, d *schema.ResourceData, client *APIClient) error {
 	payload := map[string]interface{}{
 		"name":             d.Get("name").(string),
 		"stackFileContent": d.Get("stack_file_content").(string),
-		"env":              flattenEnvList(d.Get("env").([]interface{})),
+		"env":              stackEnvPayload(d),
 		"fromAppTemplate":  false,
 		"registries":       expandIntList(d.Get("registries").([]interface{})),
 	}
@@ -1374,7 +1567,7 @@ func createStackStandaloneRepo(ctx context.Context, d *schema.ResourceData, clie
 		"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
 		"sourceID":                  d.Get("source_id").(int),
 		"supportRelativePath":       d.Get("support_relative_path").(bool),
-		"env":                       flattenEnvList(d.Get("env").([]interface{})),
+		"env":                       stackEnvPayload(d),
 		"fromAppTemplate":           false,
 		"tlsskipVerify":             d.Get("tlsskip_verify").(bool),
 		"additionalFiles":           expandStringList(d.Get("additional_files").([]interface{})),
@@ -1446,7 +1639,7 @@ func createStackSwarmString(ctx context.Context, d *schema.ResourceData, client 
 	payload := map[string]interface{}{
 		"name":             d.Get("name").(string),
 		"stackFileContent": d.Get("stack_file_content").(string),
-		"env":              flattenEnvList(d.Get("env").([]interface{})),
+		"env":              stackEnvPayload(d),
 		"fromAppTemplate":  false,
 		"swarmID":          d.Get("swarm_id").(string),
 		"registries":       expandIntList(d.Get("registries").([]interface{})),
@@ -1514,7 +1707,7 @@ func createStackSwarmRepo(ctx context.Context, d *schema.ResourceData, client *A
 		"repositoryGitCredentialID": d.Get("repository_git_credential_id").(int),
 		"sourceID":                  d.Get("source_id").(int),
 		"supportRelativePath":       d.Get("support_relative_path").(bool),
-		"env":                       flattenEnvList(d.Get("env").([]interface{})),
+		"env":                       stackEnvPayload(d),
 		"fromAppTemplate":           false,
 		"tlsskipVerify":             d.Get("tlsskip_verify").(bool),
 		"swarmID":                   d.Get("swarm_id").(string),
@@ -1580,11 +1773,11 @@ func createStackSwarmRepo(ctx context.Context, d *schema.ResourceData, client *A
 	d.SetId(strconv.Itoa(result.ID))
 
 	if d.Get("prune").(bool) {
-		fmt.Println("[INFO] Performing immediate redeploy with prune=true after stack creation")
-		if diags := resourcePortainerStackUpdate(context.Background(), d, client); diags.HasError() {
-			fmt.Printf("[WARN] prune redeploy failed: %v\n", diags)
-		} else {
-			fmt.Println("[INFO] prune redeploy succeeded")
+		log.Printf("[INFO] Performing immediate redeploy with prune=true after stack creation")
+		// The redeploy is waited out and a failed one reported; logging it
+		// only reported a broken stack as created.
+		if diags := resourcePortainerStackUpdate(ctx, d, client); diags.HasError() {
+			return fmt.Errorf("prune redeploy after creating stack %s failed: %s", d.Id(), diags[0].Summary)
 		}
 	}
 
@@ -1777,7 +1970,7 @@ func createStackK8sURL(ctx context.Context, d *schema.ResourceData, client *APIC
 	return nil
 }
 
-func updateStackAccessControl(d *schema.ResourceData, client *APIClient, stackID string) error {
+func updateStackAccessControl(ctx context.Context, d *schema.ResourceData, client *APIClient, stackID string) error {
 	// If ownership is not set, we might default to something or just return
 	// But if d.Get("ownership") is set, it might be "", which is default.
 	// But "ownership" is computed so default is likely not "".
@@ -1790,7 +1983,7 @@ func updateStackAccessControl(d *schema.ResourceData, client *APIClient, stackID
 	}
 
 	// Retrieve the ResourceControlID for this stack
-	rcIDString, _, err := lookupResourceControlID(client, 6, stackID) // 6 = stack
+	rcIDString, _, err := lookupResourceControlID(ctx, client, 6, stackID) // 6 = stack
 	if err != nil {
 		// If resource control doesn't exist, we can't update it.
 		// But stacks usually have one created by default.
@@ -1830,14 +2023,14 @@ func updateStackAccessControl(d *schema.ResourceData, client *APIClient, stackID
 		}
 	}
 
-	if err := doJSON(context.Background(), client, http.MethodPut, fmt.Sprintf("%s/resource_controls/%s", client.Endpoint, rcID), payload, nil); err != nil {
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/resource_controls/%s", client.Endpoint, rcID), payload, nil); err != nil {
 		return fmt.Errorf("failed to update resource control %s: %w", rcID, err)
 	}
 
 	return nil
 }
 
-func readStackAccessControl(d *schema.ResourceData, client *APIClient, rcID string) error {
+func readStackAccessControl(ctx context.Context, d *schema.ResourceData, client *APIClient, rcID string) error {
 	var rc struct {
 		AdministratorsOnly bool `json:"AdministratorsOnly"`
 		Public             bool `json:"Public"`
@@ -1849,7 +2042,7 @@ func readStackAccessControl(d *schema.ResourceData, client *APIClient, rcID stri
 		} `json:"UserAccesses"`
 	}
 
-	if err := doJSON(context.Background(), client, http.MethodGet, fmt.Sprintf("%s/resource_controls/%s", client.Endpoint, rcID), nil, &rc); err != nil {
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/resource_controls/%s", client.Endpoint, rcID), nil, &rc); err != nil {
 		return fmt.Errorf("failed to fetch resource control %s: %w", rcID, err)
 	}
 

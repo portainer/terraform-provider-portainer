@@ -18,6 +18,9 @@ func resourceBackupLocalSettings() *schema.Resource {
 		// Portainer has no endpoint to clear the settings; removing the resource
 		// stops managing them and leaves the schedule as configured.
 		DeleteContext: removeFromStateContext,
+		Importer: &schema.ResourceImporter{
+			StateContext: importSingleton("portainer-backup-local-settings"),
+		},
 
 		Schema: map[string]*schema.Schema{
 			"cron_rule": {

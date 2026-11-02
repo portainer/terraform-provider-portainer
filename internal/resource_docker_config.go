@@ -81,8 +81,7 @@ func findExistingDockerConfigByName(ctx context.Context, client *APIClient, endp
 	}
 
 	for _, cfg := range configs {
-		if cfg["Spec"] != nil {
-			spec := cfg["Spec"].(map[string]interface{})
+		if spec, ok := cfg["Spec"].(map[string]interface{}); ok {
 			if spec["Name"] == name {
 				if id, ok := cfg["ID"].(string); ok {
 					return id, nil

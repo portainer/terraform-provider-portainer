@@ -12,10 +12,11 @@ import (
 
 func resourcePortainerOpenAMTActivate() *schema.Resource {
 	return &schema.Resource{
-		CreateContext: resourcePortainerOpenAMTActivateCreate,
-		ReadContext:   schema.NoopContext,
-		UpdateContext: schema.NoopContext,
-		DeleteContext: removeFromStateContext,
+		DeprecationMessage: openAMTDeprecation,
+		CreateContext:      resourcePortainerOpenAMTActivateCreate,
+		ReadContext:        schema.NoopContext,
+		UpdateContext:      schema.NoopContext,
+		DeleteContext:      removeFromStateContext,
 		Schema: map[string]*schema.Schema{
 			"environment_id": {
 				Type:        schema.TypeInt,

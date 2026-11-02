@@ -44,6 +44,14 @@ var secretPatterns = []string{
 	"client_secret",
 	"jwt",
 	"credential",
+	"edge_key", // Edge Agent join key: grants an agent access to the Portainer instance
+	"tls_key",  // PEM private key
+}
+
+// secretNames are exact field names that carry a secret although an exclusion
+// suffix below would otherwise clear them.
+var secretNames = map[string]bool{
+	"webhook_url": true, // unauthenticated URL that redeploys the stack: a bearer capability
 }
 
 // allowlist contains field names that match a secret pattern but are NOT
@@ -72,12 +80,16 @@ var allowlist = map[string]bool{
 var nameExclusionSuffixes = []string{
 	"_id", "_ids", "_name", "_names", "_count", "_type",
 	"_enabled", "_expiry", "_url", "_uri", "_description",
-	"_length", // e.g. required_password_length is a policy int, not a secret
+	"_length",  // e.g. required_password_length is a policy int, not a secret
+	"_version", // e.g. password_wo_version counts write-only updates, it is not the value
 }
 
 func looksSecret(name string) bool {
 	if allowlist[name] {
 		return false
+	}
+	if secretNames[name] {
+		return true
 	}
 	if strings.Contains(name, "public") {
 		return false

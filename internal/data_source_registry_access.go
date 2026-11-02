@@ -55,7 +55,7 @@ func dataSourceRegistryAccessRead(ctx context.Context, d *schema.ResourceData, m
 		return diag.FromErr(fmt.Errorf("either team_id or user_id must be provided"))
 	}
 
-	policies, err := getRegistryPolicies(client, registryID, endpointID)
+	policies, err := getRegistryPolicies(ctx, client, registryID, endpointID)
 	if err != nil {
 		if errors.Is(err, ErrRegistryNotFound) {
 			return diag.FromErr(fmt.Errorf("registry %d not found", registryID))

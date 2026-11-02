@@ -39,11 +39,13 @@ Validate the credentials before creating the source with the `portainer_gitops_s
 
 | Name                  | Type   | Required | Default | Description                                                                                                                       |
 |-----------------------|--------|----------|---------|-------------------------------------------------------------------------------------------------------------------------------------|
-| `url`                 | string | ✅ yes   | –       | URL of the Git repository the source syncs from.                                                                                      |
+| `url`                 | string | ✅ yes   | –       | URL of the Git repository the source syncs from. Portainer stores it without a trailing `/` or `.git`; such differences are not shown as changes. |
 | `name`                | string | ❌ no    | derived | Name shown in Portainer. Portainer derives one from the repository URL when unset.                                                    |
 | `interval`            | string | ❌ no    | server  | Polling interval as a duration string (for example `5m`).                                                                             |
 | `username`            | string | ❌ no    | –       | Username used to authenticate against the repository.                                                                                 |
 | `password`            | string | ❌ no    | –       | Password or personal access token paired with `username`. Stored in state as a sensitive value.                                        |
+| `password_wo`         | string | ❌ no    | –       | Write-only, never stored in state (Terraform 1.11+). Conflicts with `password`; requires `password_wo_version` |
+| `password_wo_version` | number | ❌ no    | –       | Version of `password_wo`. Increment it to send a new value; the source is updated in place |
 | `tls_skip_verify`     | bool   | ❌ no    | `false` | Skip TLS certificate verification when contacting the repository.                                                                     |
 | `administrators_only` | bool   | ❌ no    | `false` | Restrict the source to administrators. Only honoured at creation time — changing it replaces the resource.                             |
 | `public`              | bool   | ❌ no    | server  | Whether every user can use this source.                                                                                               |

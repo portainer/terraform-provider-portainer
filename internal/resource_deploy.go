@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -240,7 +241,9 @@ func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta inte
 			// optional force update
 			if forceUpdate {
 				if wait > 0 {
-					time.Sleep(time.Duration(wait) * time.Second)
+					if err := sleepCtx(ctx, time.Duration(wait)*time.Second); err != nil {
+						return diag.FromErr(err)
+					}
 				}
 				forceURL := fmt.Sprintf("%s/endpoints/%d/forceupdateservice", client.Endpoint, endpointID)
 				forcePayload := map[string]interface{}{
@@ -310,10 +313,21 @@ func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta inte
 				"Env":              envPayload,
 			}
 			body, _ := json.Marshal(putBody)
+			// Portainer 2.45 deploys asynchronously and rejects an update while a
+			// deployment runs (issue #145); wait for it before and after ours,
+			// and report ours if it failed.
+			stackID := strconv.Itoa(stackSpec.ID)
+			before, err := waitForStackIdle(ctx, client, stackID)
+			if err != nil {
+				return diag.FromErr(err)
+			}
 			updURL := fmt.Sprintf("%s/stacks/%d?endpointId=%d", client.Endpoint, stackSpec.ID, endpointID)
 			resp, code, err := apiPUTWithCodeCtx(ctx, updURL, client.APIKey, client, body)
 			if err != nil || code != 200 {
 				return diag.FromErr(fmt.Errorf("failed to update stack %s (status %d): %s", stackEnvVar, code, string(resp)))
+			}
+			if err := waitForStackRedeployed(ctx, client, stackID, before); err != nil {
+				return diag.FromErr(err)
 			}
 			fmt.Fprintf(&out, "Stack %q %s updated to %q\n", stackName, stackEnvVar, revision)
 		}
@@ -405,10 +419,21 @@ func resourceDeployCreate(ctx context.Context, d *schema.ResourceData, meta inte
 				"stackFileContent": sf.StackFileContent,
 			}
 			body, _ := json.Marshal(putBody)
+			// Portainer 2.45 deploys asynchronously and rejects an update while a
+			// deployment runs (issue #145); wait for it before and after ours,
+			// and report ours if it failed.
+			stackID := strconv.Itoa(stackSpec.ID)
+			before, err := waitForStackIdle(ctx, client, stackID)
+			if err != nil {
+				return diag.FromErr(err)
+			}
 			updURL := fmt.Sprintf("%s/stacks/%d?endpointId=%d", client.Endpoint, stackSpec.ID, endpointID)
 			resp, code, err := apiPUTWithCodeCtx(ctx, updURL, client.APIKey, client, body)
 			if err != nil || code != 200 {
 				return diag.FromErr(fmt.Errorf("failed to update stack (standalone) (status %d): %s", code, string(resp)))
+			}
+			if err := waitForStackRedeployed(ctx, client, stackID, before); err != nil {
+				return diag.FromErr(err)
 			}
 			fmt.Fprintf(&out, "Standalone stack %q updated with %s=%q\n", stackName, stackEnvVar, revision)
 		} else {

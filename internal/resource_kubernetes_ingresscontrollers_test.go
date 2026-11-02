@@ -2,6 +2,8 @@ package internal
 
 import (
 	"net/http"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -139,9 +141,11 @@ func TestKubernetesIngressControllersRead_NotFound(t *testing.T) {
 	}
 }
 
-// TestKubernetesIngressControllersDelete_DisablesViaPUT verifies that Delete
-// re-PUTs the controllers with Availability=false (no DELETE endpoint exists).
-func TestKubernetesIngressControllersDelete_DisablesViaPUT(t *testing.T) {
+// TestKubernetesIngressControllersDelete_RestoresViaPUT verifies that Delete
+// re-PUTs the controllers with Availability=true (no DELETE endpoint exists):
+// Portainer's default, where Availability=false blocked the classes for the
+// whole cluster after a destroy.
+func TestKubernetesIngressControllersDelete_RestoresViaPUT(t *testing.T) {
 	mock := NewMockServer(t)
 
 	mock.On("PUT", "/kubernetes/1/ingresscontrollers",
@@ -177,7 +181,60 @@ func TestKubernetesIngressControllersDelete_DisablesViaPUT(t *testing.T) {
 	if len(payload) != 1 {
 		t.Fatalf("expected 1 controller in payload, got %d", len(payload))
 	}
-	if payload[0]["Availability"] != false {
-		t.Errorf("expected Availability=false on delete, got %v", payload[0]["Availability"])
+	if payload[0]["Availability"] != true {
+		t.Errorf("expected Availability=true on delete, got %v", payload[0]["Availability"])
+	}
+}
+
+// TestRefreshIngressControllers is the regression test for controllers read
+// back verbatim: the cluster's other controllers and the server-side name,
+// type, used and new fields planned a change (a replacement per namespace) on
+// every run. Only the configured classes are kept, with their availability.
+func TestRefreshIngressControllers(t *testing.T) {
+	actual := []IngressController{
+		{ClassName: "traefik", Name: "traefik.io/ingress-controller", Type: "traefik", Availability: false, Used: true},
+		{ClassName: "nginx", Name: "k8s.io/ingress-nginx", Type: "nginx", Availability: true},
+	}
+	configured := []interface{}{
+		map[string]interface{}{"class_name": "traefik", "name": "traefik", "type": "custom", "availability": true, "used": false, "new": false},
+		map[string]interface{}{"class_name": "gone", "name": "gone", "type": "custom", "availability": true, "used": false, "new": false},
+	}
+
+	got := refreshIngressControllers(actual, configured)
+	want := []map[string]interface{}{
+		{"class_name": "traefik", "name": "traefik", "type": "custom", "availability": false, "used": false, "new": false},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("configured: expected %v, got %v", want, got)
+	}
+
+	if imported := refreshIngressControllers(actual, nil); len(imported) != 2 || imported[1]["class_name"] != "nginx" {
+		t.Errorf("import: expected every controller, got %v", imported)
+	}
+}
+
+// TestKubernetesIngressControllersCreate_UnknownClass verifies a class the
+// cluster does not have fails the apply: Portainer ignores it, and every
+// later plan would add it again.
+func TestKubernetesIngressControllersCreate_UnknownClass(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("PUT", "/kubernetes/1/ingresscontrollers", RespondString(http.StatusNoContent, "", ""))
+	mock.On("GET", "/kubernetes/1/ingresscontrollers", RespondJSON(http.StatusOK, []map[string]interface{}{
+		{"ClassName": "traefik", "Name": "traefik.io/ingress-controller", "Type": "traefik", "Availability": true},
+	}))
+
+	r := resourceKubernetesIngressControllers()
+	d := r.TestResourceData()
+	_ = d.Set("environment_id", 1)
+	_ = d.Set("controllers", []interface{}{
+		map[string]interface{}{"class_name": "nginx", "name": "nginx", "type": "nginx", "availability": true, "used": false, "new": false},
+	})
+
+	err := rcCreate(r, d, mock.Client())
+	if err == nil || !strings.Contains(err.Error(), `ingress class "nginx" is not in the cluster; available classes: traefik`) {
+		t.Fatalf("expected the unknown class error, got %v", err)
+	}
+	if mock.FindRequest("PUT", "/kubernetes/1/ingresscontrollers") != nil {
+		t.Error("a rejected list must not be sent")
 	}
 }

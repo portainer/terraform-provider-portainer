@@ -41,3 +41,11 @@ output "data_volume_claim" {
 | `claim_ref`     | string | Claim bound to the volume as `<namespace>/<name>`, empty while unbound.                       |
 
 Destroying this resource **deletes the PersistentVolume**. With `reclaim_policy = "Retain"` the underlying storage survives that deletion; with `Delete` it does not.
+
+## Import
+
+Persistent volumes can be imported as `<environment_id>/<name>`:
+
+```shell
+terraform import portainer_kubernetes_persistent_volume.example 5/pv-data
+```
