@@ -20,7 +20,10 @@ jobs:
           kubernetes: "true"
 
       - name: 🔍 Validate formatting (terraform fmt)
-        run: terraform fmt -check -recursive
+        # Only the Terraform directories: portainer_data/ is Portainer's data
+        # directory, which the running container fills with root-only folders
+        # that Terraform 1.11+ refuses to walk.
+        run: terraform fmt -check -recursive e2e-tests examples
 
       - name: 🧪 Convert docker-compose.yml to K8S yaml
         run: |
