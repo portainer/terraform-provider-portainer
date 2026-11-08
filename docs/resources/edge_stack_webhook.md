@@ -13,6 +13,8 @@ resource "portainer_edge_stack_webhook" "trigger_my_edge_stack" {
 }
 ```
 ## Lifecycle & Behavior
+This is an action: creating the resource triggers the edge stack webhook once. There is no state in Portainer to read back, so nothing is refreshed; change an argument (it forces a new resource) or use `terraform apply -replace` to run it again.
+
 - When you apply this resource, it triggers the execution of the webhook (stack update), simply run:
 ```hcl
 terraform apply

@@ -89,22 +89,36 @@ func TestDockerImageCreate_InvalidAuthFormat(t *testing.T) {
 	}
 }
 
-// TestDockerImageRead_NoOp verifies that Read is a no-op (the resource has
-// no remote state to refresh from).
-func TestDockerImageRead_NoOp(t *testing.T) {
-	mock := NewMockServer(t)
-
-	r := resourceDockerImage()
-	d := r.TestResourceData()
-	d.SetId("1-nginx:1.25")
-	_ = d.Set("endpoint_id", 1)
-	_ = d.Set("image", "nginx:1.25")
-
-	if err := rcRead(r, d, mock.Client()); err != nil {
-		t.Fatalf("Read failed: %v", err)
+// TestDockerImageRead_DetectsRemovedImage covers Read, which used to do
+// nothing: an image removed from the endpoint outside Terraform drops out of
+// state, so the next apply pulls it again.
+func TestDockerImageRead_DetectsRemovedImage(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		wantID string
+	}{
+		{"present", http.StatusOK, "1-nginx:1.25"},
+		{"removed", http.StatusNotFound, ""},
 	}
-	if len(mock.Requests()) != 0 {
-		t.Errorf("expected zero HTTP requests during Read, got %d", len(mock.Requests()))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := NewMockServer(t)
+			mock.On("GET", "/endpoints/1/docker/images/nginx:1.25/json", RespondJSON(tc.status, map[string]interface{}{}))
+
+			r := resourceDockerImage()
+			d := r.TestResourceData()
+			d.SetId("1-nginx:1.25")
+			_ = d.Set("endpoint_id", 1)
+			_ = d.Set("image", "nginx:1.25")
+
+			if err := rcRead(r, d, mock.Client()); err != nil {
+				t.Fatalf("Read failed: %v", err)
+			}
+			if d.Id() != tc.wantID {
+				t.Errorf("ID: expected %q, got %q", tc.wantID, d.Id())
+			}
+		})
 	}
 }
 

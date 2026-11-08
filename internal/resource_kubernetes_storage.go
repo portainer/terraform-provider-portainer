@@ -99,10 +99,15 @@ func resourceKubernetesStorageDelete(ctx context.Context, d *schema.ResourceData
 }
 
 func resourceKubernetesStorageUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	if diags := resourceKubernetesStorageDelete(ctx, d, meta); diags.HasError() {
-		return diags
-	}
-	return resourceKubernetesStorageCreate(ctx, d, meta)
+	client := meta.(*APIClient)
+
+	endpointID, name := parseStorageID(d.Id())
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/storage.k8s.io/v1/storageclasses/%s", client.Endpoint, endpointID, name)
+	return k8sUpdateManifest(ctx, d, client, url, name, "storageclass "+name, func() diag.Diagnostics {
+		return resourceKubernetesStorageDelete(ctx, d, meta)
+	}, func() diag.Diagnostics {
+		return resourceKubernetesStorageCreate(ctx, d, meta)
+	})
 }
 
 func resourceKubernetesStorageRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -114,7 +119,7 @@ func resourceKubernetesStorageRead(ctx context.Context, d *schema.ResourceData, 
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/storage.k8s.io/v1/storageclasses/%s", client.Endpoint, endpointID, name)
-	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "storageclass "+name); diags.HasError() {
+	if diags := k8sReadManifestDrift(ctx, d, client, url, "storageclass "+name); diags.HasError() {
 		return diags
 	}
 	if d.Id() == "" {
@@ -124,7 +129,7 @@ func resourceKubernetesStorageRead(ctx context.Context, d *schema.ResourceData, 
 	if err := d.Set("endpoint_id", endpointID); err != nil {
 		return diag.FromErr(err)
 	}
-	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
+	// manifest only changes in state when the live object drifted — see k8sReadManifestDrift.
 	return nil
 }
 

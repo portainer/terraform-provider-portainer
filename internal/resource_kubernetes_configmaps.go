@@ -105,10 +105,15 @@ func resourceKubernetesConfigMapsDelete(ctx context.Context, d *schema.ResourceD
 }
 
 func resourceKubernetesConfigMapsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	if diags := resourceKubernetesConfigMapsDelete(ctx, d, meta); diags.HasError() {
-		return diags
-	}
-	return resourceKubernetesConfigMapsCreate(ctx, d, meta)
+	client := meta.(*APIClient)
+
+	endpointID, namespace, name := parseConfigMapsID(d.Id())
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/api/v1/namespaces/%s/configmaps/%s", client.Endpoint, endpointID, namespace, name)
+	return k8sUpdateManifest(ctx, d, client, url, name, "configmap "+name, func() diag.Diagnostics {
+		return resourceKubernetesConfigMapsDelete(ctx, d, meta)
+	}, func() diag.Diagnostics {
+		return resourceKubernetesConfigMapsCreate(ctx, d, meta)
+	}, "namespace")
 }
 
 func resourceKubernetesConfigMapsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -120,7 +125,7 @@ func resourceKubernetesConfigMapsRead(ctx context.Context, d *schema.ResourceDat
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/api/v1/namespaces/%s/configmaps/%s", client.Endpoint, endpointID, namespace, name)
-	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "configmap "+name); diags.HasError() {
+	if diags := k8sReadManifestDrift(ctx, d, client, url, "configmap "+name); diags.HasError() {
 		return diags
 	}
 	if d.Id() == "" {
@@ -133,7 +138,7 @@ func resourceKubernetesConfigMapsRead(ctx context.Context, d *schema.ResourceDat
 	if err := d.Set("namespace", namespace); err != nil {
 		return diag.FromErr(err)
 	}
-	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
+	// manifest only changes in state when the live object drifted — see k8sReadManifestDrift.
 	return nil
 }
 

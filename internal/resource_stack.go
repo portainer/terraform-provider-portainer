@@ -853,8 +853,9 @@ func resourcePortainerStackDelete(ctx context.Context, d *schema.ResourceData, m
 			return nil
 		}
 
-		// Retry on server errors (5xx)
-		if resp.StatusCode >= 500 {
+		// Retry on server errors (5xx), except the ones that cannot go away
+		// by waiting, which used to keep a destroy busy until the timeout.
+		if resp.StatusCode >= 500 && !isPermanentStackDeleteError(string(body)) {
 			select {
 			case <-ctx.Done():
 				return diag.FromErr(fmt.Errorf("timeout deleting stack %s after %s: last error: %s", id, timeout, string(body)))
@@ -865,6 +866,23 @@ func resourcePortainerStackDelete(ctx context.Context, d *schema.ResourceData, m
 
 		return diag.FromErr(fmt.Errorf("failed to delete stack: %s", string(body)))
 	}
+}
+
+// permanentStackDeleteErrors are Docker errors a stack deletion keeps getting
+// whatever the wait: the swarm the stack belongs to is gone or this node is
+// not one of its managers.
+var permanentStackDeleteErrors = []string{
+	"not a swarm manager",
+	"not part of a swarm",
+}
+
+func isPermanentStackDeleteError(body string) bool {
+	for _, msg := range permanentStackDeleteErrors {
+		if strings.Contains(body, msg) {
+			return true
+		}
+	}
+	return false
 }
 
 // Portainer stack status values. Deploying and Error only exist from 2.45,

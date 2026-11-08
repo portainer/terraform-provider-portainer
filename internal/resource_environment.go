@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -12,12 +11,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-openapi/runtime"
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	"github.com/portainer/client-api-go/v2/pkg/client/endpoints"
 )
 
 func resourceEnvironment() *schema.Resource {
@@ -287,9 +284,17 @@ func resourceEnvironmentCreate(ctx context.Context, d *schema.ResourceData, meta
 		endpointCreationType = 2
 	}
 
-	params := endpoints.NewEndpointCreateParams()
-	params.SetName(name)
-	params.SetEndpointCreationType(endpointCreationType)
+	// POST /endpoints is multipart/form-data. Empty string fields are left out,
+	// as the generated SDK this replaced did.
+	var fields [][2]string
+	addField := func(name, value string) {
+		if value != "" {
+			fields = append(fields, [2]string{name, value})
+		}
+	}
+	var files []multipartFile
+	addField("Name", name)
+	addField("EndpointCreationType", strconv.FormatInt(endpointCreationType, 10))
 
 	// Edge Agent creation (type 4) is ambiguous on the Portainer side: without a
 	// container engine hint Portainer provisions the endpoint as a Kubernetes
@@ -299,29 +304,31 @@ func resourceEnvironmentCreate(ctx context.Context, d *schema.ResourceData, meta
 	// so Portainer keeps the Kubernetes edge type.
 	if envType == 4 {
 		containerEngine := normalizeContainerEngine(d.Get("container_engine").(string))
-		params.SetContainerEngine(&containerEngine)
+		addField("ContainerEngine", containerEngine)
 	}
 
-	url := strings.TrimSpace(d.Get("environment_address").(string))
-	params.SetURL(&url)
-
-	groupID := int64(d.Get("group_id").(int))
-	params.SetGroupID(&groupID)
+	addField("URL", strings.TrimSpace(d.Get("environment_address").(string)))
+	addField("GroupID", strconv.Itoa(d.Get("group_id").(int)))
 
 	if v, ok := d.GetOk("public_ip"); ok && v.(string) != "" {
-		purl := v.(string)
-		params.SetPublicURL(&purl)
+		addField("PublicURL", v.(string))
 	}
 
 	// Edge Agent environments (type 4, 7) do not support TagIds in the
 	// multipart Create request. Tags are applied via a follow-up Update call.
 	isEdgeAgent := envType == 4 || envType == 7
+	//
+	// Portainer accepts TagIds only as a single part holding a JSON array
+	// ("[1,2,3]"); repeated TagIds parts, one per id, are rejected with
+	// "Invalid TagIds parameter".
 	if v, ok := d.GetOk("tag_ids"); ok && !isEdgeAgent {
-		tagIDs := []int64{}
+		tagIDs := []string{}
 		for _, id := range v.([]interface{}) {
-			tagIDs = append(tagIDs, int64(id.(int)))
+			tagIDs = append(tagIDs, strconv.Itoa(id.(int)))
 		}
-		params.SetTagIds(tagIDs)
+		if len(tagIDs) > 0 {
+			addField("TagIds", "["+strings.Join(tagIDs, ",")+"]")
+		}
 	}
 
 	// Portainer refuses TLS outright for Edge Agent environments — since 2.43,
@@ -334,50 +341,48 @@ func resourceEnvironmentCreate(ctx context.Context, d *schema.ResourceData, meta
 	// applies for edge types.
 	if !isEdgeAgent {
 		tlsEnabled := d.Get("tls_enabled").(bool)
-		params.SetTLS(&tlsEnabled)
+		addField("TLS", strconv.FormatBool(tlsEnabled))
 		tlsSkipVerify := d.Get("tls_skip_verify").(bool)
-		params.SetTLSSkipVerify(&tlsSkipVerify)
+		addField("TLSSkipVerify", strconv.FormatBool(tlsSkipVerify))
 		tlsSkipClientVerify := d.Get("tls_skip_client_verify").(bool)
-		params.SetTLSSkipClientVerify(&tlsSkipClientVerify)
+		addField("TLSSkipClientVerify", strconv.FormatBool(tlsSkipClientVerify))
 
 		// Portainer reads the CA only when server verification is on and the
 		// client certificate and key only when client verification is on.
 		if tlsEnabled && !tlsSkipVerify {
 			if v, ok := d.GetOk("tls_ca_cert"); ok && v.(string) != "" {
-				params.SetTLSCACertFile(runtime.NamedReader("ca.pem", strings.NewReader(v.(string))))
+				files = append(files, multipartFile{Field: "TLSCACertFile", Filename: "ca.pem", Content: v.(string)})
 			}
 		}
 		if tlsEnabled && !tlsSkipClientVerify {
 			if v, ok := d.GetOk("tls_cert"); ok && v.(string) != "" {
-				params.SetTLSCertFile(runtime.NamedReader("cert.pem", strings.NewReader(v.(string))))
+				files = append(files, multipartFile{Field: "TLSCertFile", Filename: "cert.pem", Content: v.(string)})
 			}
 			key, err := environmentTLSKey(d)
 			if err != nil {
 				return diag.FromErr(err)
 			}
 			if key != "" {
-				params.SetTLSKeyFile(runtime.NamedReader("key.pem", strings.NewReader(key)))
+				files = append(files, multipartFile{Field: "TLSKeyFile", Filename: "key.pem", Content: key})
 			}
 		}
 	}
 
-	ctx, errBody := withErrorCapture(ctx)
-	params.SetContext(ctx)
-	resp, err := client.Client.Endpoints.EndpointCreate(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create environment: %w", decorateSDKError(err, errBody)))
+	var created portainerEndpoint
+	if err := doMultipart(ctx, client, http.MethodPost, client.Endpoint+"/endpoints", fields, files, &created); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create environment: %w", err))
 	}
 
-	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
+	d.SetId(strconv.FormatInt(created.ID, 10))
 
-	fields := map[string]interface{}{}
-	if resp.Payload.EdgeKey != "" {
-		fields["edge_key"] = resp.Payload.EdgeKey
+	state := map[string]interface{}{}
+	if created.EdgeKey != "" {
+		state["edge_key"] = created.EdgeKey
 	}
-	if resp.Payload.EdgeID != "" {
-		fields["edge_id"] = resp.Payload.EdgeID
+	if created.EdgeID != "" {
+		state["edge_id"] = created.EdgeID
 	}
-	if err := setFields(d, fields); err != nil {
+	if err := setFields(d, state); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -452,15 +457,12 @@ func edgeAddressFromKey(edgeKey string) string {
 }
 
 func findExistingEnvironmentByName(ctx context.Context, client *APIClient, name string) (int, error) {
-	ctx, errBody := withErrorCapture(ctx)
-	params := endpoints.NewEndpointListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.Endpoints.EndpointList(params, client.AuthInfo)
+	envs, err := listEnvironments(ctx, client)
 	if err != nil {
-		return 0, fmt.Errorf("failed to list environments: %w", decorateSDKError(err, errBody))
+		return 0, err
 	}
 
-	for _, e := range resp.Payload {
+	for _, e := range envs {
 		if e.Name == name {
 			return int(e.ID), nil
 		}
@@ -468,48 +470,73 @@ func findExistingEnvironmentByName(ctx context.Context, client *APIClient, name 
 	return 0, nil
 }
 
+// portainerEndpoint is the part of a Portainer environment (endpoint) the
+// provider reads.
+type portainerEndpoint struct {
+	ID              int64               `json:"Id"`
+	Name            string              `json:"Name"`
+	Type            int64               `json:"Type"`
+	GroupID         int64               `json:"GroupId"`
+	URL             string              `json:"URL"`
+	PublicURL       string              `json:"PublicURL"`
+	EdgeID          string              `json:"EdgeID"`
+	EdgeKey         string              `json:"EdgeKey"`
+	TagIds          []int64             `json:"TagIds"`
+	TLSConfig       *portainerTLSConfig `json:"TLSConfig"`
+	ContainerEngine string              `json:"ContainerEngine"`
+}
+
+type portainerTLSConfig struct {
+	TLS           bool   `json:"TLS"`
+	TLSSkipVerify bool   `json:"TLSSkipVerify"`
+	TLSCert       string `json:"TLSCert"`
+}
+
+// listEnvironments returns every environment (GET /endpoints).
+func listEnvironments(ctx context.Context, client *APIClient) ([]portainerEndpoint, error) {
+	var envs []portainerEndpoint
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/endpoints", nil, &envs); err != nil {
+		return nil, fmt.Errorf("failed to list environments: %w", err)
+	}
+	return envs, nil
+}
+
 func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := endpoints.NewEndpointInspectParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	resp, err := client.Client.Endpoints.EndpointInspect(params, client.AuthInfo)
-	if err != nil {
-		var notFound *endpoints.EndpointInspectNotFound
-		if errors.As(err, &notFound) {
+	var env portainerEndpoint
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/endpoints/%d", client.Endpoint, id), nil, &env); err != nil {
+		if isAPINotFound(err) {
 			d.SetId("")
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to read environment: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to read environment: %w", err))
 	}
 
-	if err := d.Set("name", resp.Payload.Name); err != nil {
+	if err := d.Set("name", env.Name); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("type", int(resp.Payload.Type)); err != nil {
+	if err := d.Set("type", int(env.Type)); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("group_id", int(resp.Payload.GroupID)); err != nil {
+	if err := d.Set("group_id", int(env.GroupID)); err != nil {
 		return diag.FromErr(err)
 	}
-	envType := int(resp.Payload.Type)
+	envType := int(env.Type)
 	// Until an agent associates, Portainer reports an empty EdgeID (unless the
 	// EnforceEdgeID setting is enabled), so for Edge Agent environments keep the
 	// ID generated at create time rather than wiping it (issue #142). A
 	// server-reported ID always wins, and non-edge environments keep reflecting
 	// the API verbatim.
-	edgeID := resp.Payload.EdgeID
+	edgeID := env.EdgeID
 	if edgeID == "" && (envType == 4 || envType == 7) {
 		edgeID = d.Get("edge_id").(string)
 	}
 	if err := d.Set("edge_id", edgeID); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("edge_key", resp.Payload.EdgeKey); err != nil {
+	if err := d.Set("edge_key", env.EdgeKey); err != nil {
 		return diag.FromErr(err)
 	}
 	// Portainer stores the Edge Agent URL as a bare host, so a configured
@@ -524,10 +551,10 @@ func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta i
 	// Agent environments lose the scheme the same way ("tcp://host:9001" comes
 	// back as "host:9001"), so any environment keeps the address in state when
 	// only the scheme is missing.
-	address := resp.Payload.URL
+	address := env.URL
 	fromKey := ""
 	if envType == 4 || envType == 7 {
-		fromKey = edgeAddressFromKey(resp.Payload.EdgeKey)
+		fromKey = edgeAddressFromKey(env.EdgeKey)
 	}
 	if fromKey != "" {
 		address = fromKey
@@ -540,8 +567,8 @@ func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta i
 		return diag.FromErr(err)
 	}
 
-	if resp.Payload.PublicURL != "" {
-		if err := d.Set("public_ip", resp.Payload.PublicURL); err != nil {
+	if env.PublicURL != "" {
+		if err := d.Set("public_ip", env.PublicURL); err != nil {
 			return diag.FromErr(err)
 		}
 	} else {
@@ -551,7 +578,7 @@ func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta i
 	}
 
 	tagIDs := []int{}
-	for _, tid := range resp.Payload.TagIds {
+	for _, tid := range env.TagIds {
 		tagIDs = append(tagIDs, int(tid))
 	}
 	if err := d.Set("tag_ids", tagIDs); err != nil {
@@ -566,8 +593,8 @@ func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta i
 	// certificate is stored. Azure environments (3) are created without a TLS
 	// configuration at all, which would read as tls_enabled = false against
 	// the default true on every plan.
-	if envType != 3 && envType != 4 && envType != 7 && resp.Payload.TLSConfig != nil {
-		tls := resp.Payload.TLSConfig
+	if envType != 3 && envType != 4 && envType != 7 && env.TLSConfig != nil {
+		tls := env.TLSConfig
 		fields := map[string]interface{}{"tls_enabled": tls.TLS}
 		if tls.TLS {
 			fields["tls_skip_verify"] = tls.TLSSkipVerify
@@ -580,7 +607,7 @@ func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta i
 
 	// Edge Agent environments created by an older Portainer store an empty
 	// ContainerEngine for Docker, and no migration fills it in.
-	if err := d.Set("container_engine", normalizeContainerEngine(resp.Payload.ContainerEngine)); err != nil {
+	if err := d.Set("container_engine", normalizeContainerEngine(env.ContainerEngine)); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -762,18 +789,11 @@ func resourceEnvironmentDelete(ctx context.Context, d *schema.ResourceData, meta
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := endpoints.NewEndpointDeleteParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	_, err := client.Client.Endpoints.EndpointDelete(params, client.AuthInfo)
-	if err != nil {
-		var notFound *endpoints.EndpointDeleteNotFound
-		if errors.As(err, &notFound) {
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/endpoints/%d", client.Endpoint, id), nil, nil); err != nil {
+		if isAPINotFound(err) {
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to delete environment: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to delete environment: %w", err))
 	}
 
 	return nil

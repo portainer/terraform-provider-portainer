@@ -45,9 +45,13 @@ func TestEnvironmentCov3_Create_NonEdgeWithTags(t *testing.T) {
 	if post == nil {
 		t.Fatal("expected POST /endpoints")
 	}
-	// The multipart form should carry a TagIds field for a non-edge environment.
+	// The multipart form should carry a single TagIds field holding a JSON
+	// array: Portainer rejects one TagIds part per id.
 	if !strings.Contains(string(post.Body), "TagIds") {
 		t.Errorf("expected multipart body to include TagIds form field, body=%q", string(post.Body))
+	}
+	if strings.Count(string(post.Body), `name="TagIds"`) != 1 || !strings.Contains(string(post.Body), "[8,9]") {
+		t.Errorf("expected one TagIds part with value [8,9], body=%q", string(post.Body))
 	}
 	// No follow-up Update should be issued for a non-edge tags-only create.
 	if mock.FindRequest("PUT", "/endpoints/61") != nil {

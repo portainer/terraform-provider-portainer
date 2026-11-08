@@ -2,6 +2,7 @@ package internal
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -141,8 +142,7 @@ func TestWebhookUpdate_NoChangeIsNoOp(t *testing.T) {
 }
 
 // TestWebhookDelete_HappyPath verifies the DELETE call is sent and the
-// resource clears its ID afterwards. Note: the generated SDK contract treats
-// 202 (not 204) as the success code for this endpoint.
+// resource clears its ID afterwards.
 func TestWebhookDelete_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 
@@ -164,8 +164,8 @@ func TestWebhookDelete_HappyPath(t *testing.T) {
 }
 
 // TestWebhookDelete_NoContent is the regression test for every destroy
-// failing: Portainer answers DELETE /webhooks/{id} with 204, which the SDK
-// call rejected because it expects 202.
+// failing: Portainer answers DELETE /webhooks/{id} with 204, which the
+// generated SDK used before rejected because it expected 202.
 func TestWebhookDelete_NoContent(t *testing.T) {
 	for _, status := range []int{http.StatusNoContent, http.StatusNotFound} {
 		mock := NewMockServer(t)
@@ -176,5 +176,31 @@ func TestWebhookDelete_NoContent(t *testing.T) {
 		if err := rcDelete(r, d, mock.Client()); err != nil {
 			t.Errorf("status %d: expected Delete to succeed, got %v", status, err)
 		}
+	}
+}
+
+// TestWebhookRead_FiltersByEnvironment covers Business Edition, which rejects
+// GET /webhooks without an environment filter (it looks up environment 0).
+func TestWebhookRead_FiltersByEnvironment(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/webhooks", RespondJSON(http.StatusOK, []map[string]interface{}{
+		{"Id": 7, "Token": "tok", "ResourceId": "abc", "EndpointId": 3, "Type": 2},
+	}))
+
+	r := resourceWebhook()
+	d := r.TestResourceData()
+	d.SetId("7")
+	_ = d.Set("endpoint_id", 3)
+	_ = d.Set("resource_id", "abc")
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	req := mock.FindRequest("GET", "/webhooks")
+	if req == nil || !strings.Contains(req.Query, "EndpointID%22%3A3") || !strings.Contains(req.Query, "ResourceID%22%3A%22abc") {
+		t.Errorf("expected an EndpointID and ResourceID filter, got query %q", req.Query)
+	}
+	if d.Id() != "7" || d.Get("resource_id") != "abc" {
+		t.Errorf("expected the webhook read back, got ID %q resource %v", d.Id(), d.Get("resource_id"))
 	}
 }

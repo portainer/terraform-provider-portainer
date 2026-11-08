@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/portainer/client-api-go/v2/pkg/client/tags"
 )
 
 func dataSourceTag() *schema.Resource {
@@ -28,15 +27,12 @@ func dataSourceTagRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := tags.NewTagListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.Tags.TagList(params, client.AuthInfo)
+	tagList, err := listTags(ctx, client)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list tags: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(err)
 	}
 
-	for _, t := range resp.Payload {
+	for _, t := range tagList {
 		if t.Name == name {
 			d.SetId(strconv.FormatInt(t.ID, 10))
 			return nil

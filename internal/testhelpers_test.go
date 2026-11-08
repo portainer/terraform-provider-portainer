@@ -6,14 +6,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"sync"
 	"testing"
-
-	httptransport "github.com/go-openapi/runtime/client"
-	"github.com/go-openapi/strfmt"
-	portainer "github.com/portainer/client-api-go/v2/pkg/client"
 )
 
 // MockServer wraps httptest.Server, records every incoming request, and routes
@@ -83,31 +78,15 @@ func (m *MockServer) Requests() []*RecordedRequest {
 
 // Client returns an *APIClient pointed at the mock server with a dummy API key.
 //
-// Two flavors of resources coexist in this provider:
-//
-//  1. Direct-HTTP resources call client.DoRequest(context.Background(), "POST", "/cloud/...", ...).
-//     The Endpoint here is m.URL (no "/api" suffix), so the final URL has no
-//     prefix and the dispatcher sees paths like "/cloud/gitcredentials".
-//
-//  2. SDK-based resources call client.Client.Tags.TagCreate(...) which routes
-//     through a swagger transport with basePath="/api", so the dispatcher
-//     sees "/api/tags".
-//
-// To let tests register handlers with one consistent path style, the
-// dispatcher strips a leading "/api" before matching. Tests always write
-// mock.On("POST", "/tags", ...) regardless of which flavor the resource uses.
+// The Endpoint is m.URL (no "/api" suffix), so a resource calling
+// client.Endpoint+"/tags" reaches the dispatcher as "/tags". The dispatcher
+// also strips a leading "/api", so tests register mock.On("POST", "/tags", ...)
+// whichever form the request path takes.
 func (m *MockServer) Client() *APIClient {
-	u, _ := url.Parse(m.URL)
-	sdkTransport := httptransport.New(u.Host, "/api", []string{u.Scheme})
-	authInfo := httptransport.APIKeyAuth("X-API-Key", "header", "test-api-key")
-	sdkTransport.DefaultAuthentication = authInfo
-
 	return &APIClient{
 		Endpoint:   m.URL,
 		APIKey:     "test-api-key",
 		HTTPClient: http.Client{},
-		Client:     portainer.New(sdkTransport, strfmt.Default),
-		AuthInfo:   authInfo,
 	}
 }
 
@@ -116,8 +95,7 @@ func (m *MockServer) dispatch(w http.ResponseWriter, r *http.Request) {
 	_ = r.Body.Close()
 
 	// Normalize: strip a leading "/api" so tests can register handlers with
-	// the same paths regardless of whether the resource uses direct HTTP
-	// (no /api prefix) or the SDK transport (which adds it).
+	// the same paths whether or not the request carries the prefix.
 	path := r.URL.Path
 	switch {
 	case strings.HasPrefix(path, "/api/"):

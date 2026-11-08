@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/portainer/client-api-go/v2/pkg/client/custom_templates"
 )
 
 func dataSourceCustomTemplate() *schema.Resource {
@@ -38,15 +37,12 @@ func dataSourceCustomTemplateRead(ctx context.Context, d *schema.ResourceData, m
 	client := meta.(*APIClient)
 	title := d.Get("title").(string)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := custom_templates.NewCustomTemplateListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.CustomTemplates.CustomTemplateList(params, client.AuthInfo)
+	templates, err := listCustomTemplates(ctx, client)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list custom templates: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(err)
 	}
 
-	for _, t := range resp.Payload {
+	for _, t := range templates {
 		if t.Title == title {
 			d.SetId(strconv.FormatInt(t.ID, 10))
 			if err := setFields(d, map[string]interface{}{

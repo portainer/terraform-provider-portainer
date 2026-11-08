@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestDataSourceTagRead_HappyPath verifies that the SDK-based list call is
+// TestDataSourceTagRead_HappyPath verifies that the list call is
 // made and the matched tag's ID is populated.
 //
 // Note: the Portainer Tag model serializes ID as the lowercase JSON key "id"

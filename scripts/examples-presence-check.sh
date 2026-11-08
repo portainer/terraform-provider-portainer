@@ -19,6 +19,9 @@
 # exits 1.
 
 set -euo pipefail
+# A fixed locale keeps the awk regexes working the same everywhere: GNU awk
+# matches nothing at all when the locale is unset.
+export LC_ALL=C
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
@@ -32,7 +35,7 @@ fi
 resources="$(awk '
     /ResourcesMap:/   { in_res = 1; in_ds = 0; next }
     /DataSourcesMap:/ { in_res = 0; in_ds = 1; next }
-    /^\s*\},?\s*$/    { in_res = 0; in_ds = 0; next }
+    /^[[:space:]]*\},?[[:space:]]*$/    { in_res = 0; in_ds = 0; next }
     in_res && /"portainer_/ {
         if (match($0, /"portainer_[A-Za-z0-9_]+"/)) print substr($0, RSTART + 11, RLENGTH - 12)
     }
@@ -41,7 +44,7 @@ resources="$(awk '
 data_sources="$(awk '
     /ResourcesMap:/   { in_res = 1; in_ds = 0; next }
     /DataSourcesMap:/ { in_res = 0; in_ds = 1; next }
-    /^\s*\},?\s*$/    { in_res = 0; in_ds = 0; next }
+    /^[[:space:]]*\},?[[:space:]]*$/    { in_res = 0; in_ds = 0; next }
     in_ds && /"portainer_/ {
         if (match($0, /"portainer_[A-Za-z0-9_]+"/)) print substr($0, RSTART + 11, RLENGTH - 12)
     }

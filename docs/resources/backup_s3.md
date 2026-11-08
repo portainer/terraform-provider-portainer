@@ -29,11 +29,15 @@ This resource does not track state — it performs a one-time backup to the spec
 | Name                 | Type   | Required | Description                                                                   |
 |----------------------|--------|----------|-------------------------------------------------------------------------------|
 | `access_key_id`      | string | ✅ yes   | AWS access key ID or S3-compatible access key                                 |
-| `secret_access_key`  | string | ✅ yes   | AWS secret key or S3-compatible secret key                                    |
+| `secret_access_key`  | string | 🚫 optional | AWS secret key or S3-compatible secret key. One of `secret_access_key` or `secret_access_key_wo` is required. |
+| `secret_access_key_wo` | string | 🚫 optional | Write-only `secret_access_key` (supports ephemeral values; never stored in Terraform state; Terraform 1.11+). Conflicts with `secret_access_key`; requires `secret_access_key_wo_version`. |
+| `secret_access_key_wo_version` | number | 🚫 optional | Version of `secret_access_key_wo`; increment it to send a new value. Changing it forces resource recreation. |
 | `bucket_name`        | string | ✅ yes   | Name of the S3 bucket where backup should be stored                           |
 | `region`             | string | ✅ yes   | AWS region (e.g., `eu-central-1`)                                             |
 | `s3_compatible_host` | string | ✅ yes   | Hostname of S3-compatible provider (e.g., `https://s3.example.com`)           |
-| `password`           | string | ✅ yes   | Password to encrypt the backup archive                                        |
+| `password`           | string | 🚫 optional | Password to encrypt the backup archive. One of `password` or `password_wo` is required. |
+| `password_wo` | string | 🚫 optional | Write-only `password` (supports ephemeral values; never stored in Terraform state; Terraform 1.11+). Conflicts with `password`; requires `password_wo_version`. |
+| `password_wo_version` | number | 🚫 optional | Version of `password_wo`; increment it to send a new value. Changing it forces resource recreation. |
 | `cron_rule`          | string | 🚫 optional | Optional cron rule for scheduling backups (e.g., `@daily`) *(not yet stored in state)* |
 
 ## Scheduled run status

@@ -1,0 +1,59 @@
+name: Business Edition E2E Tests
+
+# Tests what only Portainer Business Edition accepts (license, disable_kube_*,
+# cloud credentials, change windows, container webhooks) against a fresh
+# portainer-ee. It needs a license in the repository secret
+# PORTAINER_BE_LICENSE; without it (forks, Dependabot, no license yet) the
+# tests are skipped and the workflow still succeeds.
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays at 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  license:
+    name: License available
+    runs-on: ubuntu-latest
+    outputs:
+      present: ${{ steps.check.outputs.present }}
+    steps:
+      - id: check
+        env:
+          LICENSE: ${{ secrets.PORTAINER_BE_LICENSE }}
+        run: |
+          if [ -n "$LICENSE" ]; then
+            echo "present=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "present=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::PORTAINER_BE_LICENSE is not set, the Business Edition tests are skipped."
+          fi
+
+  business-edition:
+    name: Business Edition
+    needs: license
+    if: needs.license.outputs.present == 'true'
+    runs-on: ubuntu-latest
+    env:
+      PORTAINER_VERSION: "2.45.3"
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: 🧰 E2E setup (provider and Terraform, no Portainer CE)
+        uses: ./.github/actions/e2e-setup
+        with:
+          start-portainer: "false"
+          portainer-version: ${{ env.PORTAINER_VERSION }}
+
+      - name: 🐳 Start Portainer Business Edition
+        run: bash e2e-tests/lib/be-setup.sh >/dev/null
+
+      - name: 🧪 Business Edition tests
+        env:
+          TF_VAR_license_key: ${{ secrets.PORTAINER_BE_LICENSE }}
+        run: bash e2e-tests/lib/be-run.sh

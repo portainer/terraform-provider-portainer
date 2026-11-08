@@ -2,15 +2,13 @@ package internal
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	"github.com/portainer/client-api-go/v2/pkg/client/tags"
-	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceTag() *schema.Resource {
@@ -37,37 +35,27 @@ func resourceTagCreate(ctx context.Context, d *schema.ResourceData, meta interfa
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := tags.NewTagCreateParams()
-	params.SetContext(ctx)
-	params.Body = &models.TagsTagCreatePayload{
-		Name: &name,
+	var created portainerTag
+	body := map[string]interface{}{"name": name}
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/tags", body, &created); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create tag: %w", err))
 	}
 
-	resp, err := client.Client.Tags.TagCreate(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create tag: %w", decorateSDKError(err, errBody)))
-	}
-
-	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
+	d.SetId(strconv.FormatInt(created.ID, 10))
 	return resourceTagRead(ctx, d, meta)
 }
 
 func resourceTagRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	// SDK does not expose GetTagByID, so we list and filter.
-	// This matches the fallback logic of the previous implementation.
-	ctx, errBody := withErrorCapture(ctx)
-	params := tags.NewTagListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.Tags.TagList(params, client.AuthInfo)
+	// Portainer has no GET /tags/{id}, so list and filter.
+	tagList, err := listTags(ctx, client)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list tags: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(err)
 	}
 
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
-	for _, tag := range resp.Payload {
+	for _, tag := range tagList {
 		if tag.ID == id {
 			if err := d.Set("name", tag.Name); err != nil {
 				return diag.FromErr(err)
@@ -84,19 +72,26 @@ func resourceTagDelete(ctx context.Context, d *schema.ResourceData, meta interfa
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := tags.NewTagDeleteParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	_, err := client.Client.Tags.TagDelete(params, client.AuthInfo)
-	if err != nil {
-		var notFound *tags.TagDeleteNotFound
-		if errors.As(err, &notFound) {
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/tags/%d", client.Endpoint, id), nil, nil); err != nil {
+		if isAPINotFound(err) {
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to delete tag: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to delete tag: %w", err))
 	}
 
 	return nil
+}
+
+type portainerTag struct {
+	ID   int64  `json:"id"`
+	Name string `json:"Name"`
+}
+
+// listTags returns every tag (GET /tags).
+func listTags(ctx context.Context, client *APIClient) ([]portainerTag, error) {
+	var tagList []portainerTag
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/tags", nil, &tagList); err != nil {
+		return nil, fmt.Errorf("failed to list tags: %w", err)
+	}
+	return tagList, nil
 }

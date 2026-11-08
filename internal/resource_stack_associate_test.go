@@ -96,19 +96,41 @@ func TestStackAssociateCreate_HTTPError(t *testing.T) {
 	}
 }
 
-// TestStackAssociateRead_NoOp verifies Read is a no-op.
-func TestStackAssociateRead_NoOp(t *testing.T) {
-	mock := NewMockServer(t)
-
-	r := resourceStackAssociate()
-	d := r.TestResourceData()
-	d.SetId("5")
-
-	if err := rcRead(r, d, mock.Client()); err != nil {
-		t.Fatalf("Read should be no-op, got error: %v", err)
+// TestStackAssociateRead_ChecksAssociation covers Read, which used to do
+// nothing: a deleted stack drops out of state, and a stack attached to another
+// endpoint since shows the change, which re-associates it.
+func TestStackAssociateRead_ChecksAssociation(t *testing.T) {
+	cases := []struct {
+		name         string
+		status       int
+		endpoint     int
+		wantID       string
+		wantEndpoint int
+	}{
+		{"still associated", http.StatusOK, 3, "5", 3},
+		{"moved", http.StatusOK, 7, "5", 7},
+		{"stack deleted", http.StatusNotFound, 0, "", 3},
 	}
-	if got := len(mock.Requests()); got != 0 {
-		t.Errorf("expected zero HTTP calls from Read, got %d", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := NewMockServer(t)
+			mock.On("GET", "/stacks/5", RespondJSON(tc.status, map[string]interface{}{"Id": 5, "EndpointId": tc.endpoint}))
+
+			r := resourceStackAssociate()
+			d := r.TestResourceData()
+			d.SetId("5")
+			_ = d.Set("endpoint_id", 3)
+
+			if err := rcRead(r, d, mock.Client()); err != nil {
+				t.Fatalf("Read failed: %v", err)
+			}
+			if d.Id() != tc.wantID {
+				t.Errorf("ID: expected %q, got %q", tc.wantID, d.Id())
+			}
+			if tc.wantID != "" && d.Get("endpoint_id") != tc.wantEndpoint {
+				t.Errorf("endpoint_id: expected %d, got %v", tc.wantEndpoint, d.Get("endpoint_id"))
+			}
+		})
 	}
 }
 

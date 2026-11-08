@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 // TestDockerPluginCreate_WithSettings verifies the settings block is encoded
@@ -195,5 +197,22 @@ func TestDockerPluginCreate_StreamError(t *testing.T) {
 	}
 	if d.Id() != "" {
 		t.Errorf("expected no ID after a failed pull, got %q", d.Id())
+	}
+}
+
+// TestDockerPluginSettingsDescriptionIsInformational covers an imported
+// plugin: the settings come from the privileges without a description, and a
+// configured description used to force a replacement. Docker compares
+// privileges by name and value only.
+func TestDockerPluginSettingsDescriptionIsInformational(t *testing.T) {
+	r := resourceDockerPlugin()
+	suppress := r.Schema["settings"].Elem.(*schema.Resource).Schema["description"].DiffSuppressFunc
+	existing := r.TestResourceData()
+	existing.SetId("rclone")
+	if !suppress("settings.0.description", "", "host network", existing) {
+		t.Error("a description change on an existing plugin must not be planned")
+	}
+	if suppress("settings.0.description", "", "host network", r.TestResourceData()) {
+		t.Error("a new plugin keeps the configured description")
 	}
 }

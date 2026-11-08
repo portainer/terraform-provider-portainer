@@ -10,7 +10,7 @@ import (
 // resource_custom_template_test.go: Read 404 -> clear ID, Create error
 // propagation, Create with no source (validation error), the repository create
 // path, the Update happy path (incl. git_fetch for git-based templates),
-// Delete 404 swallow, and getVariablesSDK with variables present.
+// Delete 404 swallow, and customTemplateVariables with variables present.
 // =========================================================================
 
 // TestCustomTemplateRead_404ClearsID verifies a NotFound on inspect clears the
@@ -197,8 +197,8 @@ func TestCustomTemplateDelete_404Swallowed(t *testing.T) {
 	}
 }
 
-// TestGetVariablesSDK covers getVariablesSDK with a populated variables list.
-func TestGetVariablesSDK(t *testing.T) {
+// TestCustomTemplateVariables covers customTemplateVariables with a populated variables list.
+func TestCustomTemplateVariables(t *testing.T) {
 	r := resourceCustomTemplate()
 	d := r.TestResourceData()
 	_ = d.Set("variables", []interface{}{
@@ -210,7 +210,7 @@ func TestGetVariablesSDK(t *testing.T) {
 		},
 	})
 
-	vars := getVariablesSDK(d)
+	vars := customTemplateVariables(d)
 	if len(vars) != 1 {
 		t.Fatalf("expected 1 variable, got %d", len(vars))
 	}
@@ -222,11 +222,11 @@ func TestGetVariablesSDK(t *testing.T) {
 	}
 }
 
-// TestGetVariablesSDK_Empty returns nil when no variables are set.
-func TestGetVariablesSDK_Empty(t *testing.T) {
+// TestCustomTemplateVariables_Empty returns nil when no variables are set.
+func TestCustomTemplateVariables_Empty(t *testing.T) {
 	r := resourceCustomTemplate()
 	d := r.TestResourceData()
-	if got := getVariablesSDK(d); got != nil {
+	if got := customTemplateVariables(d); got != nil {
 		t.Errorf("expected nil for empty variables, got %v", got)
 	}
 }

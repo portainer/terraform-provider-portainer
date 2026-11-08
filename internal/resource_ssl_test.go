@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-// resource_ssl uses the generated SDK (client.Client.Ssl.*):
-//   - SSLUpdate is PUT /ssl with JSON body {cert, key, clientCert, httpEnabled}
-//     and a 204-style response (no body model bound; we only assert the call).
-//   - SSLInspect is GET /ssl returning models.PortainereeSSLSettings with
-//     `httpEnabled` as the only field we map back to state.
+// resource_ssl:
+//   - Update is PUT /ssl with JSON body {cert, key, clientCert, httpenabled}
+//     and a 204-style response (we only assert the call).
+//   - Read is GET /ssl, with `httpEnabled` as the only field mapped back to
+//     state.
 //   - Delete is a no-op API call: it just clears the resource ID.
 //
 // Create/Update share the same function so we test Update via Create.
@@ -55,8 +55,34 @@ func TestSSLCreate_HappyPath(t *testing.T) {
 	}
 }
 
+// TestSSLCreate_HTTPDisabled verifies http_enabled = false reaches Portainer,
+// which keeps the current setting when httpenabled is missing.
+func TestSSLCreate_HTTPDisabled(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("PUT", "/ssl", RespondJSON(http.StatusNoContent, map[string]interface{}{}))
+
+	r := resourceSSLSettings()
+	d := r.TestResourceData()
+	_ = d.Set("http_enabled", false)
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	put := mock.FindRequest("PUT", "/ssl")
+	if put == nil {
+		t.Fatal("expected PUT /ssl to be sent")
+	}
+	var payload map[string]interface{}
+	if err := put.DecodeJSON(&payload); err != nil {
+		t.Fatalf("failed to decode PUT body: %v", err)
+	}
+	if got, ok := payload["httpenabled"]; !ok || got != false {
+		t.Errorf("payload.httpenabled: expected false, got %v (present=%v)", got, ok)
+	}
+}
+
 // TestSSLRead_HappyPath verifies the Read function populates http_enabled from
-// the SDK response and stamps the canonical ID.
+// the API response and stamps the canonical ID.
 func TestSSLRead_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 
@@ -116,8 +142,6 @@ func TestSSLUpdate_HappyPath(t *testing.T) {
 	if got := payload["cert"]; got != "----NEW-CERT----" {
 		t.Errorf("payload.cert: expected %q, got %v", "----NEW-CERT----", got)
 	}
-	// SDK uses omitempty for `httpenabled`, so we just confirm the call
-	// reached the endpoint above and the cert/key are present.
 	if got := payload["key"]; got != "----NEW-KEY----" {
 		t.Errorf("payload.key: expected %q, got %v", "----NEW-KEY----", got)
 	}

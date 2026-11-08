@@ -140,7 +140,7 @@ func TestRegistryRead_404ClearsID(t *testing.T) {
 	}
 }
 
-// TestRegistryUpdate_HappyPath verifies the SDK PUT call is sent and
+// TestRegistryUpdate_HappyPath verifies the PUT call is sent and
 // then chains into Read.
 func TestRegistryUpdate_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
@@ -177,7 +177,7 @@ func TestRegistryUpdate_HappyPath(t *testing.T) {
 	}
 }
 
-// TestRegistryDelete_HappyPath verifies the SDK DELETE call is sent.
+// TestRegistryDelete_HappyPath verifies the DELETE call is sent.
 func TestRegistryDelete_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 

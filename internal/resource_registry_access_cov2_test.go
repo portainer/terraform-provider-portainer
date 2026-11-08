@@ -8,7 +8,7 @@ import (
 // =========================================================================
 // Additional coverage (cov2) for resource_registry_access.go: the Update
 // delegation, the user-variant Create, the endpoint-not-in-RegistryAccesses
-// branch of getRegistryPolicies, the EndpointRegistryAccess SDK error path,
+// branch of getRegistryPolicies, the registry access PUT error path,
 // the Delete user variant, and the Read no-team/no-user no-op.
 // =========================================================================
 
@@ -102,7 +102,7 @@ func TestRegistryAccessCov2_Create_User_NoExistingAccess(t *testing.T) {
 	}
 }
 
-// TestRegistryAccessCov2_Create_PUTError covers the EndpointRegistryAccess SDK
+// TestRegistryAccessCov2_Create_PUTError covers the registry access PUT
 // error path: the inspect succeeds but the access PUT returns a non-2xx.
 func TestRegistryAccessCov2_Create_PUTError(t *testing.T) {
 	mock := NewMockServer(t)

@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// TestEndpointGroupCreate_HappyPath exercises the create path which uses the
-// generated SDK (client.Client.EndpointGroups.*). The Create flow first lists
+// TestEndpointGroupCreate_HappyPath exercises the create path. The Create
+// flow first lists
 // existing groups (to check for a name collision), then POSTs the new group,
 // then re-reads it.
 func TestEndpointGroupCreate_HappyPath(t *testing.T) {
@@ -142,7 +142,7 @@ func TestEndpointGroupRead_HappyPath(t *testing.T) {
 	}
 }
 
-// TestEndpointGroupRead_404_ClearsID verifies that a 404 from the SDK clears
+// TestEndpointGroupRead_404_ClearsID verifies that a 404 from the API clears
 // the ID (drift detection).
 func TestEndpointGroupRead_404_ClearsID(t *testing.T) {
 	mock := NewMockServer(t)
@@ -205,7 +205,7 @@ func TestEndpointGroupUpdate_HappyPath(t *testing.T) {
 	}
 }
 
-// TestEndpointGroupDelete_HappyPath verifies the SDK DELETE is sent.
+// TestEndpointGroupDelete_HappyPath verifies the DELETE is sent.
 func TestEndpointGroupDelete_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 

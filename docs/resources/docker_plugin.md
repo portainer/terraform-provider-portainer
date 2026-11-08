@@ -67,7 +67,7 @@ resource "portainer_docker_plugin" "rclone" {
 | ------------- | ------------ | -------- | --------------------------------------------------------------- |
 | `name`        | string       | ✅ yes    | Type of privilege: `network`, `mount`, `device`, `capabilities` |
 | `value`       | list(string) | ✅ yes    | List of values for the given privilege                          |
-| `description` | string       | 🚫 optional | Optional description (ignored if empty)                         |
+| `description` | string       | 🚫 optional | Informational description; Docker ignores it, so changing it does not replace an existing plugin |
 
 ---
 

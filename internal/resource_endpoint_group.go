@@ -2,15 +2,13 @@ package internal
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	"github.com/portainer/client-api-go/v2/pkg/client/endpoint_groups"
-	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceEndpointGroup() *schema.Resource {
@@ -57,16 +55,15 @@ func resourceEndpointGroupCreate(ctx context.Context, d *schema.ResourceData, me
 		return resourceEndpointGroupUpdate(ctx, d, meta)
 	}
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := endpoint_groups.NewPostEndpointGroupsParams()
-	params.SetContext(ctx)
-	params.Body = &models.EndpointgroupsEndpointGroupCreatePayload{
-		Name: &name,
-	}
+	body := struct {
+		Name                string  `json:"name"`
+		Description         string  `json:"description,omitempty"`
+		AssociatedEndpoints []int64 `json:"associatedEndpoints"`
+		TagIDs              []int64 `json:"tagIDs"`
+	}{Name: name}
 
 	if v, ok := d.GetOk("description"); ok {
-		desc := v.(string)
-		params.Body.Description = desc
+		body.Description = v.(string)
 	}
 
 	if v, ok := d.GetOk("tag_ids"); ok {
@@ -74,28 +71,25 @@ func resourceEndpointGroupCreate(ctx context.Context, d *schema.ResourceData, me
 		for _, id := range v.([]interface{}) {
 			tagIDs = append(tagIDs, int64(id.(int)))
 		}
-		params.Body.TagIDs = tagIDs
+		body.TagIDs = tagIDs
 	}
 
-	resp, err := client.Client.EndpointGroups.PostEndpointGroups(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create endpoint group: %w", decorateSDKError(err, errBody)))
+	var created portainerEndpointGroup
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/endpoint_groups", body, &created); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create endpoint group: %w", err))
 	}
 
-	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
+	d.SetId(strconv.FormatInt(created.ID, 10))
 	return resourceEndpointGroupRead(ctx, d, meta)
 }
 
 func findExistingEndpointGroupByName(ctx context.Context, client *APIClient, name string) (int, error) {
-	ctx, errBody := withErrorCapture(ctx)
-	params := endpoint_groups.NewEndpointGroupListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.EndpointGroups.EndpointGroupList(params, client.AuthInfo)
+	groups, err := listEndpointGroups(ctx, client)
 	if err != nil {
-		return 0, fmt.Errorf("failed to list endpoint groups: %w", decorateSDKError(err, errBody))
+		return 0, err
 	}
 
-	for _, g := range resp.Payload {
+	for _, g := range groups {
 		if g.Name == name {
 			return int(g.ID), nil
 		}
@@ -107,30 +101,24 @@ func resourceEndpointGroupRead(ctx context.Context, d *schema.ResourceData, meta
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := endpoint_groups.NewGetEndpointGroupsIDParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	resp, err := client.Client.EndpointGroups.GetEndpointGroupsID(params, client.AuthInfo)
-	if err != nil {
-		var notFound *endpoint_groups.GetEndpointGroupsIDNotFound
-		if errors.As(err, &notFound) {
+	var group portainerEndpointGroup
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, id), nil, &group); err != nil {
+		if isAPINotFound(err) {
 			d.SetId("")
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to read endpoint group: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to read endpoint group: %w", err))
 	}
 
-	if err := d.Set("name", resp.Payload.Name); err != nil {
+	if err := d.Set("name", group.Name); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("description", resp.Payload.Description); err != nil {
+	if err := d.Set("description", group.Description); err != nil {
 		return diag.FromErr(err)
 	}
 
 	tagIDs := []int{}
-	for _, tid := range resp.Payload.TagIds {
+	for _, tid := range group.TagIds {
 		tagIDs = append(tagIDs, int(tid))
 	}
 	if err := d.Set("tag_ids", tagIDs); err != nil {
@@ -145,16 +133,14 @@ func resourceEndpointGroupUpdate(ctx context.Context, d *schema.ResourceData, me
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 	name := d.Get("name").(string)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := endpoint_groups.NewEndpointGroupUpdateParams()
-	params.SetContext(ctx)
-	params.ID = id
-	params.Body = &models.EndpointgroupsEndpointGroupUpdatePayload{
-		Name: name,
-	}
+	body := struct {
+		Name        string  `json:"name,omitempty"`
+		Description string  `json:"description,omitempty"`
+		TagIDs      []int64 `json:"tagIDs"`
+	}{Name: name}
 
 	if v, ok := d.GetOk("description"); ok {
-		params.Body.Description = v.(string)
+		body.Description = v.(string)
 	}
 
 	if v, ok := d.GetOk("tag_ids"); ok {
@@ -162,12 +148,11 @@ func resourceEndpointGroupUpdate(ctx context.Context, d *schema.ResourceData, me
 		for _, tid := range v.([]interface{}) {
 			tagIDs = append(tagIDs, int64(tid.(int)))
 		}
-		params.Body.TagIDs = tagIDs
+		body.TagIDs = tagIDs
 	}
 
-	_, err := client.Client.EndpointGroups.EndpointGroupUpdate(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to update endpoint group: %w", decorateSDKError(err, errBody)))
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, id), body, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update endpoint group: %w", err))
 	}
 
 	return resourceEndpointGroupRead(ctx, d, meta)
@@ -177,19 +162,28 @@ func resourceEndpointGroupDelete(ctx context.Context, d *schema.ResourceData, me
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := endpoint_groups.NewEndpointGroupDeleteParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	_, err := client.Client.EndpointGroups.EndpointGroupDelete(params, client.AuthInfo)
-	if err != nil {
-		var notFound *endpoint_groups.EndpointGroupDeleteNotFound
-		if errors.As(err, &notFound) {
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/endpoint_groups/%d", client.Endpoint, id), nil, nil); err != nil {
+		if isAPINotFound(err) {
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to delete endpoint group: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to delete endpoint group: %w", err))
 	}
 
 	return nil
+}
+
+type portainerEndpointGroup struct {
+	ID          int64   `json:"Id"`
+	Name        string  `json:"Name"`
+	Description string  `json:"Description"`
+	TagIds      []int64 `json:"TagIds"`
+}
+
+// listEndpointGroups returns every environment group (GET /endpoint_groups).
+func listEndpointGroups(ctx context.Context, client *APIClient) ([]portainerEndpointGroup, error) {
+	var groups []portainerEndpointGroup
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/endpoint_groups", nil, &groups); err != nil {
+		return nil, fmt.Errorf("failed to list endpoint groups: %w", err)
+	}
+	return groups, nil
 }

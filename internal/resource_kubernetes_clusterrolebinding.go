@@ -99,10 +99,15 @@ func resourceKubernetesClusterRoleBindingsDelete(ctx context.Context, d *schema.
 }
 
 func resourceKubernetesClusterRoleBindingsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	if diags := resourceKubernetesClusterRoleBindingsDelete(ctx, d, meta); diags.HasError() {
-		return diags
-	}
-	return resourceKubernetesClusterRoleBindingsCreate(ctx, d, meta)
+	client := meta.(*APIClient)
+
+	endpointID, name := parseClusterRolesBindingsID(d.Id())
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/rbac.authorization.k8s.io/v1/clusterrolebindings/%s", client.Endpoint, endpointID, name)
+	return k8sUpdateManifest(ctx, d, client, url, name, "clusterrolebinding "+name, func() diag.Diagnostics {
+		return resourceKubernetesClusterRoleBindingsDelete(ctx, d, meta)
+	}, func() diag.Diagnostics {
+		return resourceKubernetesClusterRoleBindingsCreate(ctx, d, meta)
+	})
 }
 
 func resourceKubernetesClusterRoleBindingsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -114,7 +119,7 @@ func resourceKubernetesClusterRoleBindingsRead(ctx context.Context, d *schema.Re
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/rbac.authorization.k8s.io/v1/clusterrolebindings/%s", client.Endpoint, endpointID, name)
-	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "clusterrolebinding "+name); diags.HasError() {
+	if diags := k8sReadManifestDrift(ctx, d, client, url, "clusterrolebinding "+name); diags.HasError() {
 		return diags
 	}
 	if d.Id() == "" {
@@ -124,7 +129,7 @@ func resourceKubernetesClusterRoleBindingsRead(ctx context.Context, d *schema.Re
 	if err := d.Set("endpoint_id", endpointID); err != nil {
 		return diag.FromErr(err)
 	}
-	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
+	// manifest only changes in state when the live object drifted — see k8sReadManifestDrift.
 	return nil
 }
 

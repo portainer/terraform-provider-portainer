@@ -18,6 +18,8 @@ resource "portainer_stack_associate" "example" {
 ```
 
 ## Lifecycle & Behavior
+The association is checked on refresh: a stack deleted since drops out of state, and a stack attached to another endpoint shows up as a change, which associates it again.
+
 For de-association of the Stack in docker swarm run:
 ```hcl
 terraform apply

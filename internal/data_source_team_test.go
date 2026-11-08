@@ -6,7 +6,7 @@ import (
 )
 
 // TestDataSourceTeamRead_HappyPath verifies that the data source lists teams
-// via the SDK (GET /teams), filters by name, and sets the ID.
+// via GET /teams, filters by name, and sets the ID.
 func TestDataSourceTeamRead_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 

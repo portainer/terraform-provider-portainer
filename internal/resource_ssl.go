@@ -3,11 +3,10 @@ package internal
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/portainer/client-api-go/v2/pkg/client/ssl"
-	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceSSLSettings() *schema.Resource {
@@ -50,19 +49,22 @@ func resourceSSLSettings() *schema.Resource {
 func resourceSSLSettingsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := ssl.NewSSLUpdateParams()
-	params.SetContext(ctx)
-	params.Body = &models.SslSslUpdatePayload{
+	// httpenabled is always sent: Portainer keeps the current setting when it
+	// is missing, so leaving false out could never switch HTTP off.
+	body := struct {
+		Cert        string `json:"cert,omitempty"`
+		Key         string `json:"key,omitempty"`
+		ClientCert  string `json:"clientCert,omitempty"`
+		HTTPEnabled bool   `json:"httpenabled"`
+	}{
 		Cert:        d.Get("cert").(string),
 		Key:         d.Get("key").(string),
 		ClientCert:  d.Get("client_cert").(string),
-		Httpenabled: d.Get("http_enabled").(bool),
+		HTTPEnabled: d.Get("http_enabled").(bool),
 	}
 
-	_, err := client.Client.Ssl.SSLUpdate(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to update SSL settings: %w", decorateSDKError(err, errBody)))
+	if err := doJSON(ctx, client, http.MethodPut, client.Endpoint+"/ssl", body, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update SSL settings: %w", err))
 	}
 
 	d.SetId("portainer-ssl")
@@ -72,15 +74,14 @@ func resourceSSLSettingsUpdate(ctx context.Context, d *schema.ResourceData, meta
 func resourceSSLSettingsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := ssl.NewSSLInspectParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.Ssl.SSLInspect(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to read SSL settings: %w", decorateSDKError(err, errBody)))
+	var settings struct {
+		HTTPEnabled bool `json:"httpEnabled"`
+	}
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/ssl", nil, &settings); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to read SSL settings: %w", err))
 	}
 
-	if err := d.Set("http_enabled", resp.Payload.HTTPEnabled); err != nil {
+	if err := d.Set("http_enabled", settings.HTTPEnabled); err != nil {
 		return diag.FromErr(err)
 	}
 	d.SetId("portainer-ssl")

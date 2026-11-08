@@ -34,9 +34,11 @@ func resourceDockerImage() *schema.Resource {
 			Delete: schema.DefaultTimeout(5 * time.Minute),
 		},
 		Schema: map[string]*schema.Schema{
-			"endpoint_id":   {Type: schema.TypeInt, Required: true, ForceNew: true, Description: "Identifier of the Portainer endpoint on which the Docker image should be pulled."},
-			"image":         {Type: schema.TypeString, Required: true, ForceNew: true, Description: "Image reference to pull (for example `nginx:latest`)."},
-			"registry_auth": {Type: schema.TypeString, Optional: true, Sensitive: true, ForceNew: true, Description: "Sensitive base64-encoded JSON object with registry credentials (username, password, email, serveraddress) used to pull the image."},
+			"endpoint_id":              {Type: schema.TypeInt, Required: true, ForceNew: true, Description: "Identifier of the Portainer endpoint on which the Docker image should be pulled."},
+			"image":                    {Type: schema.TypeString, Required: true, ForceNew: true, Description: "Image reference to pull (for example `nginx:latest`)."},
+			"registry_auth":            {Type: schema.TypeString, Optional: true, Sensitive: true, ForceNew: true, ConflictsWith: []string{"registry_auth_wo"}, Description: "Registry credentials used to pull the image, as `username:password`. Stored in state as a sensitive value; use `registry_auth_wo` to keep it out of state."},
+			"registry_auth_wo":         writeOnlySecretSchema("registry_auth", "registry_auth_wo_version", "registry credentials (`username:password`)"),
+			"registry_auth_wo_version": writeOnlyVersionSchema("registry_auth_wo", true),
 		},
 	}
 }
@@ -45,7 +47,10 @@ func resourceDockerImageCreate(ctx context.Context, d *schema.ResourceData, meta
 	client := meta.(*APIClient)
 	image := d.Get("image").(string)
 	endpointID := d.Get("endpoint_id").(int)
-	auth := d.Get("registry_auth").(string)
+	auth, err := twinSecret(d, "registry_auth")
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	timeout := d.Timeout(schema.TimeoutCreate)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -103,7 +108,21 @@ func resourceDockerImageCreate(ctx context.Context, d *schema.ResourceData, meta
 	return nil
 }
 
+// resourceDockerImageRead checks the image is still on the endpoint, so one
+// removed outside Terraform is pulled again.
 func resourceDockerImageRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*APIClient)
+	endpointID := d.Get("endpoint_id").(int)
+	image := d.Get("image").(string)
+
+	inspectURL := fmt.Sprintf("%s/endpoints/%d/docker/images/%s/json", client.Endpoint, endpointID, url.PathEscape(image))
+	if err := doJSON(ctx, client, http.MethodGet, inspectURL, nil, nil); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to inspect image %s: %w", image, err))
+	}
 	return nil
 }
 

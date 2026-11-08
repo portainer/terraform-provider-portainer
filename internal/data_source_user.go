@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/portainer/client-api-go/v2/pkg/client/users"
 )
 
 func dataSourceUser() *schema.Resource {
@@ -33,15 +32,12 @@ func dataSourceUserRead(ctx context.Context, d *schema.ResourceData, meta interf
 	client := meta.(*APIClient)
 	username := d.Get("username").(string)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := users.NewUserListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.Users.UserList(params, client.AuthInfo)
+	userList, err := listUsers(ctx, client)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list users: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to list users: %w", err))
 	}
 
-	for _, u := range resp.Payload {
+	for _, u := range userList {
 		if u.Username == username {
 			d.SetId(strconv.FormatInt(u.ID, 10))
 			if err := d.Set("role", u.Role); err != nil {

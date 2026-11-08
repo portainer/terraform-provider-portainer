@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -105,11 +106,28 @@ func resourceCloudCredentialsRead(ctx context.Context, d *schema.ResourceData, m
 	if err := d.Set("cloud_provider", result.Provider); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("credentials", result.Credentials); err != nil {
+	if err := d.Set("credentials", unmaskCredentials(result.Credentials, d.Get("credentials").(map[string]interface{}))); err != nil {
 		return diag.FromErr(err)
 	}
 
 	return nil
+}
+
+// unmaskCredentials keeps the configured value of every secret Portainer
+// returns masked ("******"): the mask read into state planned a change on
+// every run. A key that is no longer there, or a plain value that changed,
+// still shows as drift.
+func unmaskCredentials(live, prior map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(live))
+	for k, v := range live {
+		s := fmt.Sprint(v)
+		if prev, ok := prior[k]; ok && s != "" && strings.Trim(s, "*") == "" {
+			out[k] = prev
+			continue
+		}
+		out[k] = s
+	}
+	return out
 }
 
 func resourceCloudCredentialsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {

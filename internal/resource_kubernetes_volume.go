@@ -128,10 +128,18 @@ func resourceKubernetesVolumesDelete(ctx context.Context, d *schema.ResourceData
 }
 
 func resourceKubernetesVolumesUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	if diags := resourceKubernetesVolumesDelete(ctx, d, meta); diags.HasError() {
-		return diags
+	client := meta.(*APIClient)
+
+	endpointID, namespace, volType, name := parseVolumesID(d.Id())
+	url, err := volumeAPIURL(client.Endpoint, endpointID, namespace, volType, true, name)
+	if err != nil {
+		return diag.FromErr(err)
 	}
-	return resourceKubernetesVolumesCreate(ctx, d, meta)
+	return k8sUpdateManifest(ctx, d, client, url, name, volType+" "+name, func() diag.Diagnostics {
+		return resourceKubernetesVolumesDelete(ctx, d, meta)
+	}, func() diag.Diagnostics {
+		return resourceKubernetesVolumesCreate(ctx, d, meta)
+	}, "namespace", "type")
 }
 
 func resourceKubernetesVolumesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -146,7 +154,7 @@ func resourceKubernetesVolumesRead(ctx context.Context, d *schema.ResourceData, 
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if diags := k8sConfirmExistsByGET(ctx, d, client, url, volType+" "+name); diags.HasError() {
+	if diags := k8sReadManifestDrift(ctx, d, client, url, volType+" "+name); diags.HasError() {
 		return diags
 	}
 	if d.Id() == "" {
@@ -162,7 +170,7 @@ func resourceKubernetesVolumesRead(ctx context.Context, d *schema.ResourceData, 
 	if err := d.Set("type", volType); err != nil {
 		return diag.FromErr(err)
 	}
-	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
+	// manifest only changes in state when the live object drifted — see k8sReadManifestDrift.
 	return nil
 }
 

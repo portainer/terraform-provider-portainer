@@ -89,9 +89,14 @@ func resourceDockerPlugin() *schema.Resource {
 							Description: "Name of the Docker plugin setting.",
 						},
 						"description": {
-							Type:        schema.TypeString,
-							Optional:    true,
-							Description: "Human-readable description of the plugin setting.",
+							Type:     schema.TypeString,
+							Optional: true,
+							// Docker compares privileges by name and value only,
+							// and an import fills settings in without a
+							// description, so a difference in it would only
+							// replace the plugin for nothing.
+							DiffSuppressFunc: func(_, _, _ string, d *schema.ResourceData) bool { return d.Id() != "" },
+							Description:      "Human-readable description of the plugin setting. Informational: Docker ignores it, so a change does not replace an existing plugin.",
 						},
 						"value": {
 							Type:        schema.TypeList,
