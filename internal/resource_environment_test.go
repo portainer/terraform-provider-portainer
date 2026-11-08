@@ -7,9 +7,7 @@ import (
 	"testing"
 )
 
-// resource_environment uses the generated SDK (client.Client.Endpoints.*).
-//
-// Notable SDK behaviors that shape these tests:
+// Notable API behaviors that shape these tests:
 //   - EndpointCreate is POST /endpoints with Content-Type: multipart/form-data
 //     (NOT JSON). To assert the create payload we inspect raw form fields in
 //     the request body string, not DecodeJSON.
@@ -129,7 +127,7 @@ func TestEnvironmentCreate_TypeEdgeAgent_HappyPath(t *testing.T) {
 		t.Fatal("expected POST /endpoints to be sent")
 	}
 	body := string(post.Body)
-	// The SDK uses multipart/form-data; we substring-match the form fields.
+	// Create uses multipart/form-data; we substring-match the form fields.
 	if !strings.Contains(body, "edge-prod") {
 		t.Errorf("expected POST body to contain Name=edge-prod, body=%q", body)
 	}
@@ -473,7 +471,7 @@ func TestEnvironmentSchema_TypeValidation(t *testing.T) {
 	}
 }
 
-// TestEnvironmentDelete_HappyPath verifies the SDK Delete request reaches the
+// TestEnvironmentDelete_HappyPath verifies the Delete request reaches the
 // expected path and method.
 func TestEnvironmentDelete_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
@@ -657,7 +655,7 @@ func TestEnvironmentCreate_ExistingName_DelegatesToUpdate(t *testing.T) {
 // TestEnvironmentUpdate_NonEdgeSendsFullPayload verifies that for non-edge
 // types (e.g. Docker = 1) the Update PUT body carries the connection fields
 // (name, url, groupID, TLS flags) — i.e. the !isEdgeAgent branch is exercised.
-// Camelcase fields match the SDK payload model (name, url, groupID, tls,
+// Camelcase fields match the Portainer payload (name, url, groupID, tls,
 // tlsskipVerify, ...).
 func TestEnvironmentUpdate_NonEdgeSendsFullPayload(t *testing.T) {
 	mock := NewMockServer(t)
@@ -755,7 +753,7 @@ func TestEnvironmentUpdate_EdgeAgentSkipsConnectionFields(t *testing.T) {
 		t.Fatalf("failed to decode PUT body: %v", err)
 	}
 
-	// The edge-agent branch must NOT include connection fields. The SDK
+	// The edge-agent branch must NOT include connection fields. The body
 	// uses `omitempty` on these JSON tags so an empty/zero value is
 	// elided from the body — that is exactly what we expect.
 	if payload["name"] != "edge-prod" {

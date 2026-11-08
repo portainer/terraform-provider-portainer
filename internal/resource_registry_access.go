@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/portainer/client-api-go/v2/pkg/client/endpoints"
-	"github.com/portainer/client-api-go/v2/pkg/client/registries"
-	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 var ErrRegistryNotFound = errors.New("registry not found")
@@ -60,35 +58,49 @@ func resourceRegistryAccess() *schema.Resource {
 	}
 }
 
-func getRegistryPolicies(ctx context.Context, client *APIClient, registryID int, endpointID int) (*models.PortainerRegistryAccessPolicies, error) {
-	ctx, errBody := withErrorCapture(ctx)
-	params := registries.NewRegistryInspectParams()
-	params.SetContext(ctx)
-	params.ID = int64(registryID)
+// registryAccessPolicies is a registry's access on one environment, as
+// Portainer reports it in Registry.RegistryAccesses.
+type registryAccessPolicies struct {
+	UserAccessPolicies map[string]accessPolicy `json:"UserAccessPolicies"`
+	TeamAccessPolicies map[string]accessPolicy `json:"TeamAccessPolicies"`
+	Namespaces         []string                `json:"Namespaces"`
+}
 
-	resp, err := client.Client.Registries.RegistryInspect(params, client.AuthInfo)
+type accessPolicy struct {
+	RoleID int64 `json:"RoleId,omitempty"`
+}
+
+// registryAccessPayload is the PUT /endpoints/{id}/registries/{registryId}
+// body.
+type registryAccessPayload struct {
+	UserAccessPolicies map[string]accessPolicy `json:"userAccessPolicies,omitempty"`
+	TeamAccessPolicies map[string]accessPolicy `json:"teamAccessPolicies,omitempty"`
+	Namespaces         []string                `json:"namespaces"`
+}
+
+func getRegistryPolicies(ctx context.Context, client *APIClient, registryID int, endpointID int) (*registryAccessPolicies, error) {
+	registry, err := getRegistry(ctx, client, int64(registryID))
 	if err != nil {
-		var notFound *registries.RegistryInspectNotFound
-		if errors.As(err, &notFound) {
+		if isAPINotFound(err) {
 			return nil, ErrRegistryNotFound
 		}
-		return nil, fmt.Errorf("failed to fetch registry: %w", decorateSDKError(err, errBody))
+		return nil, fmt.Errorf("failed to fetch registry: %w", err)
 	}
 
 	eidStr := strconv.Itoa(endpointID)
-	policies, ok := resp.Payload.RegistryAccesses[eidStr]
+	policies, ok := registry.RegistryAccesses[eidStr]
 	if !ok {
-		return &models.PortainerRegistryAccessPolicies{
-			UserAccessPolicies: make(models.PortainerUserAccessPolicies),
-			TeamAccessPolicies: make(models.PortainerTeamAccessPolicies),
+		return &registryAccessPolicies{
+			UserAccessPolicies: make(map[string]accessPolicy),
+			TeamAccessPolicies: make(map[string]accessPolicy),
 		}, nil
 	}
 
 	if policies.UserAccessPolicies == nil {
-		policies.UserAccessPolicies = make(models.PortainerUserAccessPolicies)
+		policies.UserAccessPolicies = make(map[string]accessPolicy)
 	}
 	if policies.TeamAccessPolicies == nil {
-		policies.TeamAccessPolicies = make(models.PortainerTeamAccessPolicies)
+		policies.TeamAccessPolicies = make(map[string]accessPolicy)
 	}
 
 	return &policies, nil
@@ -113,27 +125,15 @@ func resourceRegistryAccessCreate(ctx context.Context, d *schema.ResourceData, m
 
 	if hasTeam {
 		tidStr := strconv.Itoa(teamID.(int))
-		policies.TeamAccessPolicies[tidStr] = models.PortainerAccessPolicy{RoleID: roleID}
+		policies.TeamAccessPolicies[tidStr] = accessPolicy{RoleID: roleID}
 	}
 	if hasUser {
 		uidStr := strconv.Itoa(userID.(int))
-		policies.UserAccessPolicies[uidStr] = models.PortainerAccessPolicy{RoleID: roleID}
+		policies.UserAccessPolicies[uidStr] = accessPolicy{RoleID: roleID}
 	}
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := endpoints.NewEndpointRegistryAccessParams()
-	params.SetContext(ctx)
-	params.ID = int64(endpointID)
-	params.RegistryID = int64(registryID)
-	params.Body = &models.EndpointsRegistryAccessPayload{
-		UserAccessPolicies: policies.UserAccessPolicies,
-		TeamAccessPolicies: policies.TeamAccessPolicies,
-		Namespaces:         policies.Namespaces,
-	}
-
-	_, err = client.Client.Endpoints.EndpointRegistryAccess(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to update registry access: %w", decorateSDKError(err, errBody)))
+	if err := putRegistryAccess(ctx, client, registryID, endpointID, policies); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update registry access: %w", err))
 	}
 
 	id := fmt.Sprintf("%d/%d/", registryID, endpointID)
@@ -215,25 +215,22 @@ func resourceRegistryAccessDelete(ctx context.Context, d *schema.ResourceData, m
 		delete(policies.UserAccessPolicies, strconv.Itoa(userID.(int)))
 	}
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := endpoints.NewEndpointRegistryAccessParams()
-	params.SetContext(ctx)
-	params.ID = int64(endpointID)
-	params.RegistryID = int64(registryID)
-	params.Body = &models.EndpointsRegistryAccessPayload{
+	if err := putRegistryAccess(ctx, client, registryID, endpointID, policies); err != nil {
+		if isAPINotFound(err) {
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to delete registry access: %w", err))
+	}
+
+	return nil
+}
+
+// putRegistryAccess replaces the registry's access on the environment.
+func putRegistryAccess(ctx context.Context, client *APIClient, registryID, endpointID int, policies *registryAccessPolicies) error {
+	body := registryAccessPayload{
 		UserAccessPolicies: policies.UserAccessPolicies,
 		TeamAccessPolicies: policies.TeamAccessPolicies,
 		Namespaces:         policies.Namespaces,
 	}
-
-	_, err = client.Client.Endpoints.EndpointRegistryAccess(params, client.AuthInfo)
-	if err != nil {
-		var notFound *endpoints.EndpointRegistryAccessNotFound
-		if errors.As(err, &notFound) {
-			return nil
-		}
-		return diag.FromErr(fmt.Errorf("failed to delete registry access: %w", decorateSDKError(err, errBody)))
-	}
-
-	return nil
+	return doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/endpoints/%d/registries/%d", client.Endpoint, endpointID, registryID), body, nil)
 }

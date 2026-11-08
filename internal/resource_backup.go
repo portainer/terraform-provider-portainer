@@ -20,12 +20,15 @@ func resourceBackup() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"password": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Sensitive:   true,
-				ForceNew:    true,
-				Description: "Sensitive password used to encrypt the Portainer backup archive.",
+				Type:         schema.TypeString,
+				Optional:     true,
+				ExactlyOneOf: []string{"password", "password_wo"},
+				Sensitive:    true,
+				ForceNew:     true,
+				Description:  "Sensitive password used to encrypt the Portainer backup archive. Stored in state as a sensitive value; use `password_wo` to keep it out of state.",
 			},
+			"password_wo":         writeOnlySecretSchema("password", "password_wo_version", "password used to encrypt the backup archive"),
+			"password_wo_version": writeOnlyVersionSchema("password_wo", true),
 			"output_path": {
 				Type:        schema.TypeString,
 				Required:    true,
@@ -38,7 +41,10 @@ func resourceBackup() *schema.Resource {
 
 func resourceBackupCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
-	password := d.Get("password").(string)
+	password, err := twinSecret(d, "password")
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	outputPath := d.Get("output_path").(string)
 
 	body := map[string]interface{}{

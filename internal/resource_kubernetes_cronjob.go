@@ -105,10 +105,15 @@ func resourceKubernetesCronJobDelete(ctx context.Context, d *schema.ResourceData
 }
 
 func resourceKubernetesCronJobUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	if diags := resourceKubernetesCronJobDelete(ctx, d, meta); diags.HasError() {
-		return diags
-	}
-	return resourceKubernetesCronJobCreate(ctx, d, meta)
+	client := meta.(*APIClient)
+
+	endpointID, namespace, name := parseCronJobID(d.Id())
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/batch/v1/namespaces/%s/cronjobs/%s", client.Endpoint, endpointID, namespace, name)
+	return k8sUpdateManifest(ctx, d, client, url, name, "cronjob "+name, func() diag.Diagnostics {
+		return resourceKubernetesCronJobDelete(ctx, d, meta)
+	}, func() diag.Diagnostics {
+		return resourceKubernetesCronJobCreate(ctx, d, meta)
+	}, "namespace")
 }
 
 func resourceKubernetesCronJobRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -120,7 +125,7 @@ func resourceKubernetesCronJobRead(ctx context.Context, d *schema.ResourceData, 
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/batch/v1/namespaces/%s/cronjobs/%s", client.Endpoint, endpointID, namespace, name)
-	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "cronjob "+name); diags.HasError() {
+	if diags := k8sReadManifestDrift(ctx, d, client, url, "cronjob "+name); diags.HasError() {
 		return diags
 	}
 	if d.Id() == "" {
@@ -133,7 +138,7 @@ func resourceKubernetesCronJobRead(ctx context.Context, d *schema.ResourceData, 
 	if err := d.Set("namespace", namespace); err != nil {
 		return diag.FromErr(err)
 	}
-	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
+	// manifest only changes in state when the live object drifted — see k8sReadManifestDrift.
 	return nil
 }
 

@@ -120,10 +120,15 @@ func resourceKubernetesApplicationDelete(ctx context.Context, d *schema.Resource
 }
 
 func resourceKubernetesApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	if diags := resourceKubernetesApplicationDelete(ctx, d, meta); diags.HasError() {
-		return diags
-	}
-	return resourceKubernetesApplicationCreate(ctx, d, meta)
+	client := meta.(*APIClient)
+
+	endpointID, namespace, name := parseApllicationsID(d.Id())
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/apps/v1/namespaces/%s/deployments/%s", client.Endpoint, endpointID, namespace, name)
+	return k8sUpdateManifest(ctx, d, client, url, name, "deployment "+name, func() diag.Diagnostics {
+		return resourceKubernetesApplicationDelete(ctx, d, meta)
+	}, func() diag.Diagnostics {
+		return resourceKubernetesApplicationCreate(ctx, d, meta)
+	}, "namespace")
 }
 
 func resourceKubernetesApplicationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -135,7 +140,7 @@ func resourceKubernetesApplicationRead(ctx context.Context, d *schema.ResourceDa
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/apps/v1/namespaces/%s/deployments/%s", client.Endpoint, endpointID, namespace, name)
-	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "deployment "+name); diags.HasError() {
+	if diags := k8sReadManifestDrift(ctx, d, client, url, "deployment "+name); diags.HasError() {
 		return diags
 	}
 	if d.Id() == "" {
@@ -148,7 +153,7 @@ func resourceKubernetesApplicationRead(ctx context.Context, d *schema.ResourceDa
 	if err := d.Set("namespace", namespace); err != nil {
 		return diag.FromErr(err)
 	}
-	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
+	// manifest only changes in state when the live object drifted — see k8sReadManifestDrift.
 	return nil
 }
 

@@ -30,12 +30,16 @@ resource "portainer_registry_configure" "harbor" {
 | `authentication`  | bool   | ✅ yes   | –       | Whether the registry requires authentication. When false, Portainer ignores the credentials.        |
 | `username`        | string | ❌ no    | –       | Username used to authenticate. Required when `authentication` is true.                              |
 | `password`        | string | ❌ no    | –       | Password or token paired with `username`. Stored in state as a sensitive value.                     |
+| `password_wo` | string | ❌ no | – | Write-only `password` (supports ephemeral values; never stored in Terraform state; Terraform 1.11+). Conflicts with `password`; requires `password_wo_version`. |
+| `password_wo_version` | number | ❌ no | – | Version of `password_wo`; increment it to send a new value. The change is applied in place. |
 | `region`          | string | ❌ no    | –       | AWS region of an ECR registry. Ignored by other types.                                              |
 | `tls`             | bool   | ❌ no    | `false` | Whether Portainer contacts the registry over TLS.                                                   |
 | `tls_skip_verify` | bool   | ❌ no    | `false` | Skip verification of the registry's TLS certificate.                                                |
 | `tls_ca_cert`     | string | ❌ no    | –       | PEM-encoded CA certificate. Stored in state as a sensitive value.                                    |
 | `tls_cert`        | string | ❌ no    | –       | PEM-encoded client certificate. Stored in state as a sensitive value.                                |
 | `tls_key`         | string | ❌ no    | –       | PEM-encoded client private key. Stored in state as a sensitive value.                                |
+| `tls_key_wo` | string | ❌ no | – | Write-only `tls_key` (supports ephemeral values; never stored in Terraform state; Terraform 1.11+). Conflicts with `tls_key`; requires `tls_key_wo_version`. |
+| `tls_key_wo_version` | number | ❌ no | – | Version of `tls_key_wo`; increment it to send a new value. The change is applied in place. |
 
 ## Attributes Reference
 

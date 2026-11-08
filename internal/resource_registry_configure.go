@@ -36,11 +36,14 @@ func resourceRegistryConfigure() *schema.Resource {
 				Description: "Username used to authenticate against the registry. Required when `authentication` is true.",
 			},
 			"password": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Sensitive:   true,
-				Description: "Password or token paired with `username`. Portainer never returns it, so it cannot be checked for drift.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				Description:   "Password or token paired with `username`. Portainer never returns it, so it cannot be checked for drift. Stored in state as a sensitive value; use `password_wo` to keep it out of state.",
+				ConflictsWith: []string{"password_wo"},
 			},
+			"password_wo":         writeOnlySecretSchema("password", "password_wo_version", "registry password"),
+			"password_wo_version": writeOnlyVersionSchema("password_wo", false),
 			"region": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -71,11 +74,14 @@ func resourceRegistryConfigure() *schema.Resource {
 				Description: "PEM-encoded client certificate presented to the registry. Stored in state as a sensitive value.",
 			},
 			"tls_key": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Sensitive:   true,
-				Description: "PEM-encoded client private key paired with `tls_cert`. Stored in state as a sensitive value.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				Description:   "PEM-encoded client private key paired with `tls_cert`. Stored in state as a sensitive value; use `tls_key_wo` to keep it out of state.",
+				ConflictsWith: []string{"tls_key_wo"},
 			},
+			"tls_key_wo":         writeOnlySecretSchema("tls_key", "tls_key_wo_version", "PEM-encoded TLS client key"),
+			"tls_key_wo_version": writeOnlyVersionSchema("tls_key_wo", false),
 		},
 	}
 }
@@ -94,18 +100,32 @@ func resourceRegistryConfigureCreate(ctx context.Context, d *schema.ResourceData
 		"TLSSkipVerify":  d.Get("tls_skip_verify").(bool),
 	}
 	for field, key := range map[string]string{
-		"username": "Username", "password": "Password", "region": "Region",
+		"username": "Username", "region": "Region",
 	} {
 		if v, ok := d.GetOk(field); ok && v.(string) != "" {
 			payload[key] = v.(string)
 		}
 	}
+	password, err := twinSecret(d, "password")
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if password != "" {
+		payload["Password"] = password
+	}
 	for field, key := range map[string]string{
-		"tls_ca_cert": "TLSCACertFile", "tls_cert": "TLSCertFile", "tls_key": "TLSKeyFile",
+		"tls_ca_cert": "TLSCACertFile", "tls_cert": "TLSCertFile",
 	} {
 		if v, ok := d.GetOk(field); ok && v.(string) != "" {
 			payload[key] = []byte(v.(string))
 		}
+	}
+	tlsKey, err := twinSecret(d, "tls_key")
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if tlsKey != "" {
+		payload["TLSKeyFile"] = []byte(tlsKey)
 	}
 
 	url := fmt.Sprintf("%s/registries/%d/configure", client.Endpoint, registryID)

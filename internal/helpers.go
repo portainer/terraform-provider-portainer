@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strconv"
 	"strings"
@@ -146,13 +148,25 @@ var authHeaders = map[string]bool{
 }
 
 // doJSONWithHeaders is doJSON plus request headers the Portainer API expects
-// outside the body — currently only X-Setup-Token, which POST /restore requires
-// on an uninitialised instance.
+// outside the body: X-Setup-Token, which POST /restore requires on an
+// uninitialised instance, or a Content-Type other than application/json (the
+// Kubernetes merge patch).
 //
 // Authentication is not negotiable here: headers naming a credential are
 // dropped from the caller's map, so no call site can weaken or replace the
 // authentication the provider is configured with, whether by accident or not.
 func doJSONWithHeaders(ctx context.Context, client *APIClient, method, urlStr string, body, out interface{}, headers map[string]string) error {
+	return doJSONRequest(ctx, client, method, urlStr, body, out, headers, true)
+}
+
+// doJSONPublic is doJSONWithHeaders for the public endpoints an uninitialised
+// instance answers (e.g. /users/admin/init): the configured credentials are
+// sent when there are any, and their absence is not an error.
+func doJSONPublic(ctx context.Context, client *APIClient, method, urlStr string, body, out interface{}, headers map[string]string) error {
+	return doJSONRequest(ctx, client, method, urlStr, body, out, headers, false)
+}
+
+func doJSONRequest(ctx context.Context, client *APIClient, method, urlStr string, body, out interface{}, headers map[string]string, requireAuth bool) error {
 	var reader io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
@@ -172,13 +186,64 @@ func doJSONWithHeaders(ctx context.Context, client *APIClient, method, urlStr st
 		}
 		req.Header.Set(k, v)
 	}
+	if err := setAuthHeader(req, client); err != nil && requireAuth {
+		return err
+	}
+	if body != nil && req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return sendDecode(client, req, out)
+}
+
+// multipartFile is a file part of a multipart/form-data request.
+type multipartFile struct {
+	Field    string
+	Filename string
+	Content  string
+}
+
+// doMultipart is doJSON for multipart/form-data requests. The fields (name,
+// value pairs) are written in order, followed by the files, each with a
+// content type sniffed from its content.
+func doMultipart(ctx context.Context, client *APIClient, method, urlStr string, fields [][2]string, files []multipartFile, out interface{}) error {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for _, f := range fields {
+		if err := w.WriteField(f[0], f[1]); err != nil {
+			return fmt.Errorf("failed to build %s %s request: %w", method, urlStr, err)
+		}
+	}
+	for _, f := range files {
+		h := make(textproto.MIMEHeader)
+		h.Set("Content-Disposition", fmt.Sprintf(`form-data; name=%q; filename=%q`, f.Field, f.Filename))
+		h.Set("Content-Type", http.DetectContentType([]byte(f.Content)))
+		part, err := w.CreatePart(h)
+		if err != nil {
+			return fmt.Errorf("failed to build %s %s request: %w", method, urlStr, err)
+		}
+		if _, err := io.WriteString(part, f.Content); err != nil {
+			return fmt.Errorf("failed to build %s %s request: %w", method, urlStr, err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("failed to build %s %s request: %w", method, urlStr, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, urlStr, bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		return fmt.Errorf("failed to build %s %s request: %w", method, urlStr, err)
+	}
 	if err := setAuthHeader(req, client); err != nil {
 		return err
 	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	return sendDecode(client, req, out)
+}
 
+// sendDecode sends req and decodes a successful JSON response into out; a
+// status >= 400 is returned as an *apiStatusError.
+func sendDecode(client *APIClient, req *http.Request, out interface{}) error {
+	method, urlStr := req.Method, req.URL.String()
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to perform %s %s request: %w", method, urlStr, err)
@@ -469,6 +534,12 @@ func secretValue(d *schema.ResourceData, key, woKey, versionKey string) (string,
 		}
 	}
 	return d.Get(key).(string), nil
+}
+
+// twinSecret is secretValue for a secret whose write-only twin follows the
+// naming convention: <field>_wo with <field>_wo_version.
+func twinSecret(d *schema.ResourceData, field string) (string, error) {
+	return secretValue(d, field, field+"_wo", field+"_wo_version")
 }
 
 // formatCtyPath renders a cty path the way Terraform names attributes

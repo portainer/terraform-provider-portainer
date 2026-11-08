@@ -37,7 +37,8 @@ func resourceKubernetesSecrets() *schema.Resource {
 			"manifest": {
 				Type:        schema.TypeString,
 				Required:    true,
-				Description: "Raw YAML or JSON manifest defining the Kubernetes Secret. May contain sensitive data; stored in Terraform state.",
+				Sensitive:   true,
+				Description: "Raw YAML or JSON manifest defining the Kubernetes Secret. Contains the secret data, so it is stored in state as a sensitive value and hidden in plans.",
 			},
 		},
 	}
@@ -105,10 +106,15 @@ func resourceKubernetesSecretsDelete(ctx context.Context, d *schema.ResourceData
 }
 
 func resourceKubernetesSecretsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	if diags := resourceKubernetesSecretsDelete(ctx, d, meta); diags.HasError() {
-		return diags
-	}
-	return resourceKubernetesSecretsCreate(ctx, d, meta)
+	client := meta.(*APIClient)
+
+	endpointID, namespace, name := parseSecretsID(d.Id())
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/api/v1/namespaces/%s/secrets/%s", client.Endpoint, endpointID, namespace, name)
+	return k8sUpdateManifest(ctx, d, client, url, name, "secret "+name, func() diag.Diagnostics {
+		return resourceKubernetesSecretsDelete(ctx, d, meta)
+	}, func() diag.Diagnostics {
+		return resourceKubernetesSecretsCreate(ctx, d, meta)
+	}, "namespace")
 }
 
 func resourceKubernetesSecretsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -120,7 +126,7 @@ func resourceKubernetesSecretsRead(ctx context.Context, d *schema.ResourceData, 
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/api/v1/namespaces/%s/secrets/%s", client.Endpoint, endpointID, namespace, name)
-	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "secret "+name); diags.HasError() {
+	if diags := k8sReadManifestDrift(ctx, d, client, url, "secret "+name); diags.HasError() {
 		return diags
 	}
 	if d.Id() == "" {
@@ -133,7 +139,7 @@ func resourceKubernetesSecretsRead(ctx context.Context, d *schema.ResourceData, 
 	if err := d.Set("namespace", namespace); err != nil {
 		return diag.FromErr(err)
 	}
-	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
+	// manifest only changes in state when the live object drifted — see k8sReadManifestDrift.
 	return nil
 }
 

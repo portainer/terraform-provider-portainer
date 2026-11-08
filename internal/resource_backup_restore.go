@@ -47,12 +47,15 @@ func resourceBackupS3Restore() *schema.Resource {
 				Description: "Access key ID used to read the bucket. Stored in state as a sensitive value.",
 			},
 			"secret_access_key": {
-				Type:        schema.TypeString,
-				Required:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "Secret access key paired with `access_key_id`. Stored in state as a sensitive value.",
+				Type:         schema.TypeString,
+				Optional:     true,
+				ExactlyOneOf: []string{"secret_access_key", "secret_access_key_wo"},
+				ForceNew:     true,
+				Sensitive:    true,
+				Description:  "Secret access key paired with `access_key_id`. Stored in state as a sensitive value; use `secret_access_key_wo` to keep it out of state.",
 			},
+			"secret_access_key_wo":         writeOnlySecretSchema("secret_access_key", "secret_access_key_wo_version", "S3 secret access key"),
+			"secret_access_key_wo_version": writeOnlyVersionSchema("secret_access_key_wo", true),
 			"s3_compatible_host": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -60,12 +63,15 @@ func resourceBackupS3Restore() *schema.Resource {
 				Description: "Endpoint of an S3-compatible service such as MinIO. Leave unset for AWS S3.",
 			},
 			"password": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "Password the archive was encrypted with. Stored in state as a sensitive value.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				Description:   "Password the archive was encrypted with. Stored in state as a sensitive value; use `password_wo` to keep it out of state.",
+				ConflictsWith: []string{"password_wo"},
 			},
+			"password_wo":         writeOnlySecretSchema("password", "password_wo_version", "password the backup archive was encrypted with"),
+			"password_wo_version": writeOnlyVersionSchema("password_wo", true),
 		},
 	}
 }
@@ -73,20 +79,26 @@ func resourceBackupS3Restore() *schema.Resource {
 func resourceBackupS3RestoreCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
+	secretAccessKey, err := twinSecret(d, "secret_access_key")
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	payload := map[string]interface{}{
 		"BucketName":      d.Get("bucket_name").(string),
 		"Filename":        d.Get("filename").(string),
 		"Region":          d.Get("region").(string),
 		"AccessKeyID":     d.Get("access_key_id").(string),
-		"SecretAccessKey": d.Get("secret_access_key").(string),
+		"SecretAccessKey": secretAccessKey,
 	}
-	for field, key := range map[string]string{
-		"s3_compatible_host": "S3CompatibleHost",
-		"password":           "Password",
-	} {
-		if v, ok := d.GetOk(field); ok && v.(string) != "" {
-			payload[key] = v.(string)
-		}
+	if v, ok := d.GetOk("s3_compatible_host"); ok && v.(string) != "" {
+		payload["S3CompatibleHost"] = v.(string)
+	}
+	password, err := twinSecret(d, "password")
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if password != "" {
+		payload["Password"] = password
 	}
 
 	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/backup/s3/restore", payload, nil); err != nil {
@@ -136,12 +148,15 @@ func resourceBackupAzureRestore() *schema.Resource {
 				Description: "Blob service endpoint, for a sovereign cloud or a storage emulator.",
 			},
 			"storage_account_key": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "Storage account access key. Used with `auth_method = \"storageAccountKey\"`.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				Description:   "Storage account access key. Used with `auth_method = \"storageAccountKey\"`. Stored in state as a sensitive value; use `storage_account_key_wo` to keep it out of state.",
+				ConflictsWith: []string{"storage_account_key_wo"},
 			},
+			"storage_account_key_wo":         writeOnlySecretSchema("storage_account_key", "storage_account_key_wo_version", "Azure storage account key"),
+			"storage_account_key_wo_version": writeOnlyVersionSchema("storage_account_key_wo", true),
 			"tenant_id": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -155,26 +170,35 @@ func resourceBackupAzureRestore() *schema.Resource {
 				Description: "Application (client) ID of the service principal.",
 			},
 			"client_secret": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "Client secret of the service principal. Stored in state as a sensitive value.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				Description:   "Client secret of the service principal. Stored in state as a sensitive value; use `client_secret_wo` to keep it out of state.",
+				ConflictsWith: []string{"client_secret_wo"},
 			},
+			"client_secret_wo":         writeOnlySecretSchema("client_secret", "client_secret_wo_version", "Azure client secret"),
+			"client_secret_wo_version": writeOnlyVersionSchema("client_secret_wo", true),
 			"client_certificate": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "PEM-encoded client certificate of the service principal. Stored in state as a sensitive value.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				Description:   "PEM-encoded client certificate of the service principal. Stored in state as a sensitive value; use `client_certificate_wo` to keep it out of state.",
+				ConflictsWith: []string{"client_certificate_wo"},
 			},
+			"client_certificate_wo":         writeOnlySecretSchema("client_certificate", "client_certificate_wo_version", "Azure client certificate"),
+			"client_certificate_wo_version": writeOnlyVersionSchema("client_certificate_wo", true),
 			"client_certificate_password": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "Password protecting `client_certificate`.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				Description:   "Password protecting `client_certificate`. Stored in state as a sensitive value; use `client_certificate_password_wo` to keep it out of state.",
+				ConflictsWith: []string{"client_certificate_password_wo"},
 			},
+			"client_certificate_password_wo":         writeOnlySecretSchema("client_certificate_password", "client_certificate_password_wo_version", "password of the Azure client certificate"),
+			"client_certificate_password_wo_version": writeOnlyVersionSchema("client_certificate_password_wo", true),
 			"managed_identity_client_id": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -182,12 +206,15 @@ func resourceBackupAzureRestore() *schema.Resource {
 				Description: "Client ID of the user-assigned managed identity.",
 			},
 			"password": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "Password the archive was encrypted with. Stored in state as a sensitive value.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				Description:   "Password the archive was encrypted with. Stored in state as a sensitive value; use `password_wo` to keep it out of state.",
+				ConflictsWith: []string{"password_wo"},
 			},
+			"password_wo":         writeOnlySecretSchema("password", "password_wo_version", "password the backup archive was encrypted with"),
+			"password_wo_version": writeOnlyVersionSchema("password_wo", true),
 		},
 	}
 }
@@ -212,8 +239,16 @@ func resourceBackupAzureRestoreCreate(ctx context.Context, d *schema.ResourceDat
 		"managed_identity_client_id":  "ManagedIdentityClientID",
 		"password":                    "Password",
 	} {
-		if v, ok := d.GetOk(field); ok && v.(string) != "" {
-			payload[key] = v.(string)
+		v := d.Get(field).(string)
+		if azureBackupSecrets[field] {
+			secret, err := twinSecret(d, field)
+			if err != nil {
+				return diag.FromErr(err)
+			}
+			v = secret
+		}
+		if v != "" {
+			payload[key] = v
 		}
 	}
 

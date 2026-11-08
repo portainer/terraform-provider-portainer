@@ -43,12 +43,15 @@ func resourceBackupAzureExecute() *schema.Resource {
 				Description: "Blob service endpoint, for a sovereign cloud or a storage emulator. Leave unset for the public Azure cloud.",
 			},
 			"storage_account_key": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "Storage account access key. Used with `auth_method = \"storageAccountKey\"`.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				Description:   "Storage account access key. Used with `auth_method = \"storageAccountKey\"`. Stored in state as a sensitive value; use `storage_account_key_wo` to keep it out of state.",
+				ConflictsWith: []string{"storage_account_key_wo"},
 			},
+			"storage_account_key_wo":         writeOnlySecretSchema("storage_account_key", "storage_account_key_wo_version", "Azure storage account key"),
+			"storage_account_key_wo_version": writeOnlyVersionSchema("storage_account_key_wo", true),
 			"tenant_id": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -62,26 +65,35 @@ func resourceBackupAzureExecute() *schema.Resource {
 				Description: "Application (client) ID of the service principal.",
 			},
 			"client_secret": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "Client secret of the service principal. Used with `auth_method = \"servicePrincipalSecret\"`.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				Description:   "Client secret of the service principal. Used with `auth_method = \"servicePrincipalSecret\"`. Stored in state as a sensitive value; use `client_secret_wo` to keep it out of state.",
+				ConflictsWith: []string{"client_secret_wo"},
 			},
+			"client_secret_wo":         writeOnlySecretSchema("client_secret", "client_secret_wo_version", "Azure client secret"),
+			"client_secret_wo_version": writeOnlyVersionSchema("client_secret_wo", true),
 			"client_certificate": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "PEM-encoded client certificate of the service principal. Used with `auth_method = \"servicePrincipalCertificate\"`.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				Description:   "PEM-encoded client certificate of the service principal. Used with `auth_method = \"servicePrincipalCertificate\"`. Stored in state as a sensitive value; use `client_certificate_wo` to keep it out of state.",
+				ConflictsWith: []string{"client_certificate_wo"},
 			},
+			"client_certificate_wo":         writeOnlySecretSchema("client_certificate", "client_certificate_wo_version", "Azure client certificate"),
+			"client_certificate_wo_version": writeOnlyVersionSchema("client_certificate_wo", true),
 			"client_certificate_password": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "Password protecting `client_certificate`, when it is encrypted.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				Description:   "Password protecting `client_certificate`, when it is encrypted. Stored in state as a sensitive value; use `client_certificate_password_wo` to keep it out of state.",
+				ConflictsWith: []string{"client_certificate_password_wo"},
 			},
+			"client_certificate_password_wo":         writeOnlySecretSchema("client_certificate_password", "client_certificate_password_wo_version", "password of the Azure client certificate"),
+			"client_certificate_password_wo_version": writeOnlyVersionSchema("client_certificate_password_wo", true),
 			"managed_identity_client_id": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -89,12 +101,15 @@ func resourceBackupAzureExecute() *schema.Resource {
 				Description: "Client ID of the user-assigned managed identity. Used with `auth_method = \"managedIdentity\"`; leave unset for a system-assigned identity.",
 			},
 			"password": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Sensitive:   true,
-				Description: "Password the backup archive itself is encrypted with. Leave unset for an unencrypted archive.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Sensitive:     true,
+				Description:   "Password the backup archive itself is encrypted with. Leave unset for an unencrypted archive. Stored in state as a sensitive value; use `password_wo` to keep it out of state.",
+				ConflictsWith: []string{"password_wo"},
 			},
+			"password_wo":         writeOnlySecretSchema("password", "password_wo_version", "password used to encrypt the backup archive"),
+			"password_wo_version": writeOnlyVersionSchema("password_wo", true),
 			"triggers": {
 				Type:        schema.TypeMap,
 				Optional:    true,
@@ -112,7 +127,10 @@ func resourceBackupAzureExecuteCreate(ctx context.Context, d *schema.ResourceDat
 	// The ad-hoc endpoint takes the same settings object as the scheduled one
 	// but without a cron rule: it backs up once with the credentials given and
 	// does not change the stored schedule.
-	payload := azureBlobBackupPayload(d, false)
+	payload, err := azureBlobBackupPayload(d, false, true)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/backup/azure/execute", payload, nil); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to execute the Azure Blob backup: %w", err))
 	}

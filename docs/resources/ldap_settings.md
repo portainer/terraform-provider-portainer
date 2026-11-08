@@ -43,6 +43,8 @@ This resource updates the Portainer global settings to configure LDAP authentica
 | `password`                   | string       | no       | Password for the search account (sensitive).                       |
 | `password_wo`                | string       | no       | Write-only, never stored in state (Terraform 1.11+). Conflicts with `password`; requires `password_wo_version` |
 | `password_wo_version`        | number       | no       | Version of `password_wo`. Increment it to send a new value |
+| `tls_key_wo`                 | string       | no       | Write-only TLS key for `tls_config`, never stored in state (Terraform 1.11+). Top level because `tls_config` is computed. Conflicts with `tls_config.tls_key`; requires `tls_key_wo_version` and `tls_config` |
+| `tls_key_wo_version`         | number       | no       | Version of `tls_key_wo`. Increment it to send a new key |
 | `reader_dn`                  | string       | no       | DN of the account used to search users.                            |
 | `start_tls`                  | bool         | no       | Whether to use StartTLS.                                           |
 | `url`                        | string       | no       | LDAP server URL (deprecated, use `urls`).                          |

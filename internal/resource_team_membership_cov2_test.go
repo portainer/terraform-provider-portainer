@@ -7,7 +7,7 @@ import (
 )
 
 // =========================================================================
-// Additional coverage (cov2) for resource_team_membership.go: the SDK error
+// Additional coverage (cov2) for resource_team_membership.go: the API error
 // branches on Create / Read-list / Update / Delete, and the Importer func
 // (which delegates to Read).
 // =========================================================================

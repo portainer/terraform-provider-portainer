@@ -105,10 +105,15 @@ func resourceKubernetesRolesDelete(ctx context.Context, d *schema.ResourceData, 
 }
 
 func resourceKubernetesRolesUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	if diags := resourceKubernetesRolesDelete(ctx, d, meta); diags.HasError() {
-		return diags
-	}
-	return resourceKubernetesRolesCreate(ctx, d, meta)
+	client := meta.(*APIClient)
+
+	endpointID, namespace, name := parseRolesID(d.Id())
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/rbac.authorization.k8s.io/v1/namespaces/%s/roles/%s", client.Endpoint, endpointID, namespace, name)
+	return k8sUpdateManifest(ctx, d, client, url, name, "role "+name, func() diag.Diagnostics {
+		return resourceKubernetesRolesDelete(ctx, d, meta)
+	}, func() diag.Diagnostics {
+		return resourceKubernetesRolesCreate(ctx, d, meta)
+	}, "namespace")
 }
 
 func resourceKubernetesRolesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -120,7 +125,7 @@ func resourceKubernetesRolesRead(ctx context.Context, d *schema.ResourceData, me
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/rbac.authorization.k8s.io/v1/namespaces/%s/roles/%s", client.Endpoint, endpointID, namespace, name)
-	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "role "+name); diags.HasError() {
+	if diags := k8sReadManifestDrift(ctx, d, client, url, "role "+name); diags.HasError() {
 		return diags
 	}
 	if d.Id() == "" {
@@ -133,7 +138,7 @@ func resourceKubernetesRolesRead(ctx context.Context, d *schema.ResourceData, me
 	if err := d.Set("namespace", namespace); err != nil {
 		return diag.FromErr(err)
 	}
-	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
+	// manifest only changes in state when the live object drifted — see k8sReadManifestDrift.
 	return nil
 }
 

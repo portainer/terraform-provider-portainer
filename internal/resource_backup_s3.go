@@ -23,12 +23,15 @@ func resourceBackupS3() *schema.Resource {
 				Description: "Sensitive S3 access key identifier used to upload the Portainer backup archive.",
 			},
 			"secret_access_key": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Sensitive:   true,
-				ForceNew:    true,
-				Description: "Sensitive S3 secret access key paired with `access_key_id`.",
+				Type:         schema.TypeString,
+				Optional:     true,
+				ExactlyOneOf: []string{"secret_access_key", "secret_access_key_wo"},
+				Sensitive:    true,
+				ForceNew:     true,
+				Description:  "Sensitive S3 secret access key paired with `access_key_id`. Stored in state as a sensitive value; use `secret_access_key_wo` to keep it out of state.",
 			},
+			"secret_access_key_wo":         writeOnlySecretSchema("secret_access_key", "secret_access_key_wo_version", "S3 secret access key"),
+			"secret_access_key_wo_version": writeOnlyVersionSchema("secret_access_key_wo", true),
 			"bucket_name": {
 				Type:        schema.TypeString,
 				Required:    true,
@@ -48,12 +51,15 @@ func resourceBackupS3() *schema.Resource {
 				Description: "Endpoint URL of the S3 or S3-compatible service used for the backup upload.",
 			},
 			"password": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Sensitive:   true,
-				ForceNew:    true,
-				Description: "Sensitive password used to encrypt the Portainer backup archive before upload.",
+				Type:         schema.TypeString,
+				Optional:     true,
+				ExactlyOneOf: []string{"password", "password_wo"},
+				Sensitive:    true,
+				ForceNew:     true,
+				Description:  "Sensitive password used to encrypt the Portainer backup archive before upload. Stored in state as a sensitive value; use `password_wo` to keep it out of state.",
 			},
+			"password_wo":         writeOnlySecretSchema("password", "password_wo_version", "password used to encrypt the backup archive"),
+			"password_wo_version": writeOnlyVersionSchema("password_wo", true),
 			"cron_rule": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -77,13 +83,21 @@ func resourceBackupS3() *schema.Resource {
 func resourceBackupS3Create(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
+	secretAccessKey, err := twinSecret(d, "secret_access_key")
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	password, err := twinSecret(d, "password")
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	body := map[string]interface{}{
 		"accessKeyID":      d.Get("access_key_id").(string),
-		"secretAccessKey":  d.Get("secret_access_key").(string),
+		"secretAccessKey":  secretAccessKey,
 		"bucketName":       d.Get("bucket_name").(string),
 		"region":           d.Get("region").(string),
 		"s3CompatibleHost": d.Get("s3_compatible_host").(string),
-		"password":         d.Get("password").(string),
+		"password":         password,
 	}
 
 	if v, ok := d.GetOk("cron_rule"); ok {
@@ -118,8 +132,12 @@ func resourceBackupS3Read(ctx context.Context, d *schema.ResourceData, meta inte
 	if err := d.Set("access_key_id", result.AccessKeyID); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("secret_access_key", result.SecretAccessKey); err != nil {
-		return diag.FromErr(err)
+	// A secret given write-only is not read back: storing it is what the
+	// write-only twin avoids, and the configuration has no value to compare.
+	if d.Get("secret_access_key_wo_version").(int) == 0 {
+		if err := d.Set("secret_access_key", result.SecretAccessKey); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if err := d.Set("bucket_name", result.BucketName); err != nil {
 		return diag.FromErr(err)
@@ -130,8 +148,10 @@ func resourceBackupS3Read(ctx context.Context, d *schema.ResourceData, meta inte
 	if err := d.Set("s3_compatible_host", result.S3CompatibleHost); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("password", result.Password); err != nil {
-		return diag.FromErr(err)
+	if d.Get("password_wo_version").(int) == 0 {
+		if err := d.Set("password", result.Password); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 	if err := d.Set("cron_rule", result.CronRule); err != nil {
 		return diag.FromErr(err)

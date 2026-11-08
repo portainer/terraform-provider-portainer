@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/portainer/client-api-go/v2/pkg/client/team_memberships"
 )
 
 func dataSourceTeamMembership() *schema.Resource {
@@ -39,15 +38,12 @@ func dataSourceTeamMembershipRead(ctx context.Context, d *schema.ResourceData, m
 	teamID := int64(d.Get("team_id").(int))
 	userID := int64(d.Get("user_id").(int))
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := team_memberships.NewTeamMembershipListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.TeamMemberships.TeamMembershipList(params, client.AuthInfo)
+	memberships, err := listTeamMemberships(ctx, client)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to fetch team memberships list: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(err)
 	}
 
-	for _, m := range resp.Payload {
+	for _, m := range memberships {
 		if m.TeamID == teamID && m.UserID == userID {
 			d.SetId(strconv.FormatInt(m.ID, 10))
 			if err := d.Set("role", m.Role); err != nil {

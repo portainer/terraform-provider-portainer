@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/portainer/client-api-go/v2/pkg/client/endpoint_groups"
 )
 
 func dataSourceEndpointGroup() *schema.Resource {
@@ -33,15 +32,12 @@ func dataSourceEndpointGroupRead(ctx context.Context, d *schema.ResourceData, me
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := endpoint_groups.NewEndpointGroupListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.EndpointGroups.EndpointGroupList(params, client.AuthInfo)
+	groups, err := listEndpointGroups(ctx, client)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list endpoint groups: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(err)
 	}
 
-	for _, g := range resp.Payload {
+	for _, g := range groups {
 		if g.Name == name {
 			d.SetId(strconv.FormatInt(g.ID, 10))
 			if err := d.Set("description", g.Description); err != nil {

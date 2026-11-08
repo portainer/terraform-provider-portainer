@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ===========================================================================
@@ -39,7 +40,7 @@ import (
 
 // All create/update/read/delete paths in resource_stack.go send JSON bodies,
 // so tests assert via req.DecodeJSON. (No multipart helper is needed here,
-// unlike resource_environment which uses the multipart SDK transport.)
+// unlike resource_environment whose create is multipart.)
 
 // mockEmptyStackList registers the standard findExistingStackByName response
 // that forces the "create new stack" path (no name collision).
@@ -1104,5 +1105,28 @@ func TestStackDelete_404_NoError(t *testing.T) {
 
 	if err := rcDelete(r, d, mock.Client()); err != nil {
 		t.Fatalf("Delete should swallow 404, got error: %v", err)
+	}
+}
+
+// TestStackDelete_PermanentSwarmErrorFailsAtOnce is the regression test for a
+// destroy that retried "This node is not a swarm manager" every 15 seconds
+// until the delete timeout (10 minutes by default): waiting cannot fix it.
+func TestStackDelete_PermanentSwarmErrorFailsAtOnce(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("DELETE", "/stacks/5", RespondString(http.StatusInternalServerError, "application/json",
+		`{"message":"Unable to remove stack","details":"Error response from daemon: This node is not a swarm manager. Use \"docker swarm init\" or \"docker swarm join\" to connect this node to swarm and try again."}`))
+
+	r := resourcePortainerStack()
+	d := r.TestResourceData()
+	d.SetId("5")
+	_ = d.Set("endpoint_id", 1)
+
+	start := time.Now()
+	err := rcDelete(r, d, mock.Client())
+	if err == nil || !strings.Contains(err.Error(), "not a swarm manager") {
+		t.Fatalf("expected the swarm error, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("expected an immediate failure, took %s", elapsed)
 	}
 }

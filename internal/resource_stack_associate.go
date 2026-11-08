@@ -70,7 +70,25 @@ func resourceStackAssociateCreate(ctx context.Context, d *schema.ResourceData, m
 	return nil
 }
 
+// resourceStackAssociateRead checks the association still holds: a stack
+// deleted since drops out of state, and one now attached to another endpoint
+// shows the change, which re-associates it.
 func resourceStackAssociateRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*APIClient)
+
+	var stack struct {
+		EndpointID int `json:"EndpointId"`
+	}
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/stacks/%s", client.Endpoint, d.Id()), nil, &stack); err != nil {
+		if isAPINotFound(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(fmt.Errorf("failed to read stack %s: %w", d.Id(), err))
+	}
+	if err := d.Set("endpoint_id", stack.EndpointID); err != nil {
+		return diag.FromErr(err)
+	}
 	return nil
 }
 

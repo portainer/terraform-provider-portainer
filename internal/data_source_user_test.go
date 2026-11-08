@@ -6,7 +6,7 @@ import (
 )
 
 // TestDataSourceUserRead_HappyPath verifies that the data source lists users
-// via the SDK (GET /users), filters by username, and populates ID + role.
+// via GET /users, filters by username, and populates ID + role.
 func TestDataSourceUserRead_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 

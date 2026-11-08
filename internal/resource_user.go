@@ -2,18 +2,13 @@ package internal
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 
-	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	"github.com/portainer/client-api-go/v2/pkg/client/auth"
-	"github.com/portainer/client-api-go/v2/pkg/client/users"
-	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceUser() *schema.Resource {
@@ -94,44 +89,39 @@ func resourceUserCreate(ctx context.Context, d *schema.ResourceData, meta interf
 	}
 
 	// Check if user already exists
-	listCtx, listErrBody := withErrorCapture(ctx)
-	paramsList := users.NewUserListParams()
-	paramsList.SetContext(listCtx)
-	respList, err := client.Client.Users.UserList(paramsList, client.AuthInfo)
+	userList, err := listUsers(ctx, client)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list users: %w", decorateSDKError(err, listErrBody)))
+		return diag.FromErr(fmt.Errorf("failed to list users: %w", err))
 	}
 
-	for _, u := range respList.Payload {
+	for _, u := range userList {
 		if u.Username == username {
 			d.SetId(strconv.FormatInt(u.ID, 10))
 			return resourceUserUpdate(ctx, d, meta)
 		}
 	}
 
-	createCtx, createErrBody := withErrorCapture(ctx)
-	paramsCreate := users.NewUserCreateParams()
-	paramsCreate.SetContext(createCtx)
-	paramsCreate.Body = &models.UsersUserCreatePayload{
-		Username: &username,
-		Role:     &role,
-	}
+	createBody := struct {
+		Username string  `json:"username"`
+		Password *string `json:"password"`
+		Role     int64   `json:"role"`
+	}{Username: username, Role: role}
 	if !ldapUser {
-		paramsCreate.Body.Password = &password
+		createBody.Password = &password
 	}
 
-	respCreate, err := client.Client.Users.UserCreate(paramsCreate, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create user: %w", decorateSDKError(err, createErrBody)))
+	var created portainerUser
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/users", createBody, &created); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create user: %w", err))
 	}
 
-	d.SetId(strconv.FormatInt(respCreate.Payload.ID, 10))
+	d.SetId(strconv.FormatInt(created.ID, 10))
 
 	if teamIDInt, ok := d.GetOk("team_id"); ok {
 		if role != 2 {
 			return diag.FromErr(fmt.Errorf("team_id can only be used with standard users (role = 2)"))
 		}
-		if err := updateUserTeam(ctx, client, int(respCreate.Payload.ID), 0, teamIDInt.(int)); err != nil {
+		if err := updateUserTeam(ctx, client, int(created.ID), 0, teamIDInt.(int)); err != nil {
 			return diag.FromErr(err)
 		}
 	}
@@ -143,36 +133,34 @@ func resourceUserCreate(ctx context.Context, d *schema.ResourceData, meta interf
 		}
 
 		// Authenticate as new user
-		authCtx, authErrBody := withErrorCapture(ctx)
-		paramsAuth := auth.NewAuthenticateUserParams()
-		paramsAuth.SetContext(authCtx)
-		paramsAuth.Body = &models.AuthAuthenticatePayload{
-			Username: &username,
-			Password: &password,
+		authBody := struct {
+			Username string  `json:"username"`
+			Password string  `json:"password"`
+			APIKey   *string `json:"apiKey"`
+		}{Username: username, Password: password}
+		var authResp struct {
+			JWT string `json:"jwt"`
+		}
+		if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/auth", authBody, &authResp); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to authenticate as new user: %w", err))
 		}
 
-		respAuth, err := client.Client.Auth.AuthenticateUser(paramsAuth)
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to authenticate as new user: %w", decorateSDKError(err, authErrBody)))
+		// Portainer only creates an API key for the user it authenticates, so
+		// this request carries the new user's JWT instead of the provider's
+		// credentials.
+		userClient := &APIClient{Endpoint: client.Endpoint, JWTToken: authResp.JWT, HTTPClient: client.HTTPClient}
+		keyBody := struct {
+			Description string `json:"description"`
+			Password    string `json:"password"`
+		}{Description: description, Password: password}
+		var keyResp struct {
+			RawAPIKey string `json:"rawAPIKey"`
+		}
+		if err := doJSON(ctx, userClient, http.MethodPost, fmt.Sprintf("%s/users/%d/tokens", client.Endpoint, created.ID), keyBody, &keyResp); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to generate API key: %w", err))
 		}
 
-		userAuthInfo := httptransport.BearerToken(respAuth.Payload.Jwt)
-
-		keyCtx, keyErrBody := withErrorCapture(ctx)
-		paramsKey := users.NewUserGenerateAPIKeyParams()
-		paramsKey.SetContext(keyCtx)
-		paramsKey.ID = respCreate.Payload.ID
-		paramsKey.Body = &models.UsersUserAccessTokenCreatePayload{
-			Description: &description,
-			Password:    &password,
-		}
-
-		respKey, err := client.Client.Users.UserGenerateAPIKey(paramsKey, userAuthInfo)
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to generate API key: %w", decorateSDKError(err, keyErrBody)))
-		}
-
-		if err := d.Set("api_key_raw", respKey.Payload.RawAPIKey); err != nil {
+		if err := d.Set("api_key_raw", keyResp.RawAPIKey); err != nil {
 			return diag.FromErr(err)
 		}
 	}
@@ -184,25 +172,19 @@ func resourceUserRead(ctx context.Context, d *schema.ResourceData, meta interfac
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := users.NewUserInspectParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	resp, err := client.Client.Users.UserInspect(params, client.AuthInfo)
-	if err != nil {
-		var notFound *users.UserInspectNotFound
-		if errors.As(err, &notFound) {
+	var user portainerUser
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/users/%d", client.Endpoint, id), nil, &user); err != nil {
+		if isAPINotFound(err) {
 			d.SetId("")
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to read user: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to read user: %w", err))
 	}
 
-	if err := d.Set("username", resp.Payload.Username); err != nil {
+	if err := d.Set("username", user.Username); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("role", resp.Payload.Role); err != nil {
+	if err := d.Set("role", user.Role); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -222,6 +204,21 @@ func resourceUserRead(ctx context.Context, d *schema.ResourceData, meta interfac
 	}
 
 	return nil
+}
+
+type portainerUser struct {
+	ID       int64  `json:"Id"`
+	Username string `json:"Username"`
+	Role     int64  `json:"Role"`
+}
+
+// listUsers returns every user (GET /users).
+func listUsers(ctx context.Context, client *APIClient) ([]portainerUser, error) {
+	var userList []portainerUser
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/users", nil, &userList); err != nil {
+		return nil, err
+	}
+	return userList, nil
 }
 
 type userTeamMembership struct {
@@ -287,15 +284,12 @@ func resourceUserImport(ctx context.Context, d *schema.ResourceData, meta interf
 
 	// It's not a numeric ID, so treat it as a username
 	username := d.Id()
-	ctx, errBody := withErrorCapture(ctx)
-	params := users.NewUserListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.Users.UserList(params, client.AuthInfo)
+	userList, err := listUsers(ctx, client)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list users for import: %w", decorateSDKError(err, errBody))
+		return nil, fmt.Errorf("failed to list users for import: %w", err)
 	}
 
-	for _, u := range resp.Payload {
+	for _, u := range userList {
 		if u.Username == username {
 			d.SetId(strconv.FormatInt(u.ID, 10))
 			if diags := resourceUserRead(ctx, d, meta); diags.HasError() {
@@ -326,39 +320,30 @@ func resourceUserUpdate(ctx context.Context, d *schema.ResourceData, meta interf
 		// Skip password update when old password is unknown (e.g. after import).
 		// The Portainer API requires the current password to change it.
 		if oldPwString != "" && newPwString != "" {
-			pwCtx, pwErrBody := withErrorCapture(ctx)
-			paramsPwd := users.NewUserUpdatePasswordParams()
-			paramsPwd.SetContext(pwCtx)
-			paramsPwd.ID = id
-			paramsPwd.Body = &models.UsersUserUpdatePasswordPayload{
-				Password:    &oldPwString,
-				NewPassword: &newPwString,
-			}
-
-			_, err := client.Client.Users.UserUpdatePassword(paramsPwd, client.AuthInfo)
-			if err != nil {
-				return diag.FromErr(fmt.Errorf("failed to update password: %w", decorateSDKError(err, pwErrBody)))
+			pwBody := struct {
+				Password    string `json:"password"`
+				NewPassword string `json:"newPassword"`
+			}{Password: oldPwString, NewPassword: newPwString}
+			if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/users/%d/passwd", client.Endpoint, id), pwBody, nil); err != nil {
+				return diag.FromErr(fmt.Errorf("failed to update password: %w", err))
 			}
 		}
 	}
 
 	username := d.Get("username").(string)
 	role := int64(d.Get("role").(int))
-	useCache := true
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := users.NewUserUpdateParams()
-	params.SetContext(ctx)
-	params.ID = id
-	params.Body = &models.UsersUserUpdatePayload{
-		Username: &username,
-		Role:     &role,
-		UseCache: &useCache,
-	}
-
-	_, err := client.Client.Users.UserUpdate(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to update user: %w", decorateSDKError(err, errBody)))
+	// newPassword and password are sent as null: the password is changed
+	// through PUT /users/{id}/passwd above.
+	updateBody := struct {
+		Username    string  `json:"username"`
+		Role        int64   `json:"role"`
+		UseCache    bool    `json:"useCache"`
+		NewPassword *string `json:"newPassword"`
+		Password    *string `json:"password"`
+	}{Username: username, Role: role, UseCache: true}
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/users/%d", client.Endpoint, id), updateBody, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update user: %w", err))
 	}
 
 	if d.HasChange("team_id") {
@@ -375,18 +360,11 @@ func resourceUserDelete(ctx context.Context, d *schema.ResourceData, meta interf
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := users.NewUserDeleteParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	_, err := client.Client.Users.UserDelete(params, client.AuthInfo)
-	if err != nil {
-		var notFoundDel *users.UserDeleteNotFound
-		if errors.As(err, &notFoundDel) {
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/users/%d", client.Endpoint, id), nil, nil); err != nil {
+		if isAPINotFound(err) {
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to delete user: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to delete user: %w", err))
 	}
 
 	return nil

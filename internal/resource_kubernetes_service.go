@@ -105,10 +105,15 @@ func resourceKubernetesServiceDelete(ctx context.Context, d *schema.ResourceData
 }
 
 func resourceKubernetesServiceUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	if diags := resourceKubernetesServiceDelete(ctx, d, meta); diags.HasError() {
-		return diags
-	}
-	return resourceKubernetesServiceCreate(ctx, d, meta)
+	client := meta.(*APIClient)
+
+	endpointID, namespace, name := parseServiceID(d.Id())
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/api/v1/namespaces/%s/services/%s", client.Endpoint, endpointID, namespace, name)
+	return k8sUpdateManifest(ctx, d, client, url, name, "service "+name, func() diag.Diagnostics {
+		return resourceKubernetesServiceDelete(ctx, d, meta)
+	}, func() diag.Diagnostics {
+		return resourceKubernetesServiceCreate(ctx, d, meta)
+	}, "namespace")
 }
 
 func resourceKubernetesServiceRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -120,7 +125,7 @@ func resourceKubernetesServiceRead(ctx context.Context, d *schema.ResourceData, 
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/api/v1/namespaces/%s/services/%s", client.Endpoint, endpointID, namespace, name)
-	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "service "+name); diags.HasError() {
+	if diags := k8sReadManifestDrift(ctx, d, client, url, "service "+name); diags.HasError() {
 		return diags
 	}
 	if d.Id() == "" {
@@ -133,7 +138,7 @@ func resourceKubernetesServiceRead(ctx context.Context, d *schema.ResourceData, 
 	if err := d.Set("namespace", namespace); err != nil {
 		return diag.FromErr(err)
 	}
-	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
+	// manifest only changes in state when the live object drifted — see k8sReadManifestDrift.
 	return nil
 }
 

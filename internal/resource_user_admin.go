@@ -4,14 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 
-	"github.com/go-openapi/runtime"
-	"github.com/go-openapi/strfmt"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/portainer/client-api-go/v2/pkg/client/users"
-	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceUserAdmin() *schema.Resource {
@@ -73,30 +70,27 @@ func resourceUserAdminCreate(ctx context.Context, d *schema.ResourceData, meta i
 		return diag.FromErr(d.Set("initialized", true))
 	}
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := users.NewUserAdminInitParams()
-	params.SetContext(ctx)
-	params.Body = &models.UsersAdminInitPayload{
-		Username: &username,
-		Password: &password,
-	}
+	body := struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}{Username: username, Password: password}
 
-	var opts []users.ClientOption
+	headers := map[string]string{}
 	if !d.GetRawConfig().IsNull() {
 		token, err := writeOnlyString(d, "setup_token")
 		if err != nil {
 			return diag.FromErr(err)
 		}
 		if token != "" {
-			opts = append(opts, withHeader("X-Setup-Token", token))
+			headers["X-Setup-Token"] = token
 		}
 	}
 
-	resp, err := client.Client.Users.UserAdminInit(params, opts...)
-	if err != nil {
+	var created portainerUser
+	if err := doJSONPublic(ctx, client, http.MethodPost, client.Endpoint+"/users/admin/init", body, &created, headers); err != nil {
 		// Treat 409 (admin already initialized) as a successful, idempotent create.
-		var conflict *users.UserAdminInitConflict
-		if errors.As(err, &conflict) {
+		var se *apiStatusError
+		if errors.As(err, &se) && se.StatusCode == http.StatusConflict {
 			if d.Id() == "" {
 				d.SetId("portainer-admin")
 			}
@@ -105,11 +99,11 @@ func resourceUserAdminCreate(ctx context.Context, d *schema.ResourceData, meta i
 			}
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to initialize admin user: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to initialize admin user: %w", err))
 	}
 
-	if resp.Payload.ID != 0 {
-		d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
+	if created.ID != 0 {
+		d.SetId(strconv.FormatInt(created.ID, 10))
 	} else {
 		d.SetId("portainer-admin")
 	}
@@ -119,19 +113,6 @@ func resourceUserAdminCreate(ctx context.Context, d *schema.ResourceData, meta i
 	}
 
 	return nil
-}
-
-// withHeader adds a request header to a single SDK call.
-func withHeader(name, value string) users.ClientOption {
-	return func(op *runtime.ClientOperation) {
-		params := op.Params
-		op.Params = runtime.ClientRequestWriterFunc(func(r runtime.ClientRequest, reg strfmt.Registry) error {
-			if err := params.WriteToRequest(r, reg); err != nil {
-				return err
-			}
-			return r.SetHeaderParam(name, value)
-		})
-	}
 }
 
 // resourceUserAdminRead keeps the resource once the instance has an
@@ -154,15 +135,11 @@ func resourceUserAdminRead(ctx context.Context, d *schema.ResourceData, meta int
 // adminExists asks the public GET /users/admin/check whether the instance has
 // an administrator.
 func adminExists(ctx context.Context, client *APIClient) (bool, error) {
-	ctx, errBody := withErrorCapture(ctx)
-	params := users.NewUserAdminCheckParams()
-	params.SetContext(ctx)
-	if _, err := client.Client.Users.UserAdminCheck(params); err != nil {
-		var notFound *users.UserAdminCheckNotFound
-		if errors.As(err, &notFound) {
+	if err := doJSONPublic(ctx, client, http.MethodGet, client.Endpoint+"/users/admin/check", nil, nil, nil); err != nil {
+		if isAPINotFound(err) {
 			return false, nil
 		}
-		return false, fmt.Errorf("failed to check for an admin user: %w", decorateSDKError(err, errBody))
+		return false, fmt.Errorf("failed to check for an admin user: %w", err)
 	}
 	return true, nil
 }

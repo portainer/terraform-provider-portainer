@@ -201,7 +201,7 @@ func resourceLDAPSettings() *schema.Resource {
 							Optional:    true,
 							Computed:    true,
 							Sensitive:   true,
-							Description: "TLS key",
+							Description: "TLS key. Stored in state as a sensitive value; use the top-level `tls_key_wo` to keep it out of state.",
 						},
 						"tls_skip_verify": {
 							Type:        schema.TypeBool,
@@ -213,6 +213,18 @@ func resourceLDAPSettings() *schema.Resource {
 				},
 				Description: "TLS configuration for LDAP",
 			},
+			// Top level, because tls_config is computed and write-only
+			// attributes cannot sit inside a computed block.
+			"tls_key_wo": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				Sensitive:     true,
+				WriteOnly:     true,
+				ConflictsWith: []string{"tls_config.0.tls_key"},
+				RequiredWith:  []string{"tls_key_wo_version", "tls_config"},
+				Description:   "Write-only TLS key for `tls_config` (supports ephemeral values; never stored in Terraform state). Conflicts with `tls_config.tls_key`. Requires Terraform 1.11 or later.",
+			},
+			"tls_key_wo_version": writeOnlyVersionSchema("tls_key_wo", false),
 		},
 	}
 }
@@ -313,11 +325,29 @@ func resourceLDAPSettingsApply(ctx context.Context, d *schema.ResourceData, meta
 		items := v.([]interface{})
 		if len(items) > 0 && items[0] != nil {
 			m := items[0].(map[string]interface{})
+			tlsKey := m["tls_key"].(string)
+			if d.Get("tls_key_wo_version").(int) != 0 {
+				wo, err := writeOnlyString(d, "tls_key_wo")
+				if err != nil {
+					return diag.FromErr(err)
+				}
+				if wo != "" {
+					tlsKey = wo
+					// An old key from before the move to tls_key_wo would
+					// otherwise stay in state, which Read keeps from there.
+					if m["tls_key"].(string) != "" {
+						m["tls_key"] = ""
+						if err := d.Set("tls_config", []interface{}{m}); err != nil {
+							return diag.FromErr(err)
+						}
+					}
+				}
+			}
 			ldap["TLSConfig"] = map[string]interface{}{
 				"TLS":           m["tls"].(bool),
 				"TLSCACert":     m["tls_ca_cert"].(string),
 				"TLSCert":       m["tls_cert"].(string),
-				"TLSKey":        m["tls_key"].(string),
+				"TLSKey":        tlsKey,
 				"TLSSkipVerify": m["tls_skip_verify"].(bool),
 			}
 		}

@@ -45,7 +45,7 @@ resource "portainer_kubernetes_volume" "example_va" {
 ## Lifecycle & Behavior
 The Volume is created via the Portainer Kubernetes API.
 
-Any change results in a delete + create.
+A change of `manifest` updates the existing object in place (a JSON merge patch), so a Deployment rolls out and a Service keeps its cluster IP; fields removed from the manifest are removed from the object. The object is deleted and created again only when it cannot be changed in place: another `metadata.name` or kind, another `namespace` or `type`, or a field Kubernetes does not allow to change (for example a Job's pod template or a Deployment's selector).
 
 To update the Volume (e.g. name, image), simply modify the manifest and re-apply:
 
@@ -59,6 +59,8 @@ terraform destroy
 ```
 
 > ⚠️ Volume type must match the manifest kind (e.g. use "persistent-volume-claim" for kind: PersistentVolumeClaim)
+
+**Drift detection.** On refresh, the fields set in `manifest` are compared with the live object: a value changed outside Terraform shows up in the plan, as the drifted fields with their live values, and the next apply puts the manifest back. Fields Kubernetes adds itself (status, defaults, `resourceVersion`) and canonical quantities (`500m` for `0.5`) are not drift. Fields the manifest does not set are not managed, so a key added outside Terraform is not reported.
 
 ### Arguments Reference
 | Name         | Type   | Required   | Description                                                                 |

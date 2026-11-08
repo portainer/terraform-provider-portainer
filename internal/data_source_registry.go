@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/portainer/client-api-go/v2/pkg/client/registries"
 )
 
 func dataSourceRegistry() *schema.Resource {
@@ -38,15 +37,12 @@ func dataSourceRegistryRead(ctx context.Context, d *schema.ResourceData, meta in
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := registries.NewRegistryListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.Registries.RegistryList(params, client.AuthInfo)
+	registryList, err := listRegistries(ctx, client)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list registries: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(err)
 	}
 
-	for _, r := range resp.Payload {
+	for _, r := range registryList {
 		if r.Name == name {
 			d.SetId(strconv.FormatInt(r.ID, 10))
 			if err := d.Set("url", r.URL); err != nil {

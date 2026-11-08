@@ -2,14 +2,14 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/portainer/client-api-go/v2/pkg/client/webhooks"
-	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceWebhook() *schema.Resource {
@@ -72,23 +72,25 @@ func resourceWebhook() *schema.Resource {
 func resourceWebhookCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := webhooks.NewPostWebhooksParams()
-	params.SetContext(ctx)
-	params.Body = &models.WebhooksWebhookCreatePayload{
-		EndpointID:  int64(d.Get("endpoint_id").(int)),
-		RegistryID:  int64(d.Get("registry_id").(int)),
+	body := struct {
+		EndpointID  int    `json:"endpointID,omitempty"`
+		RegistryID  int    `json:"registryID,omitempty"`
+		ResourceID  string `json:"resourceID,omitempty"`
+		WebhookType int    `json:"webhookType,omitempty"`
+	}{
+		EndpointID:  d.Get("endpoint_id").(int),
+		RegistryID:  d.Get("registry_id").(int),
 		ResourceID:  d.Get("resource_id").(string),
-		WebhookType: int64(d.Get("webhook_type").(int)),
+		WebhookType: d.Get("webhook_type").(int),
 	}
 
-	resp, err := client.Client.Webhooks.PostWebhooks(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create webhook: %w", decorateSDKError(err, errBody)))
+	var created webhookRecord
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/webhooks", body, &created); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create webhook: %w", err))
 	}
 
-	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
-	if err := d.Set("token", resp.Payload.Token); err != nil {
+	d.SetId(strconv.Itoa(created.ID))
+	if err := d.Set("token", created.Token); err != nil {
 		return diag.FromErr(err)
 	}
 	return nil
@@ -105,6 +107,35 @@ type webhookRecord struct {
 	Type       int    `json:"Type"`
 }
 
+// listWebhooks lists the webhooks of a resource in an environment, or all of
+// them when endpointID is 0. Business Edition rejects the call without the
+// filter (it looks up environment 0); Community Edition accepts it too. The
+// filter only matches webhooks with both the environment and the resource.
+func listWebhooks(ctx context.Context, client *APIClient, endpointID int, resourceID string) ([]webhookRecord, error) {
+	listURL := client.Endpoint + "/webhooks"
+	if endpointID != 0 {
+		filters, err := json.Marshal(map[string]interface{}{"EndpointID": endpointID, "ResourceID": resourceID})
+		if err != nil {
+			return nil, err
+		}
+		listURL += "?filters=" + url.QueryEscape(string(filters))
+	}
+	var webhooks []webhookRecord
+	if err := doJSON(ctx, client, http.MethodGet, listURL, nil, &webhooks); err != nil {
+		return nil, fmt.Errorf("failed to list webhooks: %w", err)
+	}
+	return webhooks, nil
+}
+
+func containsWebhook(webhooks []webhookRecord, id int) bool {
+	for _, w := range webhooks {
+		if w.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 // resourceWebhookRead used to do nothing, so a webhook deleted in Portainer
 // stayed in state and its old URL kept being handed out.
 func resourceWebhookRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -114,9 +145,17 @@ func resourceWebhookRead(ctx context.Context, d *schema.ResourceData, meta inter
 		return diag.Errorf("invalid webhook ID %q: expected the numeric Portainer webhook ID", d.Id())
 	}
 
-	var webhooks []webhookRecord
-	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/webhooks", nil, &webhooks); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list webhooks: %w", err))
+	webhooks, err := listWebhooks(ctx, client, d.Get("endpoint_id").(int), d.Get("resource_id").(string))
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	// Not under its resource any more: list them all, so a webhook reassigned
+	// outside Terraform shows up as drift rather than as gone. Business
+	// Edition cannot list without the filter, so there it counts as gone.
+	if !containsWebhook(webhooks, id) {
+		if all, err := listWebhooks(ctx, client, 0, ""); err == nil {
+			webhooks = all
+		}
 	}
 	for _, w := range webhooks {
 		if w.ID != id {
@@ -154,17 +193,11 @@ func resourceWebhookUpdate(ctx context.Context, d *schema.ResourceData, meta int
 	}
 
 	if d.HasChange("registry_id") {
-		ctx, errBody := withErrorCapture(ctx)
-		params := webhooks.NewPutWebhooksIDParams()
-		params.SetContext(ctx)
-		params.ID = id
-		params.Body = &models.WebhooksWebhookUpdatePayload{
-			RegistryID: int64(d.Get("registry_id").(int)),
-		}
-
-		_, err := client.Client.Webhooks.PutWebhooksID(params, client.AuthInfo)
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to update webhook: %w", decorateSDKError(err, errBody)))
+		body := struct {
+			RegistryID int `json:"registryID,omitempty"`
+		}{RegistryID: d.Get("registry_id").(int)}
+		if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/webhooks/%d", client.Endpoint, id), body, nil); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to update webhook: %w", err))
 		}
 	}
 
@@ -174,8 +207,6 @@ func resourceWebhookUpdate(ctx context.Context, d *schema.ResourceData, meta int
 func resourceWebhookDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	// Not through the SDK: it expects 202, while Portainer answers 204, so
-	// every destroy failed although the webhook was gone.
 	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/webhooks/%s", client.Endpoint, d.Id()), nil, nil); err != nil && !isAPINotFound(err) {
 		return diag.FromErr(fmt.Errorf("failed to delete webhook: %w", err))
 	}

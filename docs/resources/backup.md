@@ -21,5 +21,7 @@ This resource performs a one-time backup when applied. It does not manage state 
 
 | Name         | Type   | Required | Description                                              |
 |--------------|--------|----------|----------------------------------------------------------|
-| `password`   | string | ✅ yes   | Password used to encrypt the backup archive.             |
+| `password`   | string | no | Password used to encrypt the backup archive. One of `password` or `password_wo` is required. |
+| `password_wo` | string | no | Write-only `password` (supports ephemeral values; never stored in Terraform state; Terraform 1.11+). Conflicts with `password`; requires `password_wo_version`. |
+| `password_wo_version` | number | no | Version of `password_wo`; increment it to send a new value. Changing it forces resource recreation. |
 | `output_path`| string | ✅ yes   | Path to store the output backup file (e.g. "backup.tar.gz"). |

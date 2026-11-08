@@ -105,10 +105,15 @@ func resourceKubernetesJobDelete(ctx context.Context, d *schema.ResourceData, me
 }
 
 func resourceKubernetesJobUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	if diags := resourceKubernetesJobDelete(ctx, d, meta); diags.HasError() {
-		return diags
-	}
-	return resourceKubernetesJobCreate(ctx, d, meta)
+	client := meta.(*APIClient)
+
+	endpointID, namespace, name := parseJobID(d.Id())
+	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/batch/v1/namespaces/%s/jobs/%s", client.Endpoint, endpointID, namespace, name)
+	return k8sUpdateManifest(ctx, d, client, url, name, "job "+name, func() diag.Diagnostics {
+		return resourceKubernetesJobDelete(ctx, d, meta)
+	}, func() diag.Diagnostics {
+		return resourceKubernetesJobCreate(ctx, d, meta)
+	}, "namespace")
 }
 
 func resourceKubernetesJobRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -120,7 +125,7 @@ func resourceKubernetesJobRead(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	url := fmt.Sprintf("%s/endpoints/%d/kubernetes/apis/batch/v1/namespaces/%s/jobs/%s", client.Endpoint, endpointID, namespace, name)
-	if diags := k8sConfirmExistsByGET(ctx, d, client, url, "job "+name); diags.HasError() {
+	if diags := k8sReadManifestDrift(ctx, d, client, url, "job "+name); diags.HasError() {
 		return diags
 	}
 	if d.Id() == "" {
@@ -133,7 +138,7 @@ func resourceKubernetesJobRead(ctx context.Context, d *schema.ResourceData, meta
 	if err := d.Set("namespace", namespace); err != nil {
 		return diag.FromErr(err)
 	}
-	// "manifest" intentionally not refreshed — see k8sConfirmExistsByGET.
+	// manifest only changes in state when the live object drifted — see k8sReadManifestDrift.
 	return nil
 }
 

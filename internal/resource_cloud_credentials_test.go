@@ -197,3 +197,30 @@ func TestCloudCredentialsCreate_HTTPError(t *testing.T) {
 		t.Errorf("expected empty ID after error, got %q", d.Id())
 	}
 }
+
+// TestCloudCredentialsRead_KeepsMaskedSecrets is the regression test for a
+// plan that changed the credentials on every run: Portainer returns secrets
+// masked, and the mask went into state.
+func TestCloudCredentialsRead_KeepsMaskedSecrets(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/cloud/credentials/1", RespondJSON(http.StatusOK, map[string]interface{}{
+		"id": 1, "name": "aws", "provider": "aws",
+		"credentials": map[string]interface{}{"accessKeyId": "AKIA2", "secretAccessKey": "******************"},
+	}))
+
+	r := resourceCloudCredentials()
+	d := r.TestResourceData()
+	d.SetId("1")
+	_ = d.Set("credentials", map[string]interface{}{"accessKeyId": "AKIA1", "secretAccessKey": "real-secret"})
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	creds := d.Get("credentials").(map[string]interface{})
+	if creds["secretAccessKey"] != "real-secret" {
+		t.Errorf("secretAccessKey: expected the configured value kept, got %v", creds["secretAccessKey"])
+	}
+	if creds["accessKeyId"] != "AKIA2" {
+		t.Errorf("accessKeyId: a changed plain value must still show as drift, got %v", creds["accessKeyId"])
+	}
+}

@@ -3,7 +3,6 @@ package internal
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,8 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	"github.com/portainer/client-api-go/v2/pkg/client/custom_templates"
-	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceCustomTemplate() *schema.Resource {
@@ -60,15 +57,12 @@ func resourceCustomTemplate() *schema.Resource {
 }
 
 func findExistingCustomTemplateByTitle(ctx context.Context, client *APIClient, title string) (int, error) {
-	ctx, errBody := withErrorCapture(ctx)
-	params := custom_templates.NewCustomTemplateListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.CustomTemplates.CustomTemplateList(params, client.AuthInfo)
+	templates, err := listCustomTemplates(ctx, client)
 	if err != nil {
-		return 0, fmt.Errorf("failed to list custom templates: %w", decorateSDKError(err, errBody))
+		return 0, err
 	}
 
-	for _, tmpl := range resp.Payload {
+	for _, tmpl := range templates {
 		if tmpl.Title == title {
 			return int(tmpl.ID), nil
 		}
@@ -118,27 +112,24 @@ func createTemplateFromString(ctx context.Context, d *schema.ResourceData, clien
 	description := d.Get("description").(string)
 	templateType := int64(d.Get("type").(int))
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := custom_templates.NewCustomTemplateCreateStringParams()
-	params.SetContext(ctx)
-	params.Body = &models.CustomtemplatesCustomTemplateFromFileContentPayload{
-		Title:        &title,
-		Description:  &description,
+	body := customTemplateFromStringPayload{
+		Title:        title,
+		Description:  description,
 		Note:         d.Get("note").(string),
 		Platform:     int64(d.Get("platform").(int)),
-		Type:         &templateType,
+		Type:         templateType,
 		Logo:         d.Get("logo").(string),
 		EdgeTemplate: d.Get("edge_template").(bool),
-		FileContent:  &content,
-		Variables:    getVariablesSDK(d),
+		FileContent:  content,
+		Variables:    customTemplateVariables(d),
 	}
 
-	resp, err := client.Client.CustomTemplates.CustomTemplateCreateString(params, client.AuthInfo)
-	if err != nil {
-		return fmt.Errorf("failed to create custom template from string: %w", decorateSDKError(err, errBody))
+	var created portainerCustomTemplate
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/custom_templates/create/string", body, &created); err != nil {
+		return fmt.Errorf("failed to create custom template from string: %w", err)
 	}
 
-	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
+	d.SetId(strconv.FormatInt(created.ID, 10))
 	return nil
 }
 
@@ -148,16 +139,13 @@ func createTemplateFromRepository(ctx context.Context, d *schema.ResourceData, c
 	templateType := int64(d.Get("type").(int))
 	useAuth := d.Get("repository_authentication").(bool)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := custom_templates.NewCustomTemplateCreateRepositoryParams()
-	params.SetContext(ctx)
 	composePath := d.Get("compose_file_path").(string)
-	params.Body = &models.CustomtemplatesCustomTemplateFromGitRepositoryPayload{
-		Title:                       &title,
-		Description:                 &description,
+	body := &customTemplateFromRepositoryPayload{
+		Title:                       title,
+		Description:                 description,
 		Note:                        d.Get("note").(string),
 		Platform:                    int64(d.Get("platform").(int)),
-		Type:                        &templateType,
+		Type:                        templateType,
 		Logo:                        d.Get("logo").(string),
 		EdgeTemplate:                d.Get("edge_template").(bool),
 		IsComposeFormat:             d.Get("is_compose_format").(bool),
@@ -165,37 +153,35 @@ func createTemplateFromRepository(ctx context.Context, d *schema.ResourceData, c
 		RepositoryAuthentication:    useAuth,
 		RepositoryReferenceName:     d.Get("repository_reference").(string),
 		ComposeFilePathInRepository: &composePath,
-		TlsskipVerify:               d.Get("tlsskip_verify").(bool),
-		Variables:                   getVariablesSDK(d),
+		TLSSkipVerify:               d.Get("tlsskip_verify").(bool),
+		Variables:                   customTemplateVariables(d),
 	}
 
 	if useAuth {
-		params.Body.RepositoryUsername = d.Get("repository_username").(string)
+		body.RepositoryUsername = d.Get("repository_username").(string)
 		password, err := secretValue(d, "repository_password", "repository_password_wo", "repository_password_wo_version")
 		if err != nil {
 			return err
 		}
-		params.Body.RepositoryPassword = password
+		body.RepositoryPassword = password
 	}
 
-	// The SDK payload predates Sources and has no SourceID field, so a
-	// template built from a Source goes out as the same body plus SourceID.
+	// A template built from a Source goes out as the same body plus SourceID.
 	if sourceID := d.Get("source_id").(int); sourceID != 0 {
-		return createTemplateFromSource(ctx, client, d, params.Body, sourceID)
+		return createTemplateFromSource(ctx, client, d, body, sourceID)
 	}
 
-	resp, err := client.Client.CustomTemplates.CustomTemplateCreateRepository(params, client.AuthInfo)
-	if err != nil {
-		return fmt.Errorf("failed to create custom template from repository: %w", decorateSDKError(err, errBody))
+	var created portainerCustomTemplate
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/custom_templates/create/repository", body, &created); err != nil {
+		return fmt.Errorf("failed to create custom template from repository: %w", err)
 	}
 
-	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
+	d.SetId(strconv.FormatInt(created.ID, 10))
 	return nil
 }
 
-// withSourceID returns an SDK payload as a JSON object with SourceID added,
-// for the template endpoints whose SDK models predate Sources. An empty
-// repository URL is dropped, since the Source provides it.
+// withSourceID returns a template payload as a JSON object with SourceID
+// added. An empty repository URL is dropped, since the Source provides it.
 func withSourceID(payload interface{}, sourceID int) (map[string]interface{}, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -212,7 +198,7 @@ func withSourceID(payload interface{}, sourceID int) (map[string]interface{}, er
 	return body, nil
 }
 
-func createTemplateFromSource(ctx context.Context, client *APIClient, d *schema.ResourceData, payload *models.CustomtemplatesCustomTemplateFromGitRepositoryPayload, sourceID int) error {
+func createTemplateFromSource(ctx context.Context, client *APIClient, d *schema.ResourceData, payload *customTemplateFromRepositoryPayload, sourceID int) error {
 	body, err := withSourceID(payload, sourceID)
 	if err != nil {
 		return err
@@ -228,13 +214,13 @@ func createTemplateFromSource(ctx context.Context, client *APIClient, d *schema.
 	return nil
 }
 
-func getVariablesSDK(d *schema.ResourceData) []*models.PortainerCustomTemplateVariableDefinition {
+func customTemplateVariables(d *schema.ResourceData) []*customTemplateVariable {
 	if v, ok := d.GetOk("variables"); ok {
 		vars := v.([]interface{})
-		result := make([]*models.PortainerCustomTemplateVariableDefinition, 0, len(vars))
+		result := make([]*customTemplateVariable, 0, len(vars))
 		for _, varItem := range vars {
 			if varMap, ok := varItem.(map[string]interface{}); ok {
-				varDef := &models.PortainerCustomTemplateVariableDefinition{}
+				varDef := &customTemplateVariable{}
 				if name, exists := varMap["name"]; exists {
 					varDef.Name = name.(string)
 				}
@@ -259,43 +245,37 @@ func resourceCustomTemplateRead(ctx context.Context, d *schema.ResourceData, met
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := custom_templates.NewCustomTemplateInspectParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	resp, err := client.Client.CustomTemplates.CustomTemplateInspect(params, client.AuthInfo)
-	if err != nil {
-		var notFound *custom_templates.CustomTemplateInspectNotFound
-		if errors.As(err, &notFound) {
+	var tmpl portainerCustomTemplate
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/custom_templates/%d", client.Endpoint, id), nil, &tmpl); err != nil {
+		if isAPINotFound(err) {
 			d.SetId("")
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to read custom template: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to read custom template: %w", err))
 	}
 
-	if err := d.Set("title", resp.Payload.Title); err != nil {
+	if err := d.Set("title", tmpl.Title); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("description", resp.Payload.Description); err != nil {
+	if err := d.Set("description", tmpl.Description); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("note", resp.Payload.Note); err != nil {
+	if err := d.Set("note", tmpl.Note); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("platform", int(resp.Payload.Platform)); err != nil {
+	if err := d.Set("platform", int(tmpl.Platform)); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("type", int(resp.Payload.Type)); err != nil {
+	if err := d.Set("type", int(tmpl.Type)); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("logo", resp.Payload.Logo); err != nil {
+	if err := d.Set("logo", tmpl.Logo); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("edge_template", resp.Payload.EdgeTemplate); err != nil {
+	if err := d.Set("edge_template", tmpl.EdgeTemplate); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("is_compose_format", resp.Payload.IsComposeFormat); err != nil {
+	if err := d.Set("is_compose_format", tmpl.IsComposeFormat); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -327,63 +307,54 @@ func resourceCustomTemplateUpdate(ctx context.Context, d *schema.ResourceData, m
 	composePath := d.Get("compose_file_path").(string)
 	useAuth := d.Get("repository_authentication").(bool)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := custom_templates.NewCustomTemplateUpdateParams()
-	params.SetContext(ctx)
-	params.ID = id
-	params.Body = &models.CustomtemplatesCustomTemplateUpdatePayload{
-		Title:                       &title,
-		Description:                 &description,
+	payload := &customTemplateUpdatePayload{
+		Title:                       title,
+		Description:                 description,
 		Note:                        d.Get("note").(string),
 		Platform:                    int64(d.Get("platform").(int)),
-		Type:                        &templateType,
+		Type:                        templateType,
 		Logo:                        d.Get("logo").(string),
 		EdgeTemplate:                d.Get("edge_template").(bool),
 		IsComposeFormat:             d.Get("is_compose_format").(bool),
 		ComposeFilePathInRepository: &composePath,
-		TlsskipVerify:               d.Get("tlsskip_verify").(bool),
-		FileContent:                 &fileContent,
-		Variables:                   getVariablesSDK(d),
+		TLSSkipVerify:               d.Get("tlsskip_verify").(bool),
+		FileContent:                 fileContent,
+		Variables:                   customTemplateVariables(d),
 	}
 
 	isGitBased := false
 	if repoURL := d.Get("repository_url").(string); repoURL != "" || d.Get("source_id").(int) != 0 {
 		isGitBased = true
-		params.Body.RepositoryURL = &repoURL
-		params.Body.RepositoryReferenceName = d.Get("repository_reference").(string)
-		params.Body.RepositoryAuthentication = useAuth
+		payload.RepositoryURL = &repoURL
+		payload.RepositoryReferenceName = d.Get("repository_reference").(string)
+		payload.RepositoryAuthentication = useAuth
 		if useAuth {
-			params.Body.RepositoryUsername = d.Get("repository_username").(string)
+			payload.RepositoryUsername = d.Get("repository_username").(string)
 			password, err := secretValue(d, "repository_password", "repository_password_wo", "repository_password_wo_version")
 			if err != nil {
 				return diag.FromErr(err)
 			}
-			params.Body.RepositoryPassword = password
+			payload.RepositoryPassword = password
 		}
 	}
 
+	var body interface{} = payload
 	if sourceID := d.Get("source_id").(int); sourceID != 0 {
 		// A Source-based template has to name its Source on every update, or
 		// Portainer finds neither content nor a repository and rejects it.
-		body, err := withSourceID(params.Body, sourceID)
+		withSource, err := withSourceID(payload, sourceID)
 		if err != nil {
 			return diag.FromErr(err)
 		}
-		if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/custom_templates/%d", client.Endpoint, id), body, nil); err != nil {
-			return diag.FromErr(fmt.Errorf("failed to update custom template: %w", err))
-		}
-	} else if _, err := client.Client.CustomTemplates.CustomTemplateUpdate(params, client.AuthInfo); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to update custom template: %w", decorateSDKError(err, errBody)))
+		body = withSource
+	}
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/custom_templates/%d", client.Endpoint, id), body, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update custom template: %w", err))
 	}
 
 	if isGitBased {
-		gitCtx, gitErrBody := withErrorCapture(ctx)
-		gitParams := custom_templates.NewCustomTemplateGitFetchParams()
-		gitParams.SetContext(gitCtx)
-		gitParams.ID = id
-		_, err := client.Client.CustomTemplates.CustomTemplateGitFetch(gitParams, client.AuthInfo)
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("failed to git_fetch template: %w", decorateSDKError(err, gitErrBody)))
+		if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/custom_templates/%d/git_fetch", client.Endpoint, id), nil, nil); err != nil {
+			return diag.FromErr(fmt.Errorf("failed to git_fetch template: %w", err))
 		}
 	}
 
@@ -394,18 +365,95 @@ func resourceCustomTemplateDelete(ctx context.Context, d *schema.ResourceData, m
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := custom_templates.NewCustomTemplateDeleteParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	_, err := client.Client.CustomTemplates.CustomTemplateDelete(params, client.AuthInfo)
-	if err != nil {
-		var notFound *custom_templates.CustomTemplateDeleteNotFound
-		if errors.As(err, &notFound) {
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/custom_templates/%d", client.Endpoint, id), nil, nil); err != nil {
+		if isAPINotFound(err) {
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to delete custom template: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to delete custom template: %w", err))
 	}
 	return nil
+}
+
+type customTemplateVariable struct {
+	Name         string `json:"name,omitempty"`
+	Label        string `json:"label,omitempty"`
+	DefaultValue string `json:"defaultValue,omitempty"`
+	Description  string `json:"description,omitempty"`
+}
+
+// customTemplateFromStringPayload is the POST /custom_templates/create/string
+// body.
+type customTemplateFromStringPayload struct {
+	Title        string                    `json:"title"`
+	Description  string                    `json:"description"`
+	Note         string                    `json:"note,omitempty"`
+	Platform     int64                     `json:"platform,omitempty"`
+	Type         int64                     `json:"type"`
+	Logo         string                    `json:"logo,omitempty"`
+	EdgeTemplate bool                      `json:"edgeTemplate,omitempty"`
+	FileContent  string                    `json:"fileContent"`
+	Variables    []*customTemplateVariable `json:"variables"`
+}
+
+// customTemplateFromRepositoryPayload is the
+// POST /custom_templates/create/repository body.
+type customTemplateFromRepositoryPayload struct {
+	Title                       string                    `json:"title"`
+	Description                 string                    `json:"description"`
+	Note                        string                    `json:"note,omitempty"`
+	Platform                    int64                     `json:"platform,omitempty"`
+	Type                        int64                     `json:"type"`
+	Logo                        string                    `json:"logo,omitempty"`
+	EdgeTemplate                bool                      `json:"edgeTemplate,omitempty"`
+	IsComposeFormat             bool                      `json:"isComposeFormat,omitempty"`
+	RepositoryURL               *string                   `json:"repositoryURL"`
+	RepositoryReferenceName     string                    `json:"repositoryReferenceName,omitempty"`
+	RepositoryAuthentication    bool                      `json:"repositoryAuthentication,omitempty"`
+	RepositoryUsername          string                    `json:"repositoryUsername,omitempty"`
+	RepositoryPassword          string                    `json:"repositoryPassword,omitempty"`
+	ComposeFilePathInRepository *string                   `json:"composeFilePathInRepository,omitempty"`
+	TLSSkipVerify               bool                      `json:"tlsskipVerify,omitempty"`
+	Variables                   []*customTemplateVariable `json:"variables"`
+}
+
+// customTemplateUpdatePayload is the PUT /custom_templates/{id} body.
+type customTemplateUpdatePayload struct {
+	Title                       string                    `json:"title"`
+	Description                 string                    `json:"description"`
+	Note                        string                    `json:"note,omitempty"`
+	Platform                    int64                     `json:"platform,omitempty"`
+	Type                        int64                     `json:"type"`
+	Logo                        string                    `json:"logo,omitempty"`
+	EdgeTemplate                bool                      `json:"edgeTemplate,omitempty"`
+	IsComposeFormat             bool                      `json:"isComposeFormat,omitempty"`
+	FileContent                 string                    `json:"fileContent"`
+	RepositoryURL               *string                   `json:"repositoryURL"`
+	RepositoryReferenceName     string                    `json:"repositoryReferenceName,omitempty"`
+	RepositoryAuthentication    bool                      `json:"repositoryAuthentication,omitempty"`
+	RepositoryUsername          string                    `json:"repositoryUsername,omitempty"`
+	RepositoryPassword          string                    `json:"repositoryPassword,omitempty"`
+	ComposeFilePathInRepository *string                   `json:"composeFilePathInRepository,omitempty"`
+	TLSSkipVerify               bool                      `json:"tlsskipVerify,omitempty"`
+	Variables                   []*customTemplateVariable `json:"variables"`
+}
+
+type portainerCustomTemplate struct {
+	ID              int64  `json:"Id"`
+	Title           string `json:"Title"`
+	Description     string `json:"Description"`
+	Note            string `json:"Note"`
+	Platform        int64  `json:"Platform"`
+	Type            int64  `json:"Type"`
+	Logo            string `json:"Logo"`
+	EdgeTemplate    bool   `json:"edgeTemplate"`
+	IsComposeFormat bool   `json:"isComposeFormat"`
+}
+
+// listCustomTemplates returns every custom template (GET /custom_templates).
+func listCustomTemplates(ctx context.Context, client *APIClient) ([]portainerCustomTemplate, error) {
+	var templates []portainerCustomTemplate
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/custom_templates", nil, &templates); err != nil {
+		return nil, fmt.Errorf("failed to list custom templates: %w", err)
+	}
+	return templates, nil
 }

@@ -28,12 +28,15 @@ func resourceLicenses() *schema.Resource {
 		},
 		Schema: map[string]*schema.Schema{
 			"key": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "License key to be attached",
-				Sensitive:   true,
-				ForceNew:    true,
+				Type:         schema.TypeString,
+				Optional:     true,
+				ExactlyOneOf: []string{"key", "key_wo"},
+				Description:  "License key to be attached. Stored in state as a sensitive value; use `key_wo` to keep it out of state.",
+				Sensitive:    true,
+				ForceNew:     true,
 			},
+			"key_wo":         writeOnlySecretSchema("key", "key_wo_version", "license key to be attached"),
+			"key_wo_version": writeOnlyVersionSchema("key_wo", true),
 			"force": {
 				Type:        schema.TypeBool,
 				Optional:    true,
@@ -55,7 +58,10 @@ func resourceLicenses() *schema.Resource {
 func resourceLicensesCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	licenseKey := d.Get("key").(string)
+	licenseKey, err := twinSecret(d, "key")
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	force := d.Get("force").(bool)
 
 	payload := LicensePayload{
@@ -80,26 +86,30 @@ func resourceLicensesCreate(ctx context.Context, d *schema.ResourceData, meta in
 	return nil
 }
 
-func resourceLicensesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*APIClient)
-
+// attachedLicenseKey returns the attached license whose SHA-256 is the
+// resource ID, or "" when it is not attached any more. The ID is all there is
+// to go by after an import or with key_wo, which leave key empty.
+func attachedLicenseKey(ctx context.Context, client *APIClient, id string) (string, error) {
 	var licenses []struct {
 		LicenseKey string `json:"licenseKey"`
 	}
 	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/licenses", nil, &licenses); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to get licenses: %w", err))
+		return "", fmt.Errorf("failed to get licenses: %w", err)
 	}
-
-	currentKey := d.Get("key").(string)
-	found := false
 	for _, lic := range licenses {
-		if lic.LicenseKey == currentKey {
-			found = true
-			break
+		if fmt.Sprintf("%x", sha256.Sum256([]byte(lic.LicenseKey))) == id {
+			return lic.LicenseKey, nil
 		}
 	}
+	return "", nil
+}
 
-	if !found {
+func resourceLicensesRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	key, err := attachedLicenseKey(ctx, meta.(*APIClient), d.Id())
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if key == "" {
 		d.SetId("")
 	}
 	return nil
@@ -108,8 +118,16 @@ func resourceLicensesRead(ctx context.Context, d *schema.ResourceData, meta inte
 func resourceLicensesDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
+	key, err := attachedLicenseKey(ctx, client, d.Id())
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if key == "" {
+		d.SetId("")
+		return nil
+	}
 	payload := map[string]interface{}{
-		"licenseKeys": []string{d.Get("key").(string)},
+		"licenseKeys": []string{key},
 	}
 
 	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/licenses/remove", payload, nil); err != nil {

@@ -2,15 +2,13 @@ package internal
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	"github.com/portainer/client-api-go/v2/pkg/client/team_memberships"
-	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceTeamMembership() *schema.Resource {
@@ -51,21 +49,13 @@ func resourceTeamMembershipCreate(ctx context.Context, d *schema.ResourceData, m
 	teamID := int64(d.Get("team_id").(int))
 	userID := int64(d.Get("user_id").(int))
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := team_memberships.NewTeamMembershipCreateParams()
-	params.SetContext(ctx)
-	params.Body = &models.TeammembershipsTeamMembershipCreatePayload{
-		Role:   &role,
-		TeamID: &teamID,
-		UserID: &userID,
+	var created portainerTeamMembership
+	body := teamMembershipPayload{Role: role, TeamID: teamID, UserID: userID}
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/team_memberships", body, &created); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create team membership: %w", err))
 	}
 
-	resp, err := client.Client.TeamMemberships.TeamMembershipCreate(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create team membership: %w", decorateSDKError(err, errBody)))
-	}
-
-	d.SetId(strconv.FormatInt(resp.Payload.ID, 10))
+	d.SetId(strconv.FormatInt(created.ID, 10))
 	return resourceTeamMembershipRead(ctx, d, meta)
 }
 
@@ -73,15 +63,12 @@ func resourceTeamMembershipRead(ctx context.Context, d *schema.ResourceData, met
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := team_memberships.NewTeamMembershipListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.TeamMemberships.TeamMembershipList(params, client.AuthInfo)
+	memberships, err := listTeamMemberships(ctx, client)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to fetch team memberships list: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(err)
 	}
 
-	for _, m := range resp.Payload {
+	for _, m := range memberships {
 		if m.ID == id {
 			if err := d.Set("role", m.Role); err != nil {
 				return diag.FromErr(err)
@@ -107,19 +94,9 @@ func resourceTeamMembershipUpdate(ctx context.Context, d *schema.ResourceData, m
 	teamID := int64(d.Get("team_id").(int))
 	userID := int64(d.Get("user_id").(int))
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := team_memberships.NewTeamMembershipUpdateParams()
-	params.SetContext(ctx)
-	params.ID = id
-	params.Body = &models.TeammembershipsTeamMembershipUpdatePayload{
-		Role:   &role,
-		TeamID: &teamID,
-		UserID: &userID,
-	}
-
-	_, err := client.Client.TeamMemberships.TeamMembershipUpdate(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to update team membership: %w", decorateSDKError(err, errBody)))
+	body := teamMembershipPayload{Role: role, TeamID: teamID, UserID: userID}
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/team_memberships/%d", client.Endpoint, id), body, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update team membership: %w", err))
 	}
 
 	return resourceTeamMembershipRead(ctx, d, meta)
@@ -136,19 +113,36 @@ func resourceTeamMembershipDelete(ctx context.Context, d *schema.ResourceData, m
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := team_memberships.NewTeamMembershipDeleteParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	_, err := client.Client.TeamMemberships.TeamMembershipDelete(params, client.AuthInfo)
-	if err != nil {
-		var notFound *team_memberships.TeamMembershipDeleteNotFound
-		if errors.As(err, &notFound) {
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/team_memberships/%d", client.Endpoint, id), nil, nil); err != nil {
+		if isAPINotFound(err) {
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to delete team membership: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to delete team membership: %w", err))
 	}
 
 	return nil
+}
+
+// teamMembershipPayload is the POST /team_memberships and
+// PUT /team_memberships/{id} body.
+type teamMembershipPayload struct {
+	Role   int64 `json:"role"`
+	TeamID int64 `json:"teamID"`
+	UserID int64 `json:"userID"`
+}
+
+type portainerTeamMembership struct {
+	ID     int64 `json:"Id"`
+	Role   int64 `json:"Role"`
+	TeamID int64 `json:"TeamID"`
+	UserID int64 `json:"UserID"`
+}
+
+// listTeamMemberships returns every team membership (GET /team_memberships).
+func listTeamMemberships(ctx context.Context, client *APIClient) ([]portainerTeamMembership, error) {
+	var memberships []portainerTeamMembership
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/team_memberships", nil, &memberships); err != nil {
+		return nil, fmt.Errorf("failed to fetch team memberships list: %w", err)
+	}
+	return memberships, nil
 }

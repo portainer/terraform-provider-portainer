@@ -25,10 +25,23 @@ terraform destroy
 
 > Setting `force = true` will overwrite any conflicting license keys already registered in Portainer.
 
+To keep the key out of Terraform state, pass it write-only (Terraform 1.11+):
+
+```hcl
+resource "portainer_licenses" "example" {
+  key_wo         = var.license_key
+  key_wo_version = 1
+}
+```
+
+The resource ID is the SHA-256 of the key, so an imported license or one attached with `key_wo` is still found and removed on destroy.
+
 ## Arguments Reference
 | Name               | Type         | Required    | Description                                                                        |
 | ------------------ | ------------ | ----------- | ---------------------------------------------------------------------------------- |
-| `key`              | string       | ✅ yes      | License key to be attached. Sensitive and immutable.                               |
+| `key`              | string       | 🚫 optional | License key to be attached. Sensitive and immutable. One of `key` or `key_wo` is required. |
+| `key_wo`           | string       | 🚫 optional | Write-only `key` (supports ephemeral values; never stored in Terraform state; Terraform 1.11+). Conflicts with `key`; requires `key_wo_version`. |
+| `key_wo_version`   | number       | 🚫 optional | Version of `key_wo`; increment it to attach a new key. Changing it forces resource recreation. |
 | `force`            | bool         | 🚫 optional | Whether to force attach even if there are conflicting licenses (default: `false`). |
 | `conflicting_keys` | list(string) | 🚫 optional | List of conflicting license keys, if any were detected.                            |
 

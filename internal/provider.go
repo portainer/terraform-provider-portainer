@@ -8,18 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-
-	"github.com/go-openapi/runtime"
-	httptransport "github.com/go-openapi/runtime/client"
-	"github.com/go-openapi/strfmt"
-	portainer "github.com/portainer/client-api-go/v2/pkg/client"
 )
 
 // Provider defines the Portainer Terraform provider schema and resources.
@@ -350,8 +344,6 @@ type APIClient struct {
 	JWTToken      string
 	CustomHeaders map[string]string
 	HTTPClient    http.Client
-	Client        *portainer.PortainerClientAPI
-	AuthInfo      runtime.ClientAuthInfoWriter
 }
 
 type headerTransport struct {
@@ -439,23 +431,12 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		}
 	}
 
-	// Rewrite repeated multipart TagIds form fields into the bracketed-string
-	// form Portainer expects (POST /endpoints). See sdk_request_rewrite.go.
-	transportWithTagRewrite := &tagIDsRewriteTransport{next: transportWithCustomHeaders}
-
-	// Wrap with error-capture transport so SDK call sites can surface the real
-	// Portainer response body via withErrorCapture/decorateSDKError instead of
-	// the generated SDK placeholder messages.
-	transportWithErrCapture := &errorCaptureTransport{next: transportWithTagRewrite}
-
-	// Outermost, so every attempt runs the whole chain again: the multipart
-	// rewrite on a fresh body, and the error capture on the latest response.
 	var requestTimeout time.Duration
 	if v := d.Get("request_timeout").(string); v != "" {
 		requestTimeout, _ = time.ParseDuration(v) // validated by validateDuration
 	}
 	transportWithRetry := &retryTransport{
-		next:       transportWithErrCapture,
+		next:       transportWithCustomHeaders,
 		maxRetries: d.Get("max_retries").(int),
 		timeout:    requestTimeout,
 	}
@@ -463,24 +444,6 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	httpClient := &http.Client{
 		Transport: transportWithRetry,
 	}
-
-	// Prepare SDK transport
-	u, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, diag.FromErr(err)
-	}
-
-	host := u.Host
-	basePath := u.Path
-	if basePath == "" || basePath == "/" {
-		basePath = "/api"
-	} else if !strings.HasSuffix(basePath, "/api") {
-		basePath = strings.TrimRight(basePath, "/") + "/api"
-	}
-	schemes := []string{u.Scheme}
-
-	sdkTransport := httptransport.New(host, basePath, schemes)
-	sdkTransport.Transport = transportWithRetry
 
 	if !strings.HasSuffix(endpoint, "/api") {
 		endpoint = strings.TrimRight(endpoint, "/") + "/api"
@@ -492,7 +455,6 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		JWTToken:      "",
 		CustomHeaders: customHeaders,
 		HTTPClient:    *httpClient,
-		Client:        portainer.New(sdkTransport, strfmt.Default),
 	}
 
 	// Authenticate via user/password and fetch JWT if api_key is not used
@@ -526,20 +488,6 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 			return nil, diag.FromErr(fmt.Errorf("failed to parse authentication response: %w", err))
 		}
 		client.JWTToken = authResp.JWT
-	}
-
-	// Configure SDK authentication
-	var auths []runtime.ClientAuthInfoWriter
-
-	if client.APIKey != "" {
-		auths = append(auths, httptransport.APIKeyAuth("X-API-Key", "header", client.APIKey))
-	} else if client.JWTToken != "" {
-		auths = append(auths, httptransport.BearerToken(client.JWTToken))
-	}
-
-	if len(auths) > 0 {
-		client.AuthInfo = httptransport.Compose(auths...)
-		sdkTransport.DefaultAuthentication = client.AuthInfo
 	}
 
 	var diags diag.Diagnostics

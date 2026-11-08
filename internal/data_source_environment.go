@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/portainer/client-api-go/v2/pkg/client/endpoints"
 )
 
 func dataSourceEnvironment() *schema.Resource {
@@ -43,15 +42,12 @@ func dataSourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta
 	client := meta.(*APIClient)
 	name := d.Get("name").(string)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := endpoints.NewEndpointListParams()
-	params.SetContext(ctx)
-	resp, err := client.Client.Endpoints.EndpointList(params, client.AuthInfo)
+	envs, err := listEnvironments(ctx, client)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list environments: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(err)
 	}
 
-	for _, e := range resp.Payload {
+	for _, e := range envs {
 		if e.Name == name {
 			d.SetId(strconv.FormatInt(e.ID, 10))
 			if err := d.Set("type", int(e.Type)); err != nil {

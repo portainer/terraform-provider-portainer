@@ -5,9 +5,8 @@ import (
 	"testing"
 )
 
-// TestDataSourceCustomTemplateRead_HappyPath verifies the SDK-routed list call
-// to /custom_templates is filtered by title and populates computed fields.
-// (SDK transport prepends /api which the mock dispatcher strips.)
+// TestDataSourceCustomTemplateRead_HappyPath verifies the list call to
+// /custom_templates is filtered by title and populates computed fields.
 func TestDataSourceCustomTemplateRead_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 
@@ -54,8 +53,8 @@ func TestDataSourceCustomTemplateRead_NotFound(t *testing.T) {
 	}
 }
 
-// TestDataSourceCustomTemplateRead_HTTPError verifies that an HTTP 500 (one of
-// the SDK's documented error codes) is surfaced as an error.
+// TestDataSourceCustomTemplateRead_HTTPError verifies that an HTTP 500 is
+// surfaced as an error.
 func TestDataSourceCustomTemplateRead_HTTPError(t *testing.T) {
 	mock := NewMockServer(t)
 

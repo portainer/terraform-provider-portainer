@@ -20,6 +20,10 @@ inputs:
     description: "Portainer CE image tag to test against."
     required: false
     default: "2.45.3"
+  start-portainer:
+    description: "Start the shared Portainer CE instance (docker compose). Jobs that run their own instance set it to 'false'."
+    required: false
+    default: "true"
 runs:
   using: "composite"
   steps:
@@ -43,6 +47,7 @@ runs:
         find e2e-tests -name "main.tf" -exec sed -i 's|source *= *"portainer/portainer"|source = "localdomain/local/portainer"|' {} +
 
     - name: 🐳 Start Portainer via Docker Compose
+      if: inputs.start-portainer == 'true'
       shell: bash
       env:
         PORTAINER_VERSION: ${{ inputs.portainer-version }}

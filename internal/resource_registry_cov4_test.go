@@ -176,9 +176,8 @@ func TestRegistryCov4_Delete_404IsSuccess(t *testing.T) {
 	}
 }
 
-// TestRegistryCov4_Delete_Status200IsSuccess covers the branch where Portainer
-// returns HTTP 200 (rather than the SDK-expected 204): the resource inspects
-// the error string for "status 200" and treats it as success.
+// TestRegistryCov4_Delete_Status200IsSuccess covers Portainer answering the
+// delete with HTTP 200 rather than 204.
 func TestRegistryCov4_Delete_Status200IsSuccess(t *testing.T) {
 	mock := NewMockServer(t)
 

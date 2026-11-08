@@ -16,6 +16,8 @@ resource "portainer_endpoints_snapshot" "specific" {
 ```
 
 ## Lifecycle & Behavior
+This is an action: creating the resource takes the snapshot once. There is no state in Portainer to read back, so nothing is refreshed; change an argument (it forces a new resource) or use `terraform apply -replace` to run it again.
+
 Snapshot is executed during:
 ```hcl
 terraform apply

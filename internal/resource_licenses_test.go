@@ -136,15 +136,19 @@ func TestLicensesRead_KeyAbsent_ClearsID(t *testing.T) {
 	}
 }
 
-// TestLicensesDelete_HappyPath verifies the remove POST payload.
+// TestLicensesDelete_HappyPath verifies the remove POST payload. The key is
+// looked up by the ID, since with key_wo or after an import it is not in state.
 func TestLicensesDelete_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 
+	mock.On("GET", "/licenses", RespondJSON(http.StatusOK, []map[string]interface{}{
+		{"licenseKey": "ANOTHER-KEY"},
+		{"licenseKey": testLicenseKey},
+	}))
 	mock.On("POST", "/licenses/remove", RespondJSON(http.StatusOK, map[string]interface{}{}))
 
 	r := resourceLicenses()
 	d := r.TestResourceData()
-	_ = d.Set("key", testLicenseKey)
 	d.SetId(sha256Hex(testLicenseKey))
 
 	if err := rcDelete(r, d, mock.Client()); err != nil {
@@ -187,5 +191,41 @@ func TestLicensesCreate_HTTPError(t *testing.T) {
 	}
 	if d.Id() != "" {
 		t.Errorf("expected empty ID after error, got %q", d.Id())
+	}
+}
+
+// TestLicensesRead_ByID: with key_wo or after an import key is empty in state;
+// the license is still found by its SHA-256, which is the ID.
+func TestLicensesRead_ByID(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/licenses", RespondJSON(http.StatusOK, []map[string]interface{}{{"licenseKey": testLicenseKey}}))
+
+	r := resourceLicenses()
+	d := r.TestResourceData()
+	d.SetId(sha256Hex(testLicenseKey))
+
+	if err := rcRead(r, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if d.Id() != sha256Hex(testLicenseKey) {
+		t.Errorf("expected the license to stay in state, got ID %q", d.Id())
+	}
+}
+
+// TestLicensesDelete_AlreadyRemoved: a license removed outside Terraform is
+// not removed again.
+func TestLicensesDelete_AlreadyRemoved(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/licenses", RespondJSON(http.StatusOK, []map[string]interface{}{}))
+
+	r := resourceLicenses()
+	d := r.TestResourceData()
+	d.SetId(sha256Hex(testLicenseKey))
+
+	if err := rcDelete(r, d, mock.Client()); err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+	if mock.FindRequest("POST", "/licenses/remove") != nil {
+		t.Error("expected no removal of a license that is not attached")
 	}
 }

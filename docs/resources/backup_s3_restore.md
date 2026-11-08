@@ -28,9 +28,13 @@ resource "portainer_backup_s3_restore" "recover" {
 | `filename` | string | ✅ yes | Name of the archive in the bucket. |
 | `region` | string | ✅ yes | AWS region of the bucket. |
 | `access_key_id` | string | ✅ yes | Access key ID. Sensitive. |
-| `secret_access_key` | string | ✅ yes | Secret access key. Sensitive. |
+| `secret_access_key` | string | ❌ no | Secret access key. Sensitive. One of `secret_access_key` or `secret_access_key_wo` is required. |
+| `secret_access_key_wo` | string | ❌ no | Write-only `secret_access_key` (supports ephemeral values; never stored in Terraform state; Terraform 1.11+). Conflicts with `secret_access_key`; requires `secret_access_key_wo_version`. |
+| `secret_access_key_wo_version` | number | ❌ no | Version of `secret_access_key_wo`; increment it to send a new value. Changing it forces resource recreation. |
 | `s3_compatible_host` | string | ❌ no | Endpoint of an S3-compatible service such as MinIO. |
 | `password` | string | ❌ no | Password the archive was encrypted with. Sensitive. |
+| `password_wo` | string | ❌ no | Write-only `password` (supports ephemeral values; never stored in Terraform state; Terraform 1.11+). Conflicts with `password`; requires `password_wo_version`. |
+| `password_wo_version` | number | ❌ no | Version of `password_wo`; increment it to send a new value. Changing it forces resource recreation. |
 
 ## Attributes Reference
 

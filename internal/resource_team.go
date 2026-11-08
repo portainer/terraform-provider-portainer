@@ -2,15 +2,13 @@ package internal
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	"github.com/portainer/client-api-go/v2/pkg/client/teams"
-	"github.com/portainer/client-api-go/v2/pkg/models"
 )
 
 func resourceTeam() *schema.Resource {
@@ -40,15 +38,12 @@ func resourceTeamCreate(ctx context.Context, d *schema.ResourceData, meta interf
 	teamName := d.Get("name").(string)
 
 	// Check if team already exists
-	listCtx, listErrBody := withErrorCapture(ctx)
-	paramsList := teams.NewTeamListParams()
-	paramsList.SetContext(listCtx)
-	respList, err := client.Client.Teams.TeamList(paramsList, client.AuthInfo)
+	teamList, err := listTeams(ctx, client)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to list teams: %w", decorateSDKError(err, listErrBody)))
+		return diag.FromErr(err)
 	}
 
-	for _, t := range respList.Payload {
+	for _, t := range teamList {
 		if t.Name == teamName {
 			// Team already exists, perform update
 			d.SetId(strconv.FormatInt(t.ID, 10))
@@ -58,19 +53,16 @@ func resourceTeamCreate(ctx context.Context, d *schema.ResourceData, meta interf
 	}
 
 	// Team not found, create new
-	createCtx, createErrBody := withErrorCapture(ctx)
-	paramsCreate := teams.NewTeamCreateParams()
-	paramsCreate.SetContext(createCtx)
-	paramsCreate.Body = &models.TeamsTeamCreatePayload{
-		Name: &teamName,
+	var created portainerTeam
+	body := struct {
+		Name        string  `json:"name"`
+		TeamLeaders []int64 `json:"teamLeaders"`
+	}{Name: teamName}
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/teams", body, &created); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to create team: %w", err))
 	}
 
-	respCreate, err := client.Client.Teams.TeamCreate(paramsCreate, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to create team: %w", decorateSDKError(err, createErrBody)))
-	}
-
-	d.SetId(strconv.FormatInt(respCreate.Payload.ID, 10))
+	d.SetId(strconv.FormatInt(created.ID, 10))
 	return resourceTeamRead(ctx, d, meta)
 }
 
@@ -78,22 +70,16 @@ func resourceTeamRead(ctx context.Context, d *schema.ResourceData, meta interfac
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := teams.NewTeamInspectParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	resp, err := client.Client.Teams.TeamInspect(params, client.AuthInfo)
-	if err != nil {
-		var notFound *teams.TeamInspectNotFound
-		if errors.As(err, &notFound) {
+	var team portainerTeam
+	if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/teams/%d", client.Endpoint, id), nil, &team); err != nil {
+		if isAPINotFound(err) {
 			d.SetId("")
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to read team: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to read team: %w", err))
 	}
 
-	if err := d.Set("name", resp.Payload.Name); err != nil {
+	if err := d.Set("name", team.Name); err != nil {
 		return diag.FromErr(err)
 	}
 	return nil
@@ -104,17 +90,11 @@ func resourceTeamUpdate(ctx context.Context, d *schema.ResourceData, meta interf
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 	name := d.Get("name").(string)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := teams.NewTeamUpdateParams()
-	params.SetContext(ctx)
-	params.ID = id
-	params.Body = &models.TeamsTeamUpdatePayload{
-		Name: name,
-	}
-
-	_, err := client.Client.Teams.TeamUpdate(params, client.AuthInfo)
-	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to update team: %w", decorateSDKError(err, errBody)))
+	body := struct {
+		Name string `json:"name,omitempty"`
+	}{Name: name}
+	if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/teams/%d", client.Endpoint, id), body, nil); err != nil {
+		return diag.FromErr(fmt.Errorf("failed to update team: %w", err))
 	}
 
 	return resourceTeamRead(ctx, d, meta)
@@ -124,19 +104,26 @@ func resourceTeamDelete(ctx context.Context, d *schema.ResourceData, meta interf
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	ctx, errBody := withErrorCapture(ctx)
-	params := teams.NewTeamDeleteParams()
-	params.SetContext(ctx)
-	params.ID = id
-
-	_, err := client.Client.Teams.TeamDelete(params, client.AuthInfo)
-	if err != nil {
-		var notFoundDel *teams.TeamDeleteNotFound
-		if errors.As(err, &notFoundDel) {
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/teams/%d", client.Endpoint, id), nil, nil); err != nil {
+		if isAPINotFound(err) {
 			return nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to delete team: %w", decorateSDKError(err, errBody)))
+		return diag.FromErr(fmt.Errorf("failed to delete team: %w", err))
 	}
 
 	return nil
+}
+
+type portainerTeam struct {
+	ID   int64  `json:"Id"`
+	Name string `json:"Name"`
+}
+
+// listTeams returns every team (GET /teams).
+func listTeams(ctx context.Context, client *APIClient) ([]portainerTeam, error) {
+	var teamList []portainerTeam
+	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/teams", nil, &teamList); err != nil {
+		return nil, fmt.Errorf("failed to list teams: %w", err)
+	}
+	return teamList, nil
 }

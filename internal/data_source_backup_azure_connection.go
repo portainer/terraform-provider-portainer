@@ -106,11 +106,14 @@ func dataSourceBackupAzureConnection() *schema.Resource {
 func dataSourceBackupAzureConnectionRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	payload := azureBlobBackupPayload(d, false)
+	payload, err := azureBlobBackupPayload(d, false, false)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	// The endpoint answers with a status code rather than a result object, so
 	// the outcome is the code itself.
-	err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/backup/azure/test", payload, nil)
+	err = doJSON(ctx, client, http.MethodPost, client.Endpoint+"/backup/azure/test", payload, nil)
 	success := err == nil
 	message := ""
 	if err != nil {

@@ -5,14 +5,10 @@ import (
 	"testing"
 )
 
-// TestTagCreate_HappyPath exercises resource_tag, which uses the generated
-// SDK (client.Client.Tags.*), to verify the mock harness handles SDK-routed
-// requests correctly.
+// TestTagCreate_HappyPath exercises the resource_tag create path.
 func TestTagCreate_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 
-	// SDK calls hit /api/tags after the dispatcher strips the prefix tests
-	// register handlers on the bare path.
 	mock.On("POST", "/tags", RespondJSON(http.StatusOK, map[string]interface{}{
 		"Id":   17,
 		"Name": "production",
@@ -59,7 +55,7 @@ func TestTagRead_NotInList(t *testing.T) {
 	}
 }
 
-// TestTagDelete_HappyPath verifies the SDK Delete call is sent.
+// TestTagDelete_HappyPath verifies the Delete call is sent.
 func TestTagDelete_HappyPath(t *testing.T) {
 	mock := NewMockServer(t)
 
