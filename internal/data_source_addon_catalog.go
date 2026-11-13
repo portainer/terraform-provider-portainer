@@ -109,6 +109,7 @@ func dataSourceAddonCatalogRead(ctx context.Context, d *schema.ResourceData, met
 		} `json:"addons"`
 	}
 	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/addons/catalog", nil, &catalog); err != nil {
+		err = explainUnsupported(ctx, client, err, "portainer_addon_catalog", requiresBE2452)
 		return diag.FromErr(fmt.Errorf("failed to read the addon catalog: %w", err))
 	}
 

@@ -75,13 +75,17 @@ Destroy now deletes a rule from Portainer only when this resource created it (`c
 
 Updates now read the rule first and send it back whole with your changes, so attributes you do not set are kept.
 
+### `portainer_docker_volume`: `driver` defaults to the engine's
+
+`driver` no longer defaults to `local`. Left unset, the engine chooses: `local` on Docker, `d2k` on a D2K environment, where the old default replaced the volume on every plan. Existing volumes plan no change.
+
 ## Import IDs
 
 Every resource with a composite import ID now separates the parts with `:`. The old formats are still accepted, so existing `import` blocks and scripts keep working.
 
 | Resource | v3 format | Accepted old format |
 |----------|-----------|---------------------|
-| `portainer_stack` | `<endpoint_id>:<stack_id>:<deployment_type>[:<method>]` | `<endpoint_id>-<stack_id>-<deployment_type>[-<method>]` |
+| `portainer_stack` | `<endpoint_id>:<stack_id>:<deployment_type>[:<method>]` (`method` is required unless the stack was deployed from Git) | `<endpoint_id>-<stack_id>-<deployment_type>[-<method>]` |
 | `portainer_docker_volume` | `<endpoint_id>:<volume_name>` | `<endpoint_id>-<volume_name>` |
 | `portainer_docker_config` | `<endpoint_id>:<config_id>` | `<endpoint_id>-<config_id>` |
 | `portainer_docker_secret` | `<endpoint_id>:<secret_id>` | `<endpoint_id>-<secret_id>` |
@@ -103,9 +107,20 @@ All of these need Portainer Business Edition 3.0 or later unless noted:
 - Kubernetes Gateway API: `portainer_kubernetes_gateway`, `portainer_kubernetes_gateway_http_route` and the data source `portainer_kubernetes_gateway_classes`.
 - `portainer_kubernetes_scoped_kubeconfig` (Business Edition 2.45.2 or later) and the data source `portainer_kubernetes_scoped_kubeconfigs` (Business Edition 3.0).
 - Data source `portainer_kubernetes_namespace_access`.
+- Kubernetes options: `kubernetes_prune` and `kubernetes_force_apply` on `portainer_stack` and `portainer_edge_stack` (Kubernetes deployments only).
+- `portainer_kubernetes_namespace` reports every resource quota of the namespace (`resource_quotas`) and the effective limit per resource (`effective_ceiling`).
+- `portainer_environment`: `delete_cluster_on_destroy` uninstalls KubeSolo from a machine Portainer installed it on when the environment is destroyed.
+- `portainer_user` (resource and data source): `created_authentication_method` and `last_authentication_method`.
 - `portainer_policy` accepts the 3.0 types `vulnerability-scanning-k8s` and `automatic-namespace-provisioning-k8s`, and the 2.45 types it was missing.
-- Add-ons: data source `portainer_addon_catalog` and the action `portainer_addon_catalog_refresh` (Business Edition).
+- Add-ons: data source `portainer_addon_catalog` and the action `portainer_addon_catalog_refresh` (Business Edition 2.45.2 or later).
 - Alerting: custom rules with `portainer_alerting_rule` and the data source `portainer_alerting_rules` (Business Edition), and `portainer_observability_environment` (Business Edition 2.45 or later).
 - `portainer_system` has two new attributes: `addons_available` and `addons_availability` (the reason, for example `kubernetes-required`). Portainer 3.0 reports availability as a string, 2.45 as a boolean; both are read.
 
 The Portainer AI products (Portainer-Run, Portainer-Command, Portainer-IDP and others) are Business Edition add-ons: install and configure them with `portainer_addon`, `portainer_addon_access` and `portainer_addon_config`.
+
+## Portainer 3.0 behavior the provider follows
+
+- Stack Git webhooks answer `202` with a JSON body instead of an empty `200`; `portainer_stack_webhook` accepts both.
+- The S3 backup settings no longer return the secret access key and the backup password; `portainer_backup_s3` keeps the configured values instead of planning a change on every run.
+- `/system/info` reports `addonsAvailable` as a string; `portainer_system` reads both forms.
+- The access endpoint of a GitOps source returns a different body; `portainer_gitops_source` reads the source again instead of decoding it.

@@ -27,6 +27,10 @@ func (r serverRequirement) String() string {
 	return s
 }
 
+// requiresBE is the requirement of a Business Edition API that every
+// supported release has, such as alerting.
+var requiresBE = serverRequirement{BusinessEdition: true}
+
 // requiresBE30 is the requirement of everything Portainer 3.0 added: D2K,
 // KubeSolo, the reconcile engine, the Gateway API. 3.x is Business Edition
 // only; Community Edition stays on 2.x.

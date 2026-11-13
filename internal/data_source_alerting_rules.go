@@ -64,6 +64,7 @@ func dataSourceAlertingRulesRead(ctx context.Context, d *schema.ResourceData, me
 
 	var rules []AlertingRule
 	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/observability/alerting/rules", nil, &rules); err != nil {
+		err = explainUnsupported(ctx, client, err, "portainer_alerting_rules", requiresBE)
 		return diag.FromErr(fmt.Errorf("failed to list alert rules: %w", err))
 	}
 	sort.Slice(rules, func(i, j int) bool { return rules[i].ID < rules[j].ID })

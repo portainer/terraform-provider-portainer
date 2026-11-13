@@ -2,7 +2,7 @@
 
 # portainer_addon_catalog
 
-> **Business Edition only.** This endpoint does not exist in Portainer CE.
+> **Requires Portainer Business Edition 2.45.2 or later.** On Community Edition or an older server the read fails with an error that says so.
 
 Reads the addon catalog document as published at the configured catalog URL: what each addon is, where its chart comes from and how Portainer serves it. Unlike `portainer_addons`, it carries no install state, records or environment data, and it is readable without being an administrator.
 

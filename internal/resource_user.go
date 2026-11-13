@@ -12,7 +12,7 @@ import (
 )
 
 func resourceUser() *schema.Resource {
-	return &schema.Resource{
+	r := &schema.Resource{
 		CreateContext: resourceUserCreate,
 		ReadContext:   resourceUserRead,
 		DeleteContext: resourceUserDelete,
@@ -72,6 +72,10 @@ func resourceUser() *schema.Resource {
 			},
 		},
 	}
+	for k, v := range userAuthenticationMethodSchema() {
+		r.Schema[k] = v
+	}
+	return r
 }
 
 func resourceUserCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -187,6 +191,9 @@ func resourceUserRead(ctx context.Context, d *schema.ResourceData, meta interfac
 	if err := d.Set("role", user.Role); err != nil {
 		return diag.FromErr(err)
 	}
+	if err := setUserAuthenticationMethods(d, user); err != nil {
+		return diag.FromErr(err)
+	}
 
 	// team_id tracks only the membership this resource manages. Other
 	// memberships (portainer_team_membership) would otherwise show up as a
@@ -210,6 +217,57 @@ type portainerUser struct {
 	ID       int64  `json:"Id"`
 	Username string `json:"Username"`
 	Role     int64  `json:"Role"`
+	// CreatedAuthenticationMethod / LastAuthenticationMethod were added in
+	// Portainer 3.0 (portainer.AuthenticationMethod: 1 = internal, 2 = LDAP,
+	// 3 = OAuth). Older servers omit them, which decodes to 0.
+	CreatedAuthenticationMethod int `json:"CreatedAuthenticationMethod"`
+	LastAuthenticationMethod    int `json:"LastAuthenticationMethod"`
+}
+
+// userAuthMethodDescription documents the values of the 3.0 authentication
+// method attributes, shared by the resource and the data source.
+const userAuthMethodDescription = "One of `internal`, `ldap` or `oauth` (Portainer `portainer.AuthenticationMethod` 1/2/3). Empty on Portainer releases before 3.0, which do not report it, and when the server has not recorded it."
+
+// authenticationMethodName maps a portainer.AuthenticationMethod value to the
+// string exposed in state. 0 (unset, or a pre-3.0 server) maps to "".
+func authenticationMethodName(m int) string {
+	switch m {
+	case 0:
+		return ""
+	case 1:
+		return "internal"
+	case 2:
+		return "ldap"
+	case 3:
+		return "oauth"
+	default:
+		return strconv.Itoa(m)
+	}
+}
+
+// setUserAuthenticationMethods stores the 3.0 authentication method fields.
+func setUserAuthenticationMethods(d *schema.ResourceData, u portainerUser) error {
+	if err := d.Set("created_authentication_method", authenticationMethodName(u.CreatedAuthenticationMethod)); err != nil {
+		return err
+	}
+	return d.Set("last_authentication_method", authenticationMethodName(u.LastAuthenticationMethod))
+}
+
+// userAuthenticationMethodSchema returns the Computed attributes shared by
+// portainer_user (resource and data source).
+func userAuthenticationMethodSchema() map[string]*schema.Schema {
+	return map[string]*schema.Schema{
+		"created_authentication_method": {
+			Type:        schema.TypeString,
+			Computed:    true,
+			Description: "Authentication method used when the user was created (Portainer 3.0+). " + userAuthMethodDescription,
+		},
+		"last_authentication_method": {
+			Type:        schema.TypeString,
+			Computed:    true,
+			Description: "Authentication method used at the user's last login (Portainer 3.0+). " + userAuthMethodDescription,
+		},
+	}
 }
 
 // listUsers returns every user (GET /users).

@@ -405,7 +405,7 @@ Podman works out of the box with most `portainer_docker_*` Terraform resources.
 The `portainer_d2k_environment` resource (Portainer Business Edition 3.0 or later) installs d2k in a namespace of a Kubernetes environment and registers a Docker (or Docker Swarm) environment whose Docker API d2k serves on the cluster, so the existing `portainer_docker_*` and `portainer_stack` resources deploy Docker workloads onto Kubernetes directly.
 
 It replaces the removed `portainer_compose_convert` (Kompose) resource. To convert an existing stack into Kubernetes manifests or a Helm chart instead, use the `portainer_stack_conversion` data source (Business Edition).
-See full documentation: [docs/resources/d2k_environment.md](https://github.com/portainer/terraform-provider-portainer/tree/main/docs/resources/d2k_environment.md)
+See full documentation: [portainer_d2k_environment](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/d2k_environment)
 
 ---
 

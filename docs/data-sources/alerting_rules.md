@@ -2,7 +2,7 @@
 
 # portainer_alerting_rules
 
-> **Business Edition only.** This endpoint does not exist in Portainer CE.
+> **Business Edition only.** On Community Edition the read fails with an error that says so.
 
 Lists the alert rules - Portainer's predefined ones and custom ones - from `GET /observability/alerting/rules`, optionally filtered by name and category.
 

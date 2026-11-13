@@ -2,7 +2,7 @@
 
 # portainer_addon_catalog_refresh
 
-> **Business Edition only.** This endpoint does not exist in Portainer CE.
+> **Requires Portainer Business Edition 2.45.2 or later.** On Community Edition or an older server the refresh fails with an error that says so.
 
 Drops Portainer's cached addon catalog, so the next read loads it from the configured catalog source. The last good copy is kept and still serves when that load fails. Requires an administrator.
 

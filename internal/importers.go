@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -154,7 +155,12 @@ func importKubernetesIngressControllers(_ context.Context, d *schema.ResourceDat
 // importStack takes "<endpoint_id>:<stack_id>:<deployment_type>[:<method>]";
 // the resource ID is the stack ID alone. The parts used to be separated by
 // "-", which is still accepted.
-func importStack(_ context.Context, d *schema.ResourceData, _ interface{}) ([]*schema.ResourceData, error) {
+//
+// method is required and forces a new stack, and Read depends on it, so it
+// cannot stay empty: without the segment it is "repository" for a stack
+// deployed from Git, and has to be given otherwise, since Portainer does not
+// record whether a stack came from a string, a file or a URL.
+func importStack(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 	const format = "<endpoint_id>:<stack_id>:<deployment_type>[:<method>]"
 	id := d.Id()
 	sep := ":"
@@ -170,6 +176,9 @@ func importStack(_ context.Context, d *schema.ResourceData, _ interface{}) ([]*s
 			return nil, fmt.Errorf("invalid import ID %q: expected %s", id, format)
 		}
 	}
+	if err := setImportDefaults(d, resourcePortainerStack().Schema); err != nil {
+		return nil, err
+	}
 	if err := setImportInts(d, id, format, map[string]string{"endpoint_id": parts[0]}); err != nil {
 		return nil, err
 	}
@@ -180,13 +189,47 @@ func importStack(_ context.Context, d *schema.ResourceData, _ interface{}) ([]*s
 	if err := d.Set("deployment_type", parts[2]); err != nil {
 		return nil, err
 	}
+	var method string
 	if len(parts) == 4 {
-		if err := d.Set("method", parts[3]); err != nil {
-			return nil, err
+		method = parts[3]
+	} else {
+		client, ok := meta.(*APIClient)
+		if !ok {
+			return nil, fmt.Errorf("invalid import ID %q: expected %s", id, format)
 		}
+		var stack struct {
+			GitConfig *struct{} `json:"gitConfig"`
+		}
+		if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/stacks/%d", client.Endpoint, stackID), nil, &stack); err != nil {
+			return nil, fmt.Errorf("failed to read stack %d: %w", stackID, err)
+		}
+		if stack.GitConfig == nil {
+			return nil, fmt.Errorf("stack %d was not deployed from Git, so the import ID needs its method: %s%sstring, %s%sfile or %s%surl", stackID, id, sep, id, sep, id, sep)
+		}
+		method = "repository"
+	}
+	if err := d.Set("method", method); err != nil {
+		return nil, err
 	}
 	d.SetId(strconv.Itoa(stackID))
 	return []*schema.ResourceData{d}, nil
+}
+
+// setImportDefaults stores the schema default of every attribute that has
+// one. Terraform does not apply defaults to imported state, so each showed as
+// a change on the first plan - and for a stack that change is a redeploy.
+// Read then overwrites whatever Portainer reports. Call it before setting
+// attributes from the import ID.
+func setImportDefaults(d *schema.ResourceData, attrs map[string]*schema.Schema) error {
+	for name, s := range attrs {
+		if s.Default == nil {
+			continue
+		}
+		if err := d.Set(name, s.Default); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // importSingleton imports a resource that manages instance-wide settings and

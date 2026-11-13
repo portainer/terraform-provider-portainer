@@ -66,6 +66,7 @@ var allowlist = map[string]bool{
 	"secret_names":         true,
 	"token_name":           true,
 	"restrict_secrets":     true, // bool toggle: whether access to secrets is restricted, not a secret
+	"include_secrets":      true, // bool toggle: whether a scoped kubeconfig may read Secrets
 	// Kubernetes service accounts: a toggle, and a list of secret NAMES.
 	"automount_service_account_token": true, // bool toggle: whether the token is mounted, not the token
 	"image_pull_secrets":              true, // references to secrets by name, never their values

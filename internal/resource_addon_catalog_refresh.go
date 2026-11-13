@@ -35,6 +35,7 @@ func resourceAddonCatalogRefreshCreate(ctx context.Context, d *schema.ResourceDa
 	client := meta.(*APIClient)
 
 	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/addons/catalog/refresh", nil, nil); err != nil {
+		err = explainUnsupported(ctx, client, err, "portainer_addon_catalog_refresh", requiresBE2452)
 		return diag.FromErr(fmt.Errorf("failed to refresh the addon catalog: %w", err))
 	}
 

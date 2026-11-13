@@ -114,17 +114,16 @@ if [ -n "${TF_VAR_k8s_environment_id:-}" ]; then
   run_test be_scoped_kubeconfig apply_converge_destroy
 fi
 
-case "${PORTAINER_VERSION:-}" in
-  3.*)
-    [ -n "${TF_VAR_k8s_environment_id:-}" ] || {
-      echo "❌ the 3.0 tests need TF_VAR_k8s_environment_id (e2e-tests/lib/be-k8s-setup.sh)"
-      exit 1
-    }
-    run_test be_data_sources_30 apply_converge_destroy
-    run_test be_gateway gateway
-    run_test be_reconcile apply_converge_destroy
-    run_test be_d2k d2k
-    ;;
-esac
+if [[ "${PORTAINER_VERSION:-}" == 3.* ]]; then
+  if [ -z "${TF_VAR_k8s_environment_id:-}" ]; then
+    echo "❌ the 3.0 tests need TF_VAR_k8s_environment_id (e2e-tests/lib/be-k8s-setup.sh)"
+    exit 1
+  fi
+  run_test be_data_sources_30 apply_converge_destroy
+  run_test be_gateway gateway
+  run_test be_reconcile apply_converge_destroy
+  run_test be_d2k d2k
+  run_test be_kubernetes_30 apply_converge_destroy
+fi
 
 echo "✅ Business Edition tests passed."

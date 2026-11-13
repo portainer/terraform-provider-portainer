@@ -70,3 +70,38 @@ func TestExplainUnsupported(t *testing.T) {
 		}
 	})
 }
+
+// TestExplainUnsupported_CatalogAndAlerting: the add-on catalog (BE 2.45.2+)
+// and the alert rules (BE) name their requirement on a server without them
+// instead of failing with a bare 404.
+func TestExplainUnsupported_CatalogAndAlerting(t *testing.T) {
+	cases := []struct {
+		name, method, path, version, edition, want string
+		run                                        func(*MockServer) error
+	}{
+		{"catalog", "GET", "/addons/catalog", "2.45.1", "EE", "Business Edition 2.45.2 or later", func(m *MockServer) error {
+			r := dataSourceAddonCatalog()
+			return rcRead(r, r.TestResourceData(), m.Client())
+		}},
+		{"catalog refresh", "POST", "/addons/catalog/refresh", "2.45.3", "CE", "Business Edition 2.45.2 or later", func(m *MockServer) error {
+			r := resourceAddonCatalogRefresh()
+			return rcCreate(r, r.TestResourceData(), m.Client())
+		}},
+		{"alerting rules", "GET", "/observability/alerting/rules", "2.45.3", "CE", "requires Portainer Business Edition;", func(m *MockServer) error {
+			r := dataSourceAlertingRules()
+			return rcRead(r, r.TestResourceData(), m.Client())
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := NewMockServer(t)
+			mock.On(tc.method, tc.path, RespondString(http.StatusNotFound, "text/plain", "404 page not found"))
+			mock.On("GET", "/system/version", RespondJSON(http.StatusOK, map[string]interface{}{
+				"ServerVersion": tc.version, "ServerEdition": tc.edition,
+			}))
+			if err := tc.run(mock); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("expected an error naming %q, got %v", tc.want, err)
+			}
+		})
+	}
+}

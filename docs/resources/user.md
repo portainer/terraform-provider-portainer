@@ -99,3 +99,5 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` | ID of the Portainer user |
+| `created_authentication_method` | Authentication method used when the user was created: `internal`, `ldap` or `oauth`. Portainer 3.0+; empty on older releases. |
+| `last_authentication_method` | Authentication method used at the user's last login: `internal`, `ldap` or `oauth`. Portainer 3.0+; empty on older releases (and for users who never logged in, if the server has not recorded it). |

@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -10,7 +11,7 @@ import (
 )
 
 func dataSourceUser() *schema.Resource {
-	return &schema.Resource{
+	r := &schema.Resource{
 		ReadContext: dataSourceUserRead,
 
 		Schema: map[string]*schema.Schema{
@@ -26,6 +27,10 @@ func dataSourceUser() *schema.Resource {
 			},
 		},
 	}
+	for k, v := range userAuthenticationMethodSchema() {
+		r.Schema[k] = v
+	}
+	return r
 }
 
 func dataSourceUserRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -41,6 +46,16 @@ func dataSourceUserRead(ctx context.Context, d *schema.ResourceData, meta interf
 		if u.Username == username {
 			d.SetId(strconv.FormatInt(u.ID, 10))
 			if err := d.Set("role", u.Role); err != nil {
+				return diag.FromErr(err)
+			}
+			// The list leaves out the 3.0 authentication method fields;
+			// the user's own endpoint has them.
+			var detail portainerUser
+			if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/users/%d", client.Endpoint, u.ID), nil, &detail); err == nil {
+				u.CreatedAuthenticationMethod = detail.CreatedAuthenticationMethod
+				u.LastAuthenticationMethod = detail.LastAuthenticationMethod
+			}
+			if err := setUserAuthenticationMethods(d, u); err != nil {
 				return diag.FromErr(err)
 			}
 			return nil

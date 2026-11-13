@@ -60,6 +60,8 @@ resource "portainer_kubernetes_namespace" "test" {
 | Name  | Description                                  |
 |-------|----------------------------------------------|
 | `id`  | Composite ID in format `environmentID:name`  |
+| `resource_quotas` | **Portainer 3.0+.** List of every ResourceQuota in the namespace: `name`, `hard` (map of hard limits, e.g. `limits.cpu = "2"`, `requests.memory = "1Gi"`; `spec.hard`, falling back to `status.hard`) and `used` (map of current usage, `status.used`). Empty before 3.0. |
+| `effective_ceiling` | **Portainer 3.0+.** Effective limit per resource across all quotas (Portainer `EffectiveCeiling`), sorted by `resource`: `resource` (e.g. `limits.cpu`, `requests.memory`), `hard` and `used` (Kubernetes quantities such as `500m`, `2Gi`), `bound_by` (name of the quota that sets the limit). Empty before 3.0. |
 
 ## Import
 

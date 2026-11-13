@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -49,10 +50,68 @@ func resourceKubernetesNamespace() *schema.Resource {
 				Description: "Map of annotations applied to the Kubernetes namespace.",
 			},
 			"resource_quota": {
-				Type:        schema.TypeMap,
-				Optional:    true,
-				Elem:        &schema.Schema{Type: schema.TypeString},
+				Type:     schema.TypeMap,
+				Optional: true,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+				// Kubernetes returns quantities in canonical form: "1000m"
+				// comes back as "1", which is the same limit.
+				DiffSuppressFunc: func(_, old, new string, _ *schema.ResourceData) bool {
+					return old != "" && new != "" && k8sScalarEqual(old, new)
+				},
 				Description: "Resource quota limits applied to the namespace (e.g. cpu, memory limits and requests).",
+			},
+			"resource_quotas": {
+				Type:     schema.TypeList,
+				Computed: true,
+				Description: "Portainer 3.0+: every Kubernetes ResourceQuota in the namespace as reported by Portainer (`ResourceQuotas`), with hard limits and current usage. " +
+					"Empty on releases before 3.0.",
+				Elem: &schema.Resource{Schema: map[string]*schema.Schema{
+					"name": {
+						Type:        schema.TypeString,
+						Computed:    true,
+						Description: "Name of the ResourceQuota object.",
+					},
+					"hard": {
+						Type:        schema.TypeMap,
+						Computed:    true,
+						Elem:        &schema.Schema{Type: schema.TypeString},
+						Description: "Hard limits per resource (e.g. `limits.cpu` = `2`, `requests.memory` = `1Gi`): `spec.hard`, or `status.hard` when the spec is empty.",
+					},
+					"used": {
+						Type:        schema.TypeMap,
+						Computed:    true,
+						Elem:        &schema.Schema{Type: schema.TypeString},
+						Description: "Current usage per resource (`status.used`).",
+					},
+				}},
+			},
+			"effective_ceiling": {
+				Type:     schema.TypeList,
+				Computed: true,
+				Description: "Portainer 3.0+: the effective limit per resource across all quotas of the namespace (`EffectiveCeiling`), i.e. the tightest hard limit for cpu/memory, sorted by resource. " +
+					"Empty on releases before 3.0.",
+				Elem: &schema.Resource{Schema: map[string]*schema.Schema{
+					"resource": {
+						Type:        schema.TypeString,
+						Computed:    true,
+						Description: "Resource the ceiling applies to, as keyed by Portainer (e.g. `limits.cpu`, `requests.memory`).",
+					},
+					"hard": {
+						Type:        schema.TypeString,
+						Computed:    true,
+						Description: "Effective hard limit (Kubernetes quantity, e.g. `500m`, `2Gi`).",
+					},
+					"used": {
+						Type:        schema.TypeString,
+						Computed:    true,
+						Description: "Current usage against the limit (Kubernetes quantity).",
+					},
+					"bound_by": {
+						Type:        schema.TypeString,
+						Computed:    true,
+						Description: "Name of the ResourceQuota that sets this limit.",
+					},
+				}},
 			},
 		},
 	}
@@ -116,6 +175,9 @@ func resourceKubernetesNamespaceRead(ctx context.Context, d *schema.ResourceData
 				Hard map[string]string `json:"hard"`
 			} `json:"spec"`
 		} `json:"ResourceQuota"`
+		// Added in Portainer 3.0 (models.K8sNamespaceResponse); absent before.
+		ResourceQuotas   []k8sNamespaceQuota               `json:"ResourceQuotas"`
+		EffectiveCeiling map[string]k8sEffectiveQuotaLimit `json:"EffectiveCeiling"`
 	}
 	// Namespace deleted out-of-band — clear from state so the next plan recreates.
 	if err := doJSON(ctx, client, http.MethodGet, url, nil, &ns); err != nil {
@@ -163,7 +225,79 @@ func resourceKubernetesNamespaceRead(ctx context.Context, d *schema.ResourceData
 		}
 	}
 
+	if err := d.Set("resource_quotas", flattenNamespaceQuotas(ns.ResourceQuotas)); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("effective_ceiling", flattenEffectiveCeiling(ns.EffectiveCeiling)); err != nil {
+		return diag.FromErr(err)
+	}
+
 	return nil
+}
+
+// k8sNamespaceQuota is the part of a v1.ResourceQuota the provider exposes.
+type k8sNamespaceQuota struct {
+	Metadata struct {
+		Name string `json:"name"`
+	} `json:"metadata"`
+	Spec struct {
+		Hard map[string]string `json:"hard"`
+	} `json:"spec"`
+	Status struct {
+		Hard map[string]string `json:"hard"`
+		Used map[string]string `json:"used"`
+	} `json:"status"`
+}
+
+// k8sEffectiveQuotaLimit is models.K8sEffectiveQuotaLimit (Portainer 3.0).
+// Hard and Used are resource.Quantity values, which serialise as strings.
+type k8sEffectiveQuotaLimit struct {
+	BoundBy string `json:"BoundBy"`
+	Hard    string `json:"Hard"`
+	Used    string `json:"Used"`
+}
+
+func flattenNamespaceQuotas(quotas []k8sNamespaceQuota) []interface{} {
+	out := make([]interface{}, 0, len(quotas))
+	for _, q := range quotas {
+		hard := q.Spec.Hard
+		if len(hard) == 0 {
+			hard = q.Status.Hard
+		}
+		out = append(out, map[string]interface{}{
+			"name": q.Metadata.Name,
+			"hard": stringMapToInterface(hard),
+			"used": stringMapToInterface(q.Status.Used),
+		})
+	}
+	return out
+}
+
+func flattenEffectiveCeiling(ceiling map[string]k8sEffectiveQuotaLimit) []interface{} {
+	keys := make([]string, 0, len(ceiling))
+	for k := range ceiling {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]interface{}, 0, len(keys))
+	for _, k := range keys {
+		c := ceiling[k]
+		out = append(out, map[string]interface{}{
+			"resource": k,
+			"hard":     c.Hard,
+			"used":     c.Used,
+			"bound_by": c.BoundBy,
+		})
+	}
+	return out
+}
+
+func stringMapToInterface(m map[string]string) map[string]interface{} {
+	out := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 func resourceKubernetesNamespaceUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {

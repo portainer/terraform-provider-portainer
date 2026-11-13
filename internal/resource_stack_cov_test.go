@@ -340,6 +340,11 @@ func TestStackImport_ParsesCompositeID(t *testing.T) {
 	if got := rd.Get("method"); got != "string" {
 		t.Errorf("method: expected string, got %v", got)
 	}
+	// Schema defaults are filled in, or the first plan after the import
+	// showed them as a change - a redeploy of the stack.
+	if got := rd.Get("repository_reference_name"); got != "refs/heads/main" {
+		t.Errorf("repository_reference_name: expected the schema default, got %v", got)
+	}
 }
 
 // TestStackImport_InvalidID verifies the import guard rejects malformed IDs.

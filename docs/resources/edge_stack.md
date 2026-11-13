@@ -121,6 +121,8 @@ terraform apply
 | `environment`             | map(string)  | 🚫 optional | Environment variables (key-value pairs) passed to the stack at deployment time |
 | `registries`              | list(number) | 🚫 optional | List of registry IDs (for pulling images)                                   |
 | `use_manifest_namespaces` | bool         | 🚫 optional | For Kubernetes only – respect namespaces in the manifest (default: `false`) |
+| `kubernetes_prune`        | bool         | 🚫 optional | Kubernetes only (`deployment_type = 1`), Portainer 3.0+: delete the resources an earlier deployment applied that the manifest no longer declares. Portainer prunes when left out; leaving it out sends nothing and keeps Portainer's recorded choice. Sent as `DeployerOptions` on create and update (not for `helm_config` stacks) |
+| `kubernetes_force_apply`  | bool         | 🚫 optional | Kubernetes only (`deployment_type = 1`), Portainer 3.0+: delete and recreate a resource whose immutable fields changed instead of failing the deployment (destroys the resource and everything tied to its identity). Off when left out; leaving it out sends nothing and keeps Portainer's recorded choice |
 
 ---
 
