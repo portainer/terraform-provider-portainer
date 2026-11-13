@@ -178,7 +178,7 @@ resource "portainer_omni_cluster" "edge_fleet" {
 ## Import
 
 ```bash
-terraform import portainer_omni_cluster.edge_fleet 3/edge-fleet
+terraform import portainer_omni_cluster.edge_fleet 3:edge-fleet
 ```
 
-The import ID is `<credential id>/<cluster name>`. An imported cluster has no machine blocks in state, so they have to be supplied in the configuration - and because they are never read back, the first plan after an import will not show them as a change.
+The import ID is `<credential id>:<cluster name>`. The format from before v3.0.0, `<credential id>/<cluster name>`, is still accepted. The ID of a cluster created before v3.0.0 moves to the new format on the next refresh. An imported cluster has no machine blocks in state, so they have to be supplied in the configuration - and because they are never read back, the first plan after an import will not show them as a change.

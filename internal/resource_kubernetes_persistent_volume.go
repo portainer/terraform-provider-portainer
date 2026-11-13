@@ -85,7 +85,7 @@ func resourceKubernetesPersistentVolumeCreate(ctx context.Context, d *schema.Res
 		return diag.FromErr(fmt.Errorf("failed to set the reclaim policy of persistent volume %q: %w", name, err))
 	}
 
-	d.SetId(fmt.Sprintf("%d/%s", envID, name))
+	d.SetId(fmt.Sprintf("%d:%s", envID, name))
 	return resourceKubernetesPersistentVolumeRead(ctx, d, meta)
 }
 

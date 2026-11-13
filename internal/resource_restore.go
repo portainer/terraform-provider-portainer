@@ -44,15 +44,16 @@ func resourceRestore() *schema.Resource {
 			},
 			"password_wo":         writeOnlySecretSchema("password", "password_wo_version", "password the backup archive was encrypted with"),
 			"password_wo_version": writeOnlyVersionSchema("password_wo", true),
-			"setup_token": {
-				Type:          schema.TypeString,
-				Optional:      true,
-				ForceNew:      true,
-				Sensitive:     true,
-				Description:   "Value sent as the `X-Setup-Token` header. Portainer requires it when the instance has not been initialised yet, which is the usual state for a restore. Stored in state as a sensitive value; use `setup_token_wo` to keep it out of state.",
-				ConflictsWith: []string{"setup_token_wo"},
+			// Write-only only: the token is a one-time bootstrap secret, so there
+			// is no plaintext twin that would put it in state.
+			"setup_token_wo": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				Sensitive:    true,
+				WriteOnly:    true,
+				RequiredWith: []string{"setup_token_wo_version"},
+				Description:  "Write-only value sent as the `X-Setup-Token` header (supports ephemeral values; never stored in Terraform state). Portainer requires it when the instance has not been initialised yet, which is the usual state for a restore. Requires Terraform 1.11 or later.",
 			},
-			"setup_token_wo":         writeOnlySecretSchema("setup_token", "setup_token_wo_version", "setup token sent as the X-Setup-Token header"),
 			"setup_token_wo_version": writeOnlyVersionSchema("setup_token_wo", true),
 		},
 	}
@@ -90,12 +91,14 @@ func resourceRestoreCreate(ctx context.Context, d *schema.ResourceData, meta int
 	// The setup token goes in a header rather than the body, so this call does
 	// not go through doJSON.
 	headers := map[string]string{}
-	setupToken, err := twinSecret(d, "setup_token")
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	if setupToken != "" {
-		headers["X-Setup-Token"] = setupToken
+	if d.Get("setup_token_wo_version").(int) != 0 {
+		setupToken, err := writeOnlyString(d, "setup_token_wo")
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		if setupToken != "" {
+			headers["X-Setup-Token"] = setupToken
+		}
 	}
 	if err := doJSONWithHeaders(ctx, client, http.MethodPost, client.Endpoint+"/restore", payload, nil, headers); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to restore the Portainer backup: %w", err))

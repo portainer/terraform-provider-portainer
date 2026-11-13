@@ -312,3 +312,32 @@ func TestDataSourceGitopsWorkflow_SchemaMatchesList(t *testing.T) {
 		}
 	}
 }
+
+// TestDataSourceGitopsWorkflows_ReconcileFilters covers what Portainer 3.0
+// added to the list: the `drifted` status and `gitopsDeployment` type
+// filters, and the drifted count in the summary.
+func TestDataSourceGitopsWorkflows_ReconcileFilters(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/gitops/workflows", RespondJSON(http.StatusOK, []map[string]interface{}{}))
+	mock.On("GET", "/gitops/workflows/summary", RespondJSON(http.StatusOK, map[string]interface{}{
+		"healthy": 2, "drifted": 1,
+	}))
+
+	ds := dataSourceGitopsWorkflows()
+	d := ds.TestResourceData()
+	_ = d.Set("status", "drifted")
+	_ = d.Set("type", "gitopsDeployment")
+
+	if err := rcRead(ds, d, mock.Client()); err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+
+	get := mock.FindRequest("GET", "/gitops/workflows")
+	if !strings.Contains(get.Query, "status=drifted") || !strings.Contains(get.Query, "type=gitopsDeployment") {
+		t.Errorf("query should carry both filters, got %q", get.Query)
+	}
+	summary := d.Get("summary").([]interface{})[0].(map[string]interface{})
+	if summary["drifted"] != 1 {
+		t.Errorf("summary.drifted: got %v", summary["drifted"])
+	}
+}

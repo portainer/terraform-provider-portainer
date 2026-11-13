@@ -17,12 +17,9 @@ func resourceDockerConfig() *schema.Resource {
 		DeleteContext: resourceDockerConfigDelete,
 		Importer: &schema.ResourceImporter{
 			StateContext: func(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-				importID := d.Id()
-				var endpointID int
-				var configID string
-				n, err := fmt.Sscanf(importID, "%d-%s", &endpointID, &configID)
-				if err != nil || n != 2 {
-					return nil, fmt.Errorf("invalid import ID format. Expected '<endpoint_id>-<config_id>'")
+				endpointID, configID, err := splitEndpointImportID(d.Id(), "<endpoint_id>:<config_id>")
+				if err != nil {
+					return nil, err
 				}
 				if err := d.Set("endpoint_id", endpointID); err != nil {
 					return nil, err

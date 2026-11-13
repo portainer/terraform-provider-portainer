@@ -149,21 +149,11 @@ func resourceEdgeGroupUpdate(ctx context.Context, d *schema.ResourceData, meta i
 func resourceEdgeGroupDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("%s/edge_groups/%s", client.Endpoint, d.Id()), nil)
-	if err := setAuthHeader(req, client); err != nil {
-		return diag.FromErr(err)
+	// Portainer's message says why a group cannot go, e.g. an Edge stack
+	// still deployed to it; a group already gone is fine.
+	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/edge_groups/%s", client.Endpoint, d.Id()), nil, nil); err != nil && !isAPINotFound(err) {
+		return diag.FromErr(fmt.Errorf("failed to delete edge group: %w", err))
 	}
-
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusNoContent {
-		return diag.FromErr(fmt.Errorf("failed to delete edge group"))
-	}
-
 	return nil
 }
 

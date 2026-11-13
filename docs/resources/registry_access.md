@@ -54,8 +54,8 @@ resource "portainer_registry_access" "dev_team_access" {
 
 ## Import
 
-Access entries can be imported as `<registry_id>/<endpoint_id>/team/<team_id>` or `<registry_id>/<endpoint_id>/user/<user_id>`:
+Access entries can be imported as `<registry_id>:<endpoint_id>:team:<team_id>` or `<registry_id>:<endpoint_id>:user:<user_id>`. The format from before v3.0.0, `<registry_id>/<endpoint_id>/team/<team_id>`, is still accepted.
 
 ```shell
-terraform import portainer_registry_access.example 3/1/team/7
+terraform import portainer_registry_access.example 3:1:team:7
 ```

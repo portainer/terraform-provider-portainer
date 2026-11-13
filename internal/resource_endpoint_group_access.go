@@ -159,11 +159,11 @@ func updateEndpointGroup(ctx context.Context, client *APIClient, endpointGroupID
 		return fmt.Errorf("failed to update endpoint group access: %w", err)
 	}
 
-	id := fmt.Sprintf("%d/", endpointGroupID)
+	id := fmt.Sprintf("%d:", endpointGroupID)
 	if hasTeam {
-		id += fmt.Sprintf("team/%d", teamID.(int))
+		id += fmt.Sprintf("team:%d", teamID.(int))
 	} else {
-		id += fmt.Sprintf("user/%d", userID.(int))
+		id += fmt.Sprintf("user:%d", userID.(int))
 	}
 	d.SetId(id)
 

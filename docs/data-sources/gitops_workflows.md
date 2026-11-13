@@ -32,8 +32,8 @@ output "failing_workflows" {
 | `start`        | number | ❌ no    | Zero-based index of the first result, for paging.                                         |
 | `limit`        | number | ❌ no    | Maximum number of results to return.                                                      |
 | `endpoint_ids` | list   | ❌ no    | Only return workflows deploying to these environment identifiers.                         |
-| `status`       | string | ❌ no    | Only return workflows in this status.                                                     |
-| `type`         | string | ❌ no    | Only return workflows of this type: `stack` or `edgeStack`.                               |
+| `status`       | string | ❌ no    | Only return workflows in this status. `drifted` requires Portainer BE 3.0 or later.        |
+| `type`         | string | ❌ no    | Only return workflows with an artifact of this type: `stack`, `edgeStack` or, on Portainer BE 3.0 or later, `gitopsDeployment` (the `reconcile` engine). |
 | `platform`     | string | ❌ no    | Only return workflows for this platform: `dockerStandalone`, `dockerSwarm`, `kubernetes`. |
 
 ## Attributes Reference
@@ -41,6 +41,6 @@ output "failing_workflows" {
 | Name        | Type | Description                                                                                                                                                                            |
 |-------------|------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `workflows` | list | Workflows matching the query. Each entry has `id`, `name`, `source_status`, `source_error`, `artifact_status`, `artifact_error`, `target_status`, `target_error`, `healthy`, `creation_date` and `last_sync_date`. |
-| `summary`   | list | Exactly one element with the counts `healthy`, `syncing`, `error`, `paused` and `unknown`.                                                                                              |
+| `summary`   | list | Exactly one element with the counts `healthy`, `syncing`, `error`, `paused`, `unknown` and `drifted` (always 0 before Portainer BE 3.0).                                                                                            |
 
 The summary comes from its own Portainer endpoint and is not filtered by the arguments above.

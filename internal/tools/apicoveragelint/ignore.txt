@@ -1,0 +1,100 @@
+# Portainer API paths the provider leaves out on purpose, one per line with
+# the reason after "#". apicoveragelint fails on any spec path that is neither
+# called by the provider nor listed here, so a new Portainer release cannot add
+# an API the provider silently ignores. Remove a line once the path is covered.
+
+# Add-ons' own machine APIs: the add-ons call them themselves.
+/addon-data/v1                      # key-value store of an add-on, written by the add-on
+/addon-data/v1/{key}                # key-value store of an add-on, written by the add-on
+/addon-user-data/v1                 # per-user store of an add-on, written by the add-on
+/addon-user-data/v1/{key}           # per-user store of an add-on, written by the add-on
+/addon-store/v1/capabilities        # add-on runtime API
+/addon-store/v1/config              # add-on runtime API; configuration goes through portainer_addon_config
+/addon-store/v1/config/{key}        # add-on runtime API; configuration goes through portainer_addon_config
+/addons/{id}/config/{key}           # single-key patch; portainer_addon_config replaces the whole config
+
+# Sessions, interactive and streaming endpoints.
+/auth/logout                        # session handling
+/auth/oauth/validate                # OAuth login flow of the UI
+/websocket/attach                   # interactive
+/websocket/exec                     # interactive
+/websocket/kubernetes-shell         # interactive
+/websocket/node-shell               # interactive
+/websocket/pod                      # interactive
+
+# Called by Edge agents, not by users.
+/endpoints/edge/async               # Edge agent check-in
+/endpoints/{id}/edge/status         # Edge agent check-in
+/endpoints/{id}/edge/alerts         # Edge agent report
+/endpoints/{id}/edge/alerts/state   # Edge agent report
+/endpoints/{id}/edge/charts         # Edge agent report
+/endpoints/{id}/edge/charts/statuses # Edge agent report
+/endpoints/{id}/edge/gitops/statuses # Edge agent report
+/endpoints/{id}/edge/gitops/{deploymentId} # Edge agent fetch of a GitOps deployment
+/endpoints/{id}/edge/jobs/{jobID}/logs # Edge agent upload of job logs
+/endpoints/{id}/edge/policies/statuses # Edge agent report
+/endpoints/{id}/edge/stacks/{stackId} # Edge agent fetch of a stack
+/edge_configurations/{id}/{state}   # Edge agent report
+/edge_stacks/{id}/status            # Edge agent report
+/edge_stacks/{id}/logs/{endpoint_id} # Edge agent log collection
+/edge_stacks/{id}/logs/{endpoint_id}/file # Edge agent log download
+
+# Runtime actions and downloads, not configuration.
+/docker/{environmentId}/containers/image_status/clear # UI cache reset
+/docker/{environmentId}/services/image_status/clear # UI cache reset
+/endpoints/{id}/docker/v2/browse/put # file upload into a volume
+/kubernetes/{id}/namespaces/{namespace}/applications/{kind}/{name}/restart # runtime action
+/kubernetes/{id}/namespaces/{namespace}/pods/{name}/restart # runtime action
+/kubernetes/{id}/namespaces/{namespace}/pods/{name} # runtime object; pods belong to their workload
+/omni/{credentialID}/cluster/provision/cancel # cancels a running provisioning
+/support/download                   # support bundle download
+/useractivity/authlogs.csv          # CSV export; portainer_user_activity reads the JSON
+/useractivity/logs.csv              # CSV export; portainer_user_activity reads the JSON
+/system/update                      # updates the Portainer server itself
+/system/upgrade                     # upgrades the Portainer server itself
+/status                             # deprecated alias of /system/status
+/registries/{id}/repositories/{repositoryName}/tags # registry browsing
+/registries/{id}/repositories/{repositoryName}/tags/details # registry browsing
+/registries/{id}/ecr/repositories/{repositoryName} # ECR browsing and cleanup
+/registries/{id}/ecr/repositories/{repositoryName}/tags # ECR browsing and cleanup
+
+# Same objects through another API the provider already uses.
+/stacks/create/standalone/file      # multipart variant; the provider sends file content to .../string
+/stacks/create/swarm/file           # multipart variant; the provider sends file content to .../string
+/kubernetes/{id}/applications       # Kubernetes objects are managed through the Kubernetes API proxy
+/kubernetes/{id}/clusterrolebindings # managed through the Kubernetes API proxy
+/kubernetes/{id}/clusterroles       # managed through the Kubernetes API proxy
+/kubernetes/{id}/configmaps         # managed through the Kubernetes API proxy
+/kubernetes/{id}/ingresses          # managed through the Kubernetes API proxy
+/kubernetes/{id}/jobs               # managed through the Kubernetes API proxy
+/kubernetes/{id}/rolebindings       # managed through the Kubernetes API proxy
+/kubernetes/{id}/roles              # managed through the Kubernetes API proxy
+/kubernetes/{id}/secrets            # managed through the Kubernetes API proxy
+/kubernetes/{id}/serviceaccounts    # managed through the Kubernetes API proxy
+/kubernetes/{id}/services           # managed through the Kubernetes API proxy
+/kubernetes/{id}/namespaces/{namespace}/configmaps # managed through the Kubernetes API proxy
+/kubernetes/{id}/namespaces/{namespace}/configmaps/{configmap} # managed through the Kubernetes API proxy
+/kubernetes/{id}/namespaces/{namespace}/ingresses/{ingress} # managed through the Kubernetes API proxy
+/kubernetes/{id}/namespaces/{namespace}/secrets # managed through the Kubernetes API proxy
+/kubernetes/{id}/namespaces/{namespace}/secrets/{secret} # managed through the Kubernetes API proxy
+/kubernetes/{id}/namespaces/{namespace}/services # managed through the Kubernetes API proxy
+/kubernetes/{id}/namespaces/{namespace}/service_accounts/{name}/image_pull_secrets # set imagePullSecrets in the service account manifest
+/kubernetes/{id}/persistent_volume_claims/resize # resize by changing the claim's manifest
+/kubernetes/{id}/storage_classes/{name}/default # set the storageclass.kubernetes.io/is-default-class annotation in the manifest
+
+# KubeSolo installation: an asynchronous, multi-step SSH flow (test, install,
+# retry, cancel); install hosts with cloud-init or Ansible and an edge key.
+/kubesolo/tests                     # KubeSolo SSH install flow
+/kubesolo/tests/active              # KubeSolo SSH install flow
+/kubesolo/tests/{id}                # KubeSolo SSH install flow
+/kubesolo/tests/{id}/retest         # KubeSolo SSH install flow
+/kubesolo/tests/{id}/hosts/{hostID}/output # KubeSolo SSH install flow
+/kubesolo/tests/{id}/hosts/{hostID}/replace-key # KubeSolo SSH install flow
+/kubesolo/install                   # KubeSolo SSH install flow
+/kubesolo/environments/{id}/cancel  # KubeSolo SSH install flow
+/kubesolo/environments/{id}/retry   # KubeSolo SSH install flow
+/observability/alerting/settings/{id}    # read by ID; portainer_alerting_settings uses the singleton /observability/alerting/settings
+/gitops/sources/{id}/credential     # needs an add-on instance token and X-On-Behalf-Of; an API key gets 401
+/gitops/workflows/{id}/deployments/{deploymentId}/files # raw file contents; portainer_gitops_repo_file reads files from the repository
+/kubernetes/{id}/gateways           # cluster-wide list; the gateway resource reads its namespace's list
+/kubernetes/{id}/namespaces/{namespace}/gateways/count # UI counter

@@ -587,8 +587,8 @@ Note that a stack can be reported as failed for reasons that have nothing to do 
 
 ## Import
 
-Stacks can be imported using their numeric ID:
+Stacks can be imported as `<endpoint_id>:<stack_id>:<deployment_type>[:<method>]`. The resource ID is the stack ID alone. The format from before v3.0.0, `<endpoint_id>-<stack_id>-<deployment_type>[-<method>]`, is still accepted.
 
 ```shell
-terraform import portainer_stack.example 5
+terraform import portainer_stack.example 1:5:standalone:string
 ```

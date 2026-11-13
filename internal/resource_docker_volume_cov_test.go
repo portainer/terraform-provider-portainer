@@ -29,8 +29,8 @@ func TestDockerVolumeCreate_HappyPath(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	if d.Id() != "1-my-vol" {
-		t.Errorf("expected ID %q, got %q", "1-my-vol", d.Id())
+	if d.Id() != "1:my-vol" {
+		t.Errorf("expected ID %q, got %q", "1:my-vol", d.Id())
 	}
 	if got := d.Get("resource_control_id"); got != 17 {
 		t.Errorf("resource_control_id: expected 17, got %v", got)
@@ -72,8 +72,8 @@ func TestDockerVolumeCreate_ClusterSpec(t *testing.T) {
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
-	if d.Id() != "1-cluster-vol" {
-		t.Errorf("expected ID %q, got %q", "1-cluster-vol", d.Id())
+	if d.Id() != "1:cluster-vol" {
+		t.Errorf("expected ID %q, got %q", "1:cluster-vol", d.Id())
 	}
 }
 
@@ -127,8 +127,8 @@ func TestDockerVolumeRead_HappyPath(t *testing.T) {
 	if got := d.Get("resource_control_id"); got != 8 {
 		t.Errorf("resource_control_id: expected 8, got %v", got)
 	}
-	if d.Id() != "1-my-vol" {
-		t.Errorf("expected ID %q, got %q", "1-my-vol", d.Id())
+	if d.Id() != "1:my-vol" {
+		t.Errorf("expected ID %q, got %q", "1:my-vol", d.Id())
 	}
 }
 
@@ -180,7 +180,7 @@ func TestDockerVolumeDelete_HappyPath(t *testing.T) {
 
 	r := resourceDockerVolume()
 	d := r.TestResourceData()
-	d.SetId("1-my-vol")
+	d.SetId("1:my-vol")
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("name", "my-vol")
 
@@ -205,7 +205,7 @@ func TestDockerVolumeDelete_404IsSuccess(t *testing.T) {
 
 	r := resourceDockerVolume()
 	d := r.TestResourceData()
-	d.SetId("1-my-vol")
+	d.SetId("1:my-vol")
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("name", "my-vol")
 
@@ -224,11 +224,37 @@ func TestDockerVolumeDelete_HTTPError(t *testing.T) {
 
 	r := resourceDockerVolume()
 	d := r.TestResourceData()
-	d.SetId("1-my-vol")
+	d.SetId("1:my-vol")
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("name", "my-vol")
 
 	if err := rcDelete(r, d, mock.Client()); err == nil {
 		t.Fatal("expected error on HTTP 500, got nil")
+	}
+}
+
+// TestDockerVolumeCreate_DefaultDriver: an unset driver is left to the engine
+// (a D2K environment reports "d2k", which a "local" default kept replacing).
+func TestDockerVolumeCreate_DefaultDriver(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("POST", "/endpoints/3/docker/volumes/create", RespondJSON(http.StatusCreated, map[string]interface{}{"Name": "v", "Driver": "d2k"}))
+
+	r := resourceDockerVolume()
+	d := r.TestResourceData()
+	_ = d.Set("endpoint_id", 3)
+	_ = d.Set("name", "v")
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	var body map[string]interface{}
+	if err := mock.FindRequest("POST", "/endpoints/3/docker/volumes/create").DecodeJSON(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if _, ok := body["Driver"]; ok {
+		t.Errorf("an unset driver must not be sent, got %v", body)
+	}
+	if got := d.Get("driver"); got != "d2k" {
+		t.Errorf("driver: expected the engine's d2k, got %v", got)
 	}
 }

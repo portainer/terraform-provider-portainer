@@ -73,7 +73,6 @@ func TestRestore_SendsDecodedArchive(t *testing.T) {
 	_ = d.Set("file_content_base64", encoded)
 	_ = d.Set("file_name", "backup.tar.gz")
 	_ = d.Set("password", "secret")
-	_ = d.Set("setup_token", "token-123")
 
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -94,12 +93,8 @@ func TestRestore_SendsDecodedArchive(t *testing.T) {
 	if string(got) != string(archive) {
 		t.Errorf("archive mismatch: %q", got)
 	}
-	if h := post.Headers.Get("X-Setup-Token"); h != "token-123" {
-		t.Errorf("X-Setup-Token header: expected %q, got %q", "token-123", h)
-	}
-	// The setup token must not displace the API key.
-	if post.Headers.Get("X-API-Key") == "" {
-		t.Error("the API key header must still be sent alongside the setup token")
+	if h := post.Headers.Get("X-Setup-Token"); h != "" {
+		t.Errorf("no setup token is configured, got X-Setup-Token %q", h)
 	}
 }
 

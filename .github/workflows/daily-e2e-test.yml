@@ -14,7 +14,7 @@ permissions:
 # tests, which need provider fixes a release may not have yet.
 jobs:
   e2e:
-    name: E2E (${{ matrix.cli }} ${{ matrix.version }})
+    name: E2E (${{ matrix.cli }} ${{ matrix.version }}, Portainer ${{ matrix.portainer }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -23,12 +23,19 @@ jobs:
           # 1.11 is the oldest Terraform with write-only attribute support.
           - cli: terraform
             version: "~1.11.0"
+            portainer: "2.45.3"
           - cli: terraform
             version: latest
+            portainer: "2.45.3"
           - cli: opentofu
             version: latest
+            portainer: "2.45.3"
+          # The previous LTS line, which the provider still supports.
+          - cli: terraform
+            version: latest
+            portainer: "2.39.8"
     env:
-      PORTAINER_VERSION: "2.45.3"
+      PORTAINER_VERSION: ${{ matrix.portainer }}
 
     steps:
       - name: ⬇️ Checkout code
@@ -64,12 +71,6 @@ jobs:
       - name: 🌐 Get Kubernetes server IP and export for Terraform
         run: make k3d-export-ip
 
-      - name: Install Kompose
-        run: |
-          curl -L https://github.com/kubernetes/kompose/releases/download/v1.35.0/kompose-linux-amd64 -o kompose
-          chmod +x kompose
-          sudo mv ./kompose /usr/local/bin/kompose
-
       - name: ⬇️ Install Terraform
         if: matrix.cli == 'terraform'
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
@@ -97,14 +98,6 @@ jobs:
         # that Terraform 1.11+ refuses to walk.
         run: terraform fmt -check -recursive e2e-tests examples
 
-      - name: 🧪 Run Terraform E2E tests - Convert docker-compose.yml to K8S yaml
-        run: |
-          cd e2e-tests/compose_convert
-          terraform init -input=false
-          terraform fmt -check
-          bash run.sh
-          ls -alh output/
-
       - name: 🧪 Run Terraform E2E tests - Create Kubernetes Environment
         run: |
           cd e2e-tests/environment
@@ -123,7 +116,7 @@ jobs:
         run: |
           # stack_standalone_string is also in FULL_CYCLE_DIRS on purpose: the apply
           # here leaves the container container_exec runs in.
-          APPLY_ONLY_DIRS=("deployment" "stack_standalone_string" "webhook" "container_exec" "backup" "auth" "open_amt" "kubernetes_delete_object" "endpoint_snapshot" "endpoint_settings" "kubernetes_namespace" "user_admin" "kubernetes_manifest_dry_run" "data_kubernetes_workloads" "data_portainer_readonly" "data_kubernetes_cluster_readonly" "data_docker_readonly" "data_connection_checks" "data_templates_catalogue" "data_endpoint_registries" "endpoint_relations" "stack_delete_by_name")
+          APPLY_ONLY_DIRS=("deployment" "stack_standalone_string" "webhook" "container_exec" "backup" "auth" "kubernetes_delete_object" "endpoint_snapshot" "endpoint_settings" "kubernetes_namespace" "user_admin" "kubernetes_manifest_dry_run" "data_kubernetes_workloads" "data_portainer_readonly" "data_kubernetes_cluster_readonly" "data_docker_readonly" "data_connection_checks" "data_templates_catalogue" "data_endpoint_registries" "endpoint_relations" "stack_delete_by_name")
           FULL_CYCLE_DIRS=("edge_string" "edge_file" "edge_repository" "kubernetes_application" "kubernetes_deployment_scale" "user_api_key" "endpoint_group_membership" "data_team_memberships" "custom_template_file" "kubernetes_clusterrole" "kubernetes_clusterrolebinding" "kubernetes_configmaps" "kubernetes_cronjob" "kubernetes_helm" "kubernetes_ingress" "kubernetes_ingresscontrollers" "kubernetes_job" "kubernetes_namespace_ingresscontrollers" "kubernetes_namespace_system" "kubernetes_role" "kubernetes_rolebinding" "kubernetes_secret" "kubernetes_service" "kubernetes_serviceaccounts" "kubernetes_storage" "kubernetes_volume"
           "custom_template_string" "custom_template_repository" "docker_image" "docker_network" "docker_plugin" "docker_volume" "stack_standalone_string" "stack_standalone_file" "stack_standalone_repository" "endpoint_group" "tag" "user-team-teammembership" "registry" "environment_tags")
 

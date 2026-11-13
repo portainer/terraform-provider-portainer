@@ -32,7 +32,7 @@ resource "portainer_kubernetes_deployment_scale" "web" {
 | Name              | Type   | Description                                                                            |
 |-------------------|--------|----------------------------------------------------------------------------------------|
 | `name`            | string | Name of the workflow.                                                                    |
-| `source_status`   | string | Status of the source phase: `healthy`, `syncing`, `error`, `paused` or `unknown`.        |
+| `source_status`   | string | Status of the source phase: `healthy`, `syncing`, `error`, `paused`, `unknown` or, on the `reconcile` engine, `drifted`. |
 | `source_error`    | string | Error reported by the source phase, empty while healthy.                                 |
 | `artifact_status` | string | Status of the artifact phase.                                                            |
 | `artifact_error`  | string | Error reported by the artifact phase.                                                    |

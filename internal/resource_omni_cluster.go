@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -686,16 +685,18 @@ func omniClusterSpec(d *schema.ResourceData) (map[string]interface{}, error) {
 }
 
 // omniClusterID and omniClusterParts keep the resource ID - credential and
-// cluster name - in one place, since every call needs both.
+// cluster name - in one place, since every call needs both. IDs from before
+// v3.0.0 use "/" instead of ":" and are still accepted.
 func omniClusterID(credentialID int, name string) string {
-	return fmt.Sprintf("%d/%s", credentialID, name)
+	return fmt.Sprintf("%d:%s", credentialID, name)
 }
 
 func omniClusterParts(id string) (int, string, error) {
-	credential, name, found := strings.Cut(id, "/")
-	if !found || credential == "" || name == "" {
-		return 0, "", fmt.Errorf("the resource ID must be <credential id>/<cluster name>, got %q", id)
+	parts, err := importIDPartsCompat(id, "/", 2, "<credential id>:<cluster name>")
+	if err != nil {
+		return 0, "", err
 	}
+	credential, name := parts[0], parts[1]
 	var credentialID int
 	if _, err := fmt.Sscanf(credential, "%d", &credentialID); err != nil {
 		return 0, "", fmt.Errorf("the credential part of the resource ID must be a number, got %q", credential)
@@ -768,6 +769,8 @@ func resourceOmniClusterRead(ctx context.Context, d *schema.ResourceData, meta i
 	if err != nil {
 		return diag.FromErr(err)
 	}
+	// Moves an ID from before v3.0.0 to the current format.
+	d.SetId(omniClusterID(credentialID, name))
 
 	var cluster struct {
 		Metadata struct {

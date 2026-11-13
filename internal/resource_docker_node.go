@@ -87,7 +87,7 @@ func resourceDockerNodeUpdate(ctx context.Context, d *schema.ResourceData, meta 
 		return diag.FromErr(fmt.Errorf("failed to update node: %w", err))
 	}
 
-	d.SetId(fmt.Sprintf("%d-%s", endpointID, nodeID))
+	d.SetId(fmt.Sprintf("%d:%s", endpointID, nodeID))
 	return nil
 }
 
@@ -134,7 +134,7 @@ func resourceDockerNodeRead(ctx context.Context, d *schema.ResourceData, meta in
 	if err := d.Set("labels", result.Spec.Labels); err != nil {
 		return diag.FromErr(err)
 	}
-	d.SetId(fmt.Sprintf("%d-%s", endpointID, nodeID))
+	d.SetId(fmt.Sprintf("%d:%s", endpointID, nodeID))
 	return nil
 }
 

@@ -16,6 +16,9 @@ type alertingRuleTier struct {
 	Severity  string  `json:"severity"`
 	Threshold float64 `json:"threshold"`
 	Enabled   bool    `json:"enabled"`
+	// Selector is part of a built-in rule's definition (BE 3.0+). Portainer
+	// never accepts it from a client, so it is only ever decoded.
+	Selector string `json:"selector,omitempty"`
 }
 
 // resourceAlertingRuleTiers configures the multi-severity tiers of an editable

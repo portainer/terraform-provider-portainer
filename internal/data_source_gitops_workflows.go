@@ -37,7 +37,7 @@ func gitopsWorkflowAttributes() map[string]*schema.Schema {
 	return map[string]*schema.Schema{
 		"id":              {Type: schema.TypeInt, Computed: true, Description: "Identifier of the workflow."},
 		"name":            {Type: schema.TypeString, Computed: true, Description: "Name of the workflow."},
-		"source_status":   {Type: schema.TypeString, Computed: true, Description: "Status of the source phase: `healthy`, `syncing`, `error`, `paused` or `unknown`."},
+		"source_status":   {Type: schema.TypeString, Computed: true, Description: "Status of the source phase: `healthy`, `syncing`, `error`, `paused`, `unknown` or, on the `reconcile` engine, `drifted`."},
 		"source_error":    {Type: schema.TypeString, Computed: true, Description: "Error reported by the source phase, empty while healthy."},
 		"artifact_status": {Type: schema.TypeString, Computed: true, Description: "Status of the artifact phase, using the same values as `source_status`."},
 		"artifact_error":  {Type: schema.TypeString, Computed: true, Description: "Error reported by the artifact phase, empty while healthy."},
@@ -102,14 +102,14 @@ func dataSourceGitopsWorkflows() *schema.Resource {
 			"status": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"healthy", "syncing", "error", "paused", "unknown"}, false),
-				Description:  "Only return workflows in this status.",
+				ValidateFunc: validation.StringInSlice([]string{"healthy", "syncing", "error", "paused", "unknown", "drifted"}, false),
+				Description:  "Only return workflows in this status. `drifted` requires Portainer Business Edition 3.0 or later.",
 			},
 			"type": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"stack", "edgeStack"}, false),
-				Description:  "Only return workflows of this type.",
+				ValidateFunc: validation.StringInSlice([]string{"stack", "edgeStack", "gitopsDeployment"}, false),
+				Description:  "Only return workflows with at least one artifact of this type. `gitopsDeployment`, an artifact on the `reconcile` engine, requires Portainer Business Edition 3.0 or later.",
 			},
 			"platform": {
 				Type:         schema.TypeString,

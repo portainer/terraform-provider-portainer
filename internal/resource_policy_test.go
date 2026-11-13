@@ -182,3 +182,54 @@ func TestPolicyCreate_HTTPError(t *testing.T) {
 		t.Errorf("expected empty ID, got %q", d.Id())
 	}
 }
+
+// TestPolicyType_Validation verifies the policy types Portainer accepts,
+// including those added in 3.0, pass validation and unknown ones do not.
+func TestPolicyType_Validation(t *testing.T) {
+	validate := resourcePortainerPolicy().Schema["policy_type"].ValidateFunc
+	for _, policyType := range []string{
+		"rbac-k8s", "security-docker", "observability-k8s", "network-security-k8s",
+		"vulnerability-scanning-k8s", "automatic-namespace-provisioning-k8s",
+	} {
+		if _, errs := validate(policyType, "policy_type"); len(errs) != 0 {
+			t.Errorf("%s: unexpected errors %v", policyType, errs)
+		}
+	}
+	if _, errs := validate("vulnerability-scanning-docker", "policy_type"); len(errs) == 0 {
+		t.Error("an unknown policy type must be rejected")
+	}
+}
+
+// TestPolicyCreate_VulnerabilityScanning verifies a 3.0 policy type and its
+// data reach the API unchanged.
+func TestPolicyCreate_VulnerabilityScanning(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("POST", "/policies", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 9}))
+	mock.On("GET", "/policies/9", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 9, "Name": "scan", "EnvironmentType": "kubernetes", "Type": "vulnerability-scanning-k8s",
+	}))
+
+	r := resourcePortainerPolicy()
+	d := r.TestResourceData()
+	_ = d.Set("name", "scan")
+	_ = d.Set("environment_type", "kubernetes")
+	_ = d.Set("policy_type", "vulnerability-scanning-k8s")
+	_ = d.Set("data", `{"operatorNamespace":"trivy-system"}`)
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	var payload map[string]interface{}
+	if err := mock.FindRequest("POST", "/policies").DecodeJSON(&payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload["Type"] != "vulnerability-scanning-k8s" {
+		t.Errorf("payload.Type: got %v", payload["Type"])
+	}
+	if data, _ := payload["Data"].(map[string]interface{}); data["operatorNamespace"] != "trivy-system" {
+		t.Errorf("payload.Data: got %v", payload["Data"])
+	}
+	if got := d.Get("policy_type"); got != "vulnerability-scanning-k8s" {
+		t.Errorf("policy_type: got %v", got)
+	}
+}

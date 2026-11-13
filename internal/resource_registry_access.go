@@ -136,11 +136,11 @@ func resourceRegistryAccessCreate(ctx context.Context, d *schema.ResourceData, m
 		return diag.FromErr(fmt.Errorf("failed to update registry access: %w", err))
 	}
 
-	id := fmt.Sprintf("%d/%d/", registryID, endpointID)
+	id := fmt.Sprintf("%d:%d:", registryID, endpointID)
 	if hasTeam {
-		id += fmt.Sprintf("team/%d", teamID.(int))
+		id += fmt.Sprintf("team:%d", teamID.(int))
 	} else {
-		id += fmt.Sprintf("user/%d", userID.(int))
+		id += fmt.Sprintf("user:%d", userID.(int))
 	}
 	d.SetId(id)
 

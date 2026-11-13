@@ -313,11 +313,12 @@ func TestStackDelete_GenericError(t *testing.T) {
 }
 
 // TestStackImport_ParsesCompositeID exercises the Importer state func with the
-// "<endpoint>-<stack>-<deployment>-<method>" form.
+// "<endpoint>:<stack>:<deployment>:<method>" form; the TestStackCov2_Import
+// tests keep the "-" form from before v3.0.0.
 func TestStackImport_ParsesCompositeID(t *testing.T) {
 	r := resourcePortainerStack()
 	d := r.TestResourceData()
-	d.SetId("3-15-standalone-string")
+	d.SetId("3:15:standalone:string")
 
 	out, err := r.Importer.StateContext(context.Background(), d, nil)
 	if err != nil {

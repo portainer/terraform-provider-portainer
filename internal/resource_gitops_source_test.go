@@ -234,3 +234,28 @@ func TestGitopsSourceURL_SuppressesPortainerNormalization(t *testing.T) {
 		t.Error("a different repository must still show as a change")
 	}
 }
+
+// TestGitopsSourceUpdate_AccessResponseShapes: Portainer 3.0 answers the
+// access update with a SourceDetail where 2.45 returned the stored Source. The
+// provider reads the source back on its own, so either body must do.
+func TestGitopsSourceUpdate_AccessResponseShapes(t *testing.T) {
+	for name, body := range map[string]interface{}{
+		"2.45 portainer.Source":    map[string]interface{}{"ID": 12, "Name": "infra", "URL": "https://github.com/acme/infra.git"},
+		"3.0 sources.SourceDetail": gitopsSourceDetailBody(12),
+	} {
+		t.Run(name, func(t *testing.T) {
+			mock := NewMockServer(t)
+			mock.On("PUT", "/gitops/sources/12/access", RespondJSON(http.StatusOK, body))
+			mock.On("GET", "/gitops/sources/12", RespondJSON(http.StatusOK, gitopsSourceDetailBody(12)))
+
+			r := resourceGitopsSource()
+			d := gitopsSourceDataWithChanges(t, "12", map[string]string{"public": "true"})
+			if err := rcUpdate(r, d, mock.Client()); err != nil {
+				t.Fatalf("Update failed: %v", err)
+			}
+			if mock.FindRequest("PUT", "/gitops/sources/12/access") == nil {
+				t.Fatal("expected PUT /gitops/sources/12/access")
+			}
+		})
+	}
+}

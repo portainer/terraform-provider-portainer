@@ -40,8 +40,8 @@ func TestRegistryAccessCreate_TeamHappyPath(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	if d.Id() != "1/2/team/7" {
-		t.Errorf("expected composite ID %q, got %q", "1/2/team/7", d.Id())
+	if d.Id() != "1:2:team:7" {
+		t.Errorf("expected composite ID %q, got %q", "1:2:team:7", d.Id())
 	}
 
 	put := mock.FindRequest("PUT", "/endpoints/2/registries/1")
@@ -126,7 +126,7 @@ func TestRegistryAccessRead_NotFoundClearsID(t *testing.T) {
 
 	r := resourceRegistryAccess()
 	d := r.TestResourceData()
-	d.SetId("1/2/team/7")
+	d.SetId("1:2:team:7")
 	_ = d.Set("registry_id", 1)
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("team_id", 7)
@@ -160,7 +160,7 @@ func TestRegistryAccessDelete_HappyPath(t *testing.T) {
 
 	r := resourceRegistryAccess()
 	d := r.TestResourceData()
-	d.SetId("1/2/team/7")
+	d.SetId("1:2:team:7")
 	_ = d.Set("registry_id", 1)
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("team_id", 7)
@@ -186,7 +186,7 @@ func TestRegistryAccessRead_RegistryNotFoundClearsID(t *testing.T) {
 
 	r := resourceRegistryAccess()
 	d := r.TestResourceData()
-	d.SetId("1/2/team/7")
+	d.SetId("1:2:team:7")
 	_ = d.Set("registry_id", 1)
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("team_id", 7)

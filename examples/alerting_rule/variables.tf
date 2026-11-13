@@ -34,3 +34,15 @@ variable "rule_duration" {
   type        = number
   default     = 5
 }
+
+variable "custom_rule_name" {
+  description = "Name of the custom alerting rule to create"
+  type        = string
+  default     = "Disk almost full"
+}
+
+variable "custom_rule_promql_expr" {
+  description = "PromQL expression the custom alerting rule evaluates"
+  type        = string
+  default     = "100 - (node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"} * 100)"
+}

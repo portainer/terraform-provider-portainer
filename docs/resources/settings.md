@@ -1,7 +1,7 @@
 # 🛠 **Resource Documentation: `portainer_settings`**
 
 # portainer_settings
-The `portainer_settings` resource allows you to manage global Portainer settings, including authentication, UI branding, telemetry, LDAP, and more.
+The `portainer_settings` resource allows you to manage global Portainer settings, including authentication, UI branding, LDAP, and more.
 
 ## Example Usage
 ```hcl
@@ -37,7 +37,6 @@ terraform apply
 | Name                           | Type     | Required | Description                                                                  |
 |--------------------------------|----------|----------|------------------------------------------------------------------------------|
 | `authentication_method`        | number   | ✅ yes   | Type of authentication (e.g., `1` = internal, `2` = LDAP, `3` = OAuth)       |
-| `enable_telemetry`             | bool     | 🚫 no    | **Deprecated**, no effect: current Portainer has no telemetry setting        |
 | `logo_url`                     | string   | 🚫 no    | URL to custom logo                                                           |
 | `snapshot_interval`            | string   | 🚫 no    | How often to run container snapshots (e.g., `"15m"`)                         |
 | `templates_url`                | string   | 🚫 no    | URL to the template list JSON                                                |
@@ -58,9 +57,6 @@ terraform apply
 | `disable_kube_roles_sync`      | bool     | ❌ no    | Disable Kubernetes role sync from RBAC (Business Edition only)               |
 | `disable_kube_shell`           | bool     | ❌ no    | Disable the Kubectl Shell feature (Business Edition only)                    |
 | `disable_kubeconfig_download`  | bool     | ❌ no    | Disable downloading of Kubeconfig files (Business Edition only)              |
-| `display_donation_header`      | bool     | ❌ no    | **Deprecated**, no effect: Portainer does not accept it through the API      |
-| `display_external_contributors`| bool     | ❌ no    | **Deprecated**, no effect: Portainer does not accept it through the API      |
-| `is_docker_desktop_extension`  | bool     | ❌ no    | **Deprecated**, no effect: Portainer detects it at startup                   |
 | `edge_portainer_url`           | string   | 🚫 no    | Public URL of the Portainer instance that edge agents use to reach back for polling and tunneling |
 | `black_listed_labels`          | list(object) | 🚫 no | Container labels (`name`/`value` pairs) that Portainer should hide from the UI |
 
@@ -159,6 +155,9 @@ terraform apply
 | Name | Description              |
 |------|--------------------------|
 | `id` | Always `"portainer-settings"` |
+| `display_donation_header` | Whether the donation header is shown. Read-only: Portainer does not accept it through the settings API |
+| `display_external_contributors` | Whether external contributors are shown. Read-only: Portainer does not accept it through the settings API |
+| `is_docker_desktop_extension` | Whether Portainer runs as the Docker Desktop extension. Read-only: Portainer detects it at startup |
 
 ## Import
 

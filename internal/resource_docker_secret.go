@@ -19,12 +19,9 @@ func resourceDockerSecret() *schema.Resource {
 		UpdateContext: resourceDockerSecretUpdate,
 		Importer: &schema.ResourceImporter{
 			StateContext: func(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-				importID := d.Id()
-				var endpointID int
-				var secretID string
-				n, err := fmt.Sscanf(importID, "%d-%s", &endpointID, &secretID)
-				if err != nil || n != 2 {
-					return nil, fmt.Errorf("invalid import ID format. Expected '<endpoint_id>-<secret_id>'")
+				endpointID, secretID, err := splitEndpointImportID(d.Id(), "<endpoint_id>:<secret_id>")
+				if err != nil {
+					return nil, err
 				}
 				if err := d.Set("endpoint_id", endpointID); err != nil {
 					return nil, err

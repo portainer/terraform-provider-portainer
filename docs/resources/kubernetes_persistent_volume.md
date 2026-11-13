@@ -44,8 +44,8 @@ Destroying this resource **deletes the PersistentVolume**. With `reclaim_policy 
 
 ## Import
 
-Persistent volumes can be imported as `<environment_id>/<name>`:
+Persistent volumes can be imported as `<environment_id>:<name>`. The format from before v3.0.0, `<environment_id>/<name>`, is still accepted.
 
 ```shell
-terraform import portainer_kubernetes_persistent_volume.example 5/pv-data
+terraform import portainer_kubernetes_persistent_volume.example 5:pv-data
 ```

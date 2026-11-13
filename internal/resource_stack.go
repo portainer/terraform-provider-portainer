@@ -34,41 +34,7 @@ func resourcePortainerStack() *schema.Resource {
 			Delete: schema.DefaultTimeout(10 * time.Minute),
 		},
 		Importer: &schema.ResourceImporter{
-			StateContext: func(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-				// "<endpoint_id>-<stack_id>-<deployment_type>"
-				// "<endpoint_id>-<stack_id>-<deployment_type>-<method>"
-
-				parts := strings.Split(d.Id(), "-")
-				if len(parts) < 3 {
-					return nil, fmt.Errorf("invalid ID format. Use '<endpoint_id>-<stack_id>-<deployment_type>[-<method>]'")
-				}
-
-				endpointID, err := strconv.Atoi(parts[0])
-				if err != nil {
-					return nil, fmt.Errorf("invalid endpoint_id in import ID: %s", parts[0])
-				}
-
-				stackID, err := strconv.Atoi(parts[1])
-				if err != nil {
-					return nil, fmt.Errorf("invalid stack_id in import ID: %s", parts[1])
-				}
-
-				deploymentType := parts[2]
-
-				if len(parts) > 3 {
-					if err := d.Set("method", parts[3]); err != nil {
-						return nil, err
-					}
-				}
-				if err := d.Set("endpoint_id", endpointID); err != nil {
-					return nil, err
-				}
-				if err := d.Set("deployment_type", deploymentType); err != nil {
-					return nil, err
-				}
-				d.SetId(fmt.Sprintf("%d", stackID))
-				return []*schema.ResourceData{d}, nil
-			},
+			StateContext: importStack,
 		},
 		Schema: map[string]*schema.Schema{
 			"deployment_type": {

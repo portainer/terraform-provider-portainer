@@ -1,0 +1,70 @@
+name: Portainer API coverage
+
+# Checks that every path of the Portainer API is either called by the provider
+# or listed with a reason in internal/tools/apicoveragelint/ignore.txt.
+#
+# Pull requests check against the pinned versions below, so a Portainer
+# release never fails an unrelated pull request. The weekly run checks the
+# newest published Community and Business Edition specs and fails when a new
+# release added paths, which is the signal to cover them or list them.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * 1" # Mondays at 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  api-coverage:
+    name: API coverage
+    runs-on: ubuntu-latest
+    env:
+      # <edition>/<version> pairs from https://api-docs.portainer.io
+      PINNED_SPECS: "ee/3.0.1 ee/2.45.3 ce/2.45.3"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Download the API specs
+        env:
+          SCHEDULED: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+        run: |
+          specs="${PINNED_SPECS}"
+          if [ "${SCHEDULED}" = "true" ]; then
+            # The newest version of each edition is the first entry.
+            ee="$(curl -sSf https://api-docs.portainer.io/ee-versions.json | jq -r '.[0].id')"
+            ce="$(curl -sSf https://api-docs.portainer.io/ce-versions.json | jq -r '.[0].id')"
+            specs="${specs} ee/${ee} ce/${ce}"
+          fi
+          mkdir -p specs
+          for spec in $(echo "${specs}" | tr ' ' '\n' | sort -u); do
+            curl -sSf --retry 3 -o "specs/${spec//\//-}.yaml" "https://api-docs.portainer.io/versions/${spec}/openapi.yaml"
+            echo "${spec}"
+          done
+
+      - name: Check coverage
+        run: |
+          args=()
+          for f in specs/*.yaml; do args+=(-spec "$f"); done
+          go run ./internal/tools/apicoveragelint "${args[@]}" . | tee api-coverage.out
+          status=${PIPESTATUS[0]}
+          {
+            echo "## Portainer API coverage"
+            echo ""
+            echo '```'
+            cat api-coverage.out
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

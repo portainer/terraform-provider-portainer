@@ -26,8 +26,8 @@ func TestDockerNodeCov2_Update_JWTAuth(t *testing.T) {
 	if err := rcCreate(r, d, client); err != nil {
 		t.Fatalf("Update via JWT failed: %v", err)
 	}
-	if d.Id() != "1-n1" {
-		t.Errorf("expected ID %q, got %q", "1-n1", d.Id())
+	if d.Id() != "1:n1" {
+		t.Errorf("expected ID %q, got %q", "1:n1", d.Id())
 	}
 
 	post := mock.FindRequest("POST", "/endpoints/1/docker/nodes/n1/update")
@@ -107,7 +107,7 @@ func TestDockerNodeCov2_Delete_NoAuth(t *testing.T) {
 
 	r := resourceDockerNode()
 	d := r.TestResourceData()
-	d.SetId("1-n1")
+	d.SetId("1:n1")
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("node_id", "n1")
 
