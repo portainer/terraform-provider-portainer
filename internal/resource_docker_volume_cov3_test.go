@@ -27,8 +27,8 @@ func TestDockerVolumeCov3_Import_HappyPath(t *testing.T) {
 	if got := imported.Get("name"); got != "my-vol" {
 		t.Errorf("name: expected %q, got %v", "my-vol", got)
 	}
-	if imported.Id() != "7-my-vol" {
-		t.Errorf("expected ID %q, got %q", "7-my-vol", imported.Id())
+	if imported.Id() != "7:my-vol" {
+		t.Errorf("expected ID %q, got %q", "7:my-vol", imported.Id())
 	}
 }
 

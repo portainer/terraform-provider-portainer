@@ -53,8 +53,8 @@ terraform destroy
 
 ## Import
 
-Swarm nodes can be imported as `<endpoint_id>-<node_id>`:
+Swarm nodes can be imported as `<endpoint_id>:<node_id>`. The format from before v3.0.0, `<endpoint_id>-<node_id>`, is still accepted.
 
 ```shell
-terraform import portainer_docker_node.example 1-ktnbjxoalbkvbvedmg1urrz8h
+terraform import portainer_docker_node.example 1:ktnbjxoalbkvbvedmg1urrz8h
 ```

@@ -85,8 +85,8 @@ func TestRegistryAccessCov2_Create_User_NoExistingAccess(t *testing.T) {
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
-	if d.Id() != "1/2/user/42" {
-		t.Errorf("expected composite ID %q, got %q", "1/2/user/42", d.Id())
+	if d.Id() != "1:2:user:42" {
+		t.Errorf("expected composite ID %q, got %q", "1:2:user:42", d.Id())
 	}
 	put := mock.FindRequest("PUT", "/endpoints/2/registries/1")
 	if put == nil {
@@ -148,7 +148,7 @@ func TestRegistryAccessCov2_Delete_User_HappyPath(t *testing.T) {
 
 	r := resourceRegistryAccess()
 	d := r.TestResourceData()
-	d.SetId("1/2/user/42")
+	d.SetId("1:2:user:42")
 	_ = d.Set("registry_id", 1)
 	_ = d.Set("endpoint_id", 2)
 	_ = d.Set("user_id", 42)

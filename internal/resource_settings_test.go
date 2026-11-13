@@ -14,7 +14,7 @@ import (
 // Important payload key quirks (from the struct tags in resource_settings.go):
 //   - Most scalars use camelCase JSON keys (authenticationMethod, snapshotInterval,
 //     edgeAgentCheckinInterval, enableEdgeComputeFeatures, ...).
-//   - A few use PascalCase (EnableTelemetry, EdgePortainerURL).
+//   - A few use PascalCase (EdgePortainerURL).
 //   - The nested OAuth block serializes under "oauthSettings" with PascalCase
 //     inner keys (ClientID, AccessTokenURI, ...).
 //   - The nested LDAP block serializes under the all-lowercase key "ldapsettings".
@@ -34,7 +34,6 @@ func TestSettingsCreate_HappyPath(t *testing.T) {
 	d := r.TestResourceData()
 	_ = d.Set("edge_portainer_url", "https://portainer.example.com")
 	_ = d.Set("authentication_method", 1)
-	_ = d.Set("enable_telemetry", true)
 	_ = d.Set("logo_url", "https://example.com/logo.png")
 	_ = d.Set("snapshot_interval", "5m")
 	_ = d.Set("templates_url", "https://example.com/templates.json")
@@ -63,9 +62,6 @@ func TestSettingsCreate_HappyPath(t *testing.T) {
 	// PascalCase keys.
 	if got := payload["EdgePortainerURL"]; got != "https://portainer.example.com" {
 		t.Errorf("EdgePortainerURL: expected URL, got %v", got)
-	}
-	if got := payload["EnableTelemetry"]; got != true {
-		t.Errorf("EnableTelemetry: expected true, got %v", got)
 	}
 	// camelCase keys. JSON numbers decode as float64.
 	if got := payload["authenticationMethod"]; got != float64(1) {

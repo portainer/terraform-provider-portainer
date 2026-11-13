@@ -184,7 +184,7 @@ func TestOmniCluster_CreateSendsMachineSpec(t *testing.T) {
 	if got := d.Get("endpoint_id"); got != 12 {
 		t.Errorf("endpoint_id: expected the environment Portainer created, got %v", got)
 	}
-	if d.Id() != "3/edge-fleet" {
+	if d.Id() != "3:edge-fleet" {
 		t.Errorf("the resource ID must carry both the credential and the name, got %q", d.Id())
 	}
 }
@@ -352,7 +352,7 @@ func TestOmniCluster_MalformedIDIsReported(t *testing.T) {
 	if err == nil {
 		t.Fatal("an ID without a credential must be reported")
 	}
-	if !strings.Contains(err.Error(), "<credential id>/<cluster name>") {
+	if !strings.Contains(err.Error(), "<credential id>:<cluster name>") {
 		t.Errorf("the error should say what the ID looks like, got: %v", err)
 	}
 }

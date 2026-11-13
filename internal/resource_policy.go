@@ -12,6 +12,23 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
+// policyTypes are the policy types the Portainer API accepts
+// (policies.PolicyType).
+var policyTypes = []string{
+	"rbac-k8s", "rbac-docker",
+	"security-k8s", "security-docker",
+	"setup-k8s", "setup-docker",
+	"registry-k8s", "registry-docker",
+	"change-confirmation",
+	"cleanup-docker",
+	"observability-k8s",
+	"pod-security-standards-k8s",
+	"network-security-k8s",
+	// Added in Portainer 3.0.
+	"vulnerability-scanning-k8s",
+	"automatic-namespace-provisioning-k8s",
+}
+
 func resourcePortainerPolicy() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourcePortainerPolicyCreate,
@@ -38,16 +55,11 @@ func resourcePortainerPolicy() *schema.Resource {
 				Description: "Environment type for the policy (kubernetes, docker, podman, swarm).",
 			},
 			"policy_type": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
-				ValidateFunc: validation.StringInSlice([]string{
-					"rbac-k8s", "rbac-docker",
-					"security-k8s", "security-docker",
-					"setup-k8s", "setup-docker",
-					"registry-k8s", "registry-docker",
-				}, false),
-				Description: "Policy type (e.g. rbac-k8s, security-docker).",
+				Type:         schema.TypeString,
+				Required:     true,
+				ForceNew:     true,
+				ValidateFunc: validation.StringInSlice(policyTypes, false),
+				Description:  "Policy type (e.g. rbac-k8s, security-docker). `vulnerability-scanning-k8s` and `automatic-namespace-provisioning-k8s` require Portainer Business Edition 3.0 or later.",
 			},
 			"environment_groups": {
 				Type:        schema.TypeList,

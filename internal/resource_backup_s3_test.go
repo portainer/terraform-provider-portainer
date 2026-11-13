@@ -160,6 +160,31 @@ func TestBackupS3Read_PopulatesState(t *testing.T) {
 	}
 }
 
+// TestBackupS3Read_KeepsRedactedSecrets: Portainer 3.0 redacts the secret
+// access key and the backup password; state keeps the configured values
+// instead of planning a change on every run.
+func TestBackupS3Read_KeepsRedactedSecrets(t *testing.T) {
+	for _, redacted := range []string{"", "******"} {
+		mock := NewMockServer(t)
+		mock.On("GET", "/backup/s3/settings", RespondJSON(http.StatusOK, map[string]interface{}{
+			"accessKeyID": "AKIA", "secretAccessKey": redacted, "password": redacted, "bucketName": "b",
+		}))
+
+		r := resourceBackupS3()
+		d := r.TestResourceData()
+		d.SetId("portainer_backup_s3")
+		_ = d.Set("secret_access_key", "configured-secret")
+		_ = d.Set("password", "configured-password")
+
+		if err := rcRead(r, d, mock.Client()); err != nil {
+			t.Fatalf("Read failed: %v", err)
+		}
+		if d.Get("secret_access_key") != "configured-secret" || d.Get("password") != "configured-password" {
+			t.Errorf("redacted %q: the configured secrets must stay, got %v / %v", redacted, d.Get("secret_access_key"), d.Get("password"))
+		}
+	}
+}
+
 // TestBackupS3Delete_ClearsID verifies that Delete simply removes the
 // resource from state (the operation is irreversible on the API side).
 func TestBackupS3Delete_ClearsID(t *testing.T) {

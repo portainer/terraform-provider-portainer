@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -26,6 +27,33 @@ func importIDParts(id, sep string, n int, format string) ([]string, error) {
 		}
 	}
 	return parts, nil
+}
+
+// importIDPartsCompat splits id in the provider-wide format, parts separated
+// by ":". An ID without ":" is split on legacySep instead, the separator the
+// resource used before v3.0.0, so existing import blocks and scripts keep
+// working; the importer then stores the ID in the current format.
+func importIDPartsCompat(id, legacySep string, n int, format string) ([]string, error) {
+	sep := ":"
+	if !strings.Contains(id, ":") {
+		sep = legacySep
+	}
+	return importIDParts(id, sep, n, format)
+}
+
+// splitEndpointImportID splits "<endpoint_id>:<object>", or the
+// "<endpoint_id>-<object>" form from before v3.0.0, for a Docker object that
+// lives on one environment.
+func splitEndpointImportID(id, format string) (int, string, error) {
+	parts, err := importIDPartsCompat(id, "-", 2, format)
+	if err != nil {
+		return 0, "", err
+	}
+	endpointID, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, "", fmt.Errorf("invalid import ID %q: expected %s", id, format)
+	}
+	return endpointID, parts[1], nil
 }
 
 // setImportInts parses each value as an int and stores it under its key.
@@ -54,8 +82,8 @@ func setImportPrincipal(d *schema.ResourceData, id, format, kind, raw string) er
 }
 
 func importRegistryAccess(_ context.Context, d *schema.ResourceData, _ interface{}) ([]*schema.ResourceData, error) {
-	const format = "<registry_id>/<endpoint_id>/team/<team_id> or <registry_id>/<endpoint_id>/user/<user_id>"
-	parts, err := importIDParts(d.Id(), "/", 4, format)
+	const format = "<registry_id>:<endpoint_id>:team:<team_id> or <registry_id>:<endpoint_id>:user:<user_id>"
+	parts, err := importIDPartsCompat(d.Id(), "/", 4, format)
 	if err != nil {
 		return nil, err
 	}
@@ -65,12 +93,13 @@ func importRegistryAccess(_ context.Context, d *schema.ResourceData, _ interface
 	if err := setImportPrincipal(d, d.Id(), format, parts[2], parts[3]); err != nil {
 		return nil, err
 	}
+	d.SetId(strings.Join(parts, ":"))
 	return []*schema.ResourceData{d}, nil
 }
 
 func importEndpointGroupAccess(_ context.Context, d *schema.ResourceData, _ interface{}) ([]*schema.ResourceData, error) {
-	const format = "<endpoint_group_id>/team/<team_id> or <endpoint_group_id>/user/<user_id>"
-	parts, err := importIDParts(d.Id(), "/", 3, format)
+	const format = "<endpoint_group_id>:team:<team_id> or <endpoint_group_id>:user:<user_id>"
+	parts, err := importIDPartsCompat(d.Id(), "/", 3, format)
 	if err != nil {
 		return nil, err
 	}
@@ -80,12 +109,13 @@ func importEndpointGroupAccess(_ context.Context, d *schema.ResourceData, _ inte
 	if err := setImportPrincipal(d, d.Id(), format, parts[1], parts[2]); err != nil {
 		return nil, err
 	}
+	d.SetId(strings.Join(parts, ":"))
 	return []*schema.ResourceData{d}, nil
 }
 
 func importDockerNode(_ context.Context, d *schema.ResourceData, _ interface{}) ([]*schema.ResourceData, error) {
-	const format = "<endpoint_id>-<node_id>"
-	parts, err := importIDParts(d.Id(), "-", 2, format)
+	const format = "<endpoint_id>:<node_id>"
+	parts, err := importIDPartsCompat(d.Id(), "-", 2, format)
 	if err != nil {
 		return nil, err
 	}
@@ -95,12 +125,13 @@ func importDockerNode(_ context.Context, d *schema.ResourceData, _ interface{}) 
 	if err := d.Set("node_id", parts[1]); err != nil {
 		return nil, err
 	}
+	d.SetId(strings.Join(parts, ":"))
 	return []*schema.ResourceData{d}, nil
 }
 
 func importKubernetesPersistentVolume(_ context.Context, d *schema.ResourceData, _ interface{}) ([]*schema.ResourceData, error) {
-	const format = "<environment_id>/<name>"
-	parts, err := importIDParts(d.Id(), "/", 2, format)
+	const format = "<environment_id>:<name>"
+	parts, err := importIDPartsCompat(d.Id(), "/", 2, format)
 	if err != nil {
 		return nil, err
 	}
@@ -110,6 +141,7 @@ func importKubernetesPersistentVolume(_ context.Context, d *schema.ResourceData,
 	if err := d.Set("name", parts[1]); err != nil {
 		return nil, err
 	}
+	d.SetId(strings.Join(parts, ":"))
 	return []*schema.ResourceData{d}, nil
 }
 
@@ -118,6 +150,86 @@ func importKubernetesIngressControllers(_ context.Context, d *schema.ResourceDat
 		return nil, err
 	}
 	return []*schema.ResourceData{d}, nil
+}
+
+// importStack takes "<endpoint_id>:<stack_id>:<deployment_type>[:<method>]";
+// the resource ID is the stack ID alone. The parts used to be separated by
+// "-", which is still accepted.
+//
+// method is required and forces a new stack, and Read depends on it, so it
+// cannot stay empty: without the segment it is "repository" for a stack
+// deployed from Git, and has to be given otherwise, since Portainer does not
+// record whether a stack came from a string, a file or a URL.
+func importStack(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	const format = "<endpoint_id>:<stack_id>:<deployment_type>[:<method>]"
+	id := d.Id()
+	sep := ":"
+	if !strings.Contains(id, ":") {
+		sep = "-"
+	}
+	parts := strings.Split(id, sep)
+	if len(parts) < 3 || len(parts) > 4 {
+		return nil, fmt.Errorf("invalid import ID %q: expected %s", id, format)
+	}
+	for _, p := range parts {
+		if p == "" {
+			return nil, fmt.Errorf("invalid import ID %q: expected %s", id, format)
+		}
+	}
+	if err := setImportDefaults(d, resourcePortainerStack().Schema); err != nil {
+		return nil, err
+	}
+	if err := setImportInts(d, id, format, map[string]string{"endpoint_id": parts[0]}); err != nil {
+		return nil, err
+	}
+	stackID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid import ID %q: expected %s", id, format)
+	}
+	if err := d.Set("deployment_type", parts[2]); err != nil {
+		return nil, err
+	}
+	var method string
+	if len(parts) == 4 {
+		method = parts[3]
+	} else {
+		client, ok := meta.(*APIClient)
+		if !ok {
+			return nil, fmt.Errorf("invalid import ID %q: expected %s", id, format)
+		}
+		var stack struct {
+			GitConfig *struct{} `json:"gitConfig"`
+		}
+		if err := doJSON(ctx, client, http.MethodGet, fmt.Sprintf("%s/stacks/%d", client.Endpoint, stackID), nil, &stack); err != nil {
+			return nil, fmt.Errorf("failed to read stack %d: %w", stackID, err)
+		}
+		if stack.GitConfig == nil {
+			return nil, fmt.Errorf("stack %d was not deployed from Git, so the import ID needs its method: %s%sstring, %s%sfile or %s%surl", stackID, id, sep, id, sep, id, sep)
+		}
+		method = "repository"
+	}
+	if err := d.Set("method", method); err != nil {
+		return nil, err
+	}
+	d.SetId(strconv.Itoa(stackID))
+	return []*schema.ResourceData{d}, nil
+}
+
+// setImportDefaults stores the schema default of every attribute that has
+// one. Terraform does not apply defaults to imported state, so each showed as
+// a change on the first plan - and for a stack that change is a redeploy.
+// Read then overwrites whatever Portainer reports. Call it before setting
+// attributes from the import ID.
+func setImportDefaults(d *schema.ResourceData, attrs map[string]*schema.Schema) error {
+	for name, s := range attrs {
+		if s.Default == nil {
+			continue
+		}
+		if err := d.Set(name, s.Default); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // importSingleton imports a resource that manages instance-wide settings and

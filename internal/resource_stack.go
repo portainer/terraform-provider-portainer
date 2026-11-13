@@ -34,41 +34,7 @@ func resourcePortainerStack() *schema.Resource {
 			Delete: schema.DefaultTimeout(10 * time.Minute),
 		},
 		Importer: &schema.ResourceImporter{
-			StateContext: func(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-				// "<endpoint_id>-<stack_id>-<deployment_type>"
-				// "<endpoint_id>-<stack_id>-<deployment_type>-<method>"
-
-				parts := strings.Split(d.Id(), "-")
-				if len(parts) < 3 {
-					return nil, fmt.Errorf("invalid ID format. Use '<endpoint_id>-<stack_id>-<deployment_type>[-<method>]'")
-				}
-
-				endpointID, err := strconv.Atoi(parts[0])
-				if err != nil {
-					return nil, fmt.Errorf("invalid endpoint_id in import ID: %s", parts[0])
-				}
-
-				stackID, err := strconv.Atoi(parts[1])
-				if err != nil {
-					return nil, fmt.Errorf("invalid stack_id in import ID: %s", parts[1])
-				}
-
-				deploymentType := parts[2]
-
-				if len(parts) > 3 {
-					if err := d.Set("method", parts[3]); err != nil {
-						return nil, err
-					}
-				}
-				if err := d.Set("endpoint_id", endpointID); err != nil {
-					return nil, err
-				}
-				if err := d.Set("deployment_type", deploymentType); err != nil {
-					return nil, err
-				}
-				d.SetId(fmt.Sprintf("%d", stackID))
-				return []*schema.ResourceData{d}, nil
-			},
+			StateContext: importStack,
 		},
 		Schema: map[string]*schema.Schema{
 			"deployment_type": {
@@ -274,6 +240,18 @@ func resourcePortainerStack() *schema.Resource {
 				Optional:    true,
 				Default:     false,
 				Description: "Whether to prune unused services/networks during stack update (default: false)",
+			},
+			"kubernetes_prune": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Computed:    true,
+				Description: "Kubernetes stacks only, Portainer 3.0 or later: whether a deployment deletes the Kubernetes resources an earlier deployment applied that the manifest no longer declares. Portainer prunes when this is left out; leaving it out keeps the choice Portainer has recorded and sends nothing, so older Portainer versions are unaffected. Changed in place for method 'repository'; for the other methods Portainer can only set it on create, so a change replaces the stack.",
+			},
+			"kubernetes_force_apply": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Computed:    true,
+				Description: "Kubernetes stacks only, Portainer 3.0 or later: whether a deployment deletes and recreates a Kubernetes resource whose immutable fields changed instead of failing on it. Recreating destroys the resource and everything tied to its identity. Portainer leaves it off when this is left out; leaving it out keeps the choice Portainer has recorded and sends nothing. Changed in place for method 'repository'; for the other methods a change replaces the stack.",
 			},
 			"repository_git_credential_id": {
 				Type:        schema.TypeInt,
@@ -612,6 +590,11 @@ func resourcePortainerStackRead(ctx context.Context, d *schema.ResourceData, met
 
 		Option struct {
 			Prune bool `json:"prune"`
+			// Portainer 3.0 and later. Older versions leave them out, and a
+			// nil KubernetesPrune means pruning is on, so neither is read
+			// back unless it is returned.
+			KubernetesPrune      *bool `json:"KubernetesPrune"`
+			KubernetesForceApply *bool `json:"KubernetesForceApply"`
 		} `json:"Option"`
 
 		GitConfig *struct {
@@ -774,6 +757,14 @@ func resourcePortainerStackRead(ctx context.Context, d *schema.ResourceData, met
 	}
 	if stack.Portainer.ResourceControl.ID != 0 {
 		fields["resource_control_id"] = stack.Portainer.ResourceControl.ID
+	}
+	if d.Get("deployment_type").(string) == "kubernetes" {
+		if stack.Option.KubernetesPrune != nil {
+			fields["kubernetes_prune"] = *stack.Option.KubernetesPrune
+		}
+		if stack.Option.KubernetesForceApply != nil {
+			fields["kubernetes_force_apply"] = *stack.Option.KubernetesForceApply
+		}
 	}
 	if err := setFields(d, fields); err != nil {
 		return diag.FromErr(err)
@@ -1170,6 +1161,7 @@ func resourcePortainerStackUpdate(ctx context.Context, d *schema.ResourceData, m
 		if v, ok := d.GetOk("filesystem_path"); ok {
 			payload["filesystemPath"] = v.(string)
 		}
+		addStackKubernetesOptions(d, payload, "kubernetesPrune", "kubernetesForceApply")
 		// Portainer 2.42 and later move the stack to another compose file in
 		// place. An older version ignores the field, which the response check
 		// below turns into an error instead of a plan that never settles.
@@ -1497,6 +1489,9 @@ func envNames(list []interface{}) []string {
 // and env_wo, or twice in env_wo: the stack would get both values and Read
 // could not tell which one belongs in state.
 func resourcePortainerStackCustomizeDiff(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	if err := stackKubernetesOptionsDiff(d); err != nil {
+		return err
+	}
 	writeOnly := map[string]bool{}
 	for _, name := range envNames(d.Get("env_wo").([]interface{})) {
 		if writeOnly[name] {
@@ -1510,6 +1505,58 @@ func resourcePortainerStackCustomizeDiff(_ context.Context, d *schema.ResourceDi
 		}
 	}
 	return nil
+}
+
+// stackKubernetesOptionKeys are the Portainer 3.0 Kubernetes apply policies.
+var stackKubernetesOptionKeys = []string{"kubernetes_prune", "kubernetes_force_apply"}
+
+// addStackKubernetesOptions adds the Kubernetes apply policies the
+// configuration sets to payload under pruneKey and forceApplyKey. One that is
+// left out is not sent: Portainer then keeps its recorded choice (or its
+// default on create), and a Portainer older than 3.0 never sees the field.
+func addStackKubernetesOptions(d *schema.ResourceData, payload map[string]interface{}, pruneKey, forceApplyKey string) {
+	if d.Get("deployment_type").(string) != "kubernetes" {
+		return
+	}
+	if v := configuredBool(d, "kubernetes_prune"); v != nil {
+		payload[pruneKey] = *v
+	}
+	if v := configuredBool(d, "kubernetes_force_apply"); v != nil {
+		payload[forceApplyKey] = *v
+	}
+}
+
+// stackKubernetesOptionsDiff rejects the Kubernetes apply policies on a
+// Docker stack and replaces a stack whose policies change when Portainer
+// cannot change them in place: only the git settings endpoint takes them, the
+// update of a string, file or url stack does not.
+func stackKubernetesOptionsDiff(d *schema.ResourceDiff) error {
+	deployment := d.Get("deployment_type").(string)
+	for _, key := range stackKubernetesOptionKeys {
+		if deployment != "" && deployment != "kubernetes" && diffConfigured(d, key) {
+			return fmt.Errorf("%s only applies to deployment_type = \"kubernetes\"", key)
+		}
+		// Left out of the configuration, the attribute keeps its state value,
+		// so a change here is always a configured one.
+		if d.Id() != "" && deployment == "kubernetes" && d.Get("method").(string) != "repository" && d.HasChange(key) {
+			if err := d.ForceNew(key); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// diffConfigured reports whether the configuration sets the top-level
+// attribute key. Without a raw configuration (unit tests) a true value counts
+// as set.
+func diffConfigured(d *schema.ResourceDiff, key string) bool {
+	config := d.GetRawConfig()
+	if config.IsNull() || !config.IsKnown() || !config.Type().IsObjectType() || !config.Type().HasAttribute(key) {
+		v, ok := d.Get(key).(bool)
+		return ok && v
+	}
+	return !config.GetAttr(key).IsNull()
 }
 
 // --------------------- STANDALONE ----------------------
@@ -1813,6 +1860,7 @@ func createStackK8sString(ctx context.Context, d *schema.ResourceData, client *A
 		"fromAppTemplate":  false,
 		"registries":       expandIntList(d.Get("registries").([]interface{})),
 	}
+	addStackKubernetesOptions(d, payload, "prune", "forceApply")
 	endpointID := d.Get("endpoint_id").(int)
 	url := fmt.Sprintf("%s/stacks/create/kubernetes/string?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)
@@ -1920,6 +1968,7 @@ func createStackK8sRepo(ctx context.Context, d *schema.ResourceData, client *API
 	}
 
 	payload["registries"] = expandIntList(d.Get("registries").([]interface{}))
+	addStackKubernetesOptions(d, payload, "prune", "forceApply")
 	endpointID := d.Get("endpoint_id").(int)
 	url := fmt.Sprintf("%s/stacks/create/kubernetes/repository?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)
@@ -1958,6 +2007,7 @@ func createStackK8sURL(ctx context.Context, d *schema.ResourceData, client *APIC
 		"composeFormat": d.Get("compose_format").(bool),
 		"registries":    expandIntList(d.Get("registries").([]interface{})),
 	}
+	addStackKubernetesOptions(d, payload, "prune", "forceApply")
 	endpointID := d.Get("endpoint_id").(int)
 	url := fmt.Sprintf("%s/stacks/create/kubernetes/url?endpointId=%d", client.Endpoint, endpointID)
 	jsonBody, _ := json.Marshal(payload)

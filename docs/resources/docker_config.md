@@ -56,8 +56,8 @@ Use `terraform destroy` to remove the config.
 
 ## Import
 
-Docker configs can be imported using a composite ID in the form `<endpoint_id>-<config_id>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<config_id>` is the Docker Swarm config ID (a string):
+Docker configs can be imported using a composite ID in the form `<endpoint_id>:<config_id>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<config_id>` is the Docker Swarm config ID (a string). The format from before v3.0.0, `<endpoint_id>-<config_id>`, is still accepted.
 
 ```shell
-terraform import portainer_docker_config.example 1-abc123
+terraform import portainer_docker_config.example 1:abc123
 ```

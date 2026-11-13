@@ -79,8 +79,8 @@ Use `terraform destroy` to remove the secret.
 
 ## Import
 
-Docker secrets can be imported using a composite ID in the form `<endpoint_id>-<secret_id>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<secret_id>` is the Docker Swarm secret ID (a string):
+Docker secrets can be imported using a composite ID in the form `<endpoint_id>:<secret_id>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<secret_id>` is the Docker Swarm secret ID (a string). The format from before v3.0.0, `<endpoint_id>-<secret_id>`, is still accepted.
 
 ```shell
-terraform import portainer_docker_secret.example 1-abc123
+terraform import portainer_docker_secret.example 1:abc123
 ```

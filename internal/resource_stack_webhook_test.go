@@ -52,6 +52,25 @@ func TestStackWebhookCreate_200OK(t *testing.T) {
 	}
 }
 
+// TestStackWebhookCreate_202Accepted: Portainer 3.0 answers 202 with a JSON
+// body instead of an empty 200.
+func TestStackWebhookCreate_202Accepted(t *testing.T) {
+	mock := NewMockServer(t)
+
+	webhookID := "accepted-uuid"
+	mock.On("POST", "/stacks/webhooks/"+webhookID, RespondJSON(http.StatusAccepted, map[string]interface{}{
+		"stackId": 4, "message": "Stack update triggered",
+	}))
+
+	r := resourcePortainerStackWebhook()
+	d := r.TestResourceData()
+	_ = d.Set("webhook_id", webhookID)
+
+	if err := rcCreate(r, d, mock.Client()); err != nil {
+		t.Fatalf("a 202 must count as success: %v", err)
+	}
+}
+
 // TestStackWebhookCreate_HTTPError verifies non-2xx propagates as error.
 func TestStackWebhookCreate_HTTPError(t *testing.T) {
 	mock := NewMockServer(t)

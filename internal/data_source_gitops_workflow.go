@@ -33,7 +33,7 @@ func dataSourceGitopsWorkflow() *schema.Resource {
 			"source_status": {
 				Type:        schema.TypeString,
 				Computed:    true,
-				Description: "Status of the source phase: `healthy`, `syncing`, `error`, `paused` or `unknown`.",
+				Description: "Status of the source phase: `healthy`, `syncing`, `error`, `paused`, `unknown` or, on the `reconcile` engine, `drifted`.",
 			},
 			"source_error": {
 				Type:        schema.TypeString,

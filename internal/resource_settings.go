@@ -13,7 +13,6 @@ import (
 type SettingsPayload struct {
 	EdgePortainerURL          string `json:"EdgePortainerURL,omitempty"`
 	AuthenticationMethod      int    `json:"authenticationMethod,omitempty"`
-	EnableTelemetry           bool   `json:"EnableTelemetry,omitempty"`
 	LogoURL                   string `json:"logoURL,omitempty"`
 	SnapshotInterval          string `json:"snapshotInterval,omitempty"`
 	TemplatesURL              string `json:"templatesURL,omitempty"`
@@ -175,12 +174,6 @@ type TLSConfig struct {
 	TLSSkipVerify bool   `json:"TLSSkipVerify,omitempty"`
 }
 
-// settingsReadOnlyDeprecation marks settings Portainer reports but no edition
-// lets PUT /settings change: the display flags are deprecated and
-// IsDockerDesktopExtension is detected at startup. A configured value was never
-// sent, so it showed as drift on every plan.
-const settingsReadOnlyDeprecation = "This attribute has no effect: Portainer does not accept it through the settings API. Remove it from the configuration; it will become read-only in the next major version."
-
 func resourceSettings() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceSettingsApply,
@@ -193,7 +186,6 @@ func resourceSettings() *schema.Resource {
 		Schema: map[string]*schema.Schema{
 			"edge_portainer_url":           {Type: schema.TypeString, Optional: true, Computed: true, Description: "Public URL of the Portainer instance that edge agents use to reach back for polling and tunneling."},
 			"authentication_method":        {Type: schema.TypeInt, Optional: true, Computed: true, Description: "Authentication method used by Portainer. 1 = internal, 2 = LDAP, 3 = OAuth."},
-			"enable_telemetry":             {Type: schema.TypeBool, Optional: true, Computed: true, Deprecated: settingsReadOnlyDeprecation, Description: "Whether anonymous usage telemetry is sent to Portainer. No effect: current Portainer has no such setting."},
 			"logo_url":                     {Type: schema.TypeString, Optional: true, Computed: true, Description: "URL of a custom logo displayed in the Portainer UI."},
 			"snapshot_interval":            {Type: schema.TypeString, Optional: true, Computed: true, Description: "Interval at which Portainer snapshots endpoints (e.g. \"5m\", \"1h\")."},
 			"templates_url":                {Type: schema.TypeString, Optional: true, Computed: true, Description: "URL of the JSON file with application templates used by the Portainer UI."},
@@ -224,24 +216,18 @@ func resourceSettings() *schema.Resource {
 			},
 			"display_donation_header": {
 				Type:        schema.TypeBool,
-				Optional:    true,
 				Computed:    true,
-				Deprecated:  settingsReadOnlyDeprecation,
-				Description: "Whether the donation header banner is shown in the Portainer UI.",
+				Description: "Whether the donation header banner is shown in the Portainer UI. Read-only: Portainer does not accept it through the settings API.",
 			},
 			"display_external_contributors": {
 				Type:        schema.TypeBool,
-				Optional:    true,
 				Computed:    true,
-				Deprecated:  settingsReadOnlyDeprecation,
-				Description: "Whether external contributors are displayed in the Portainer UI.",
+				Description: "Whether external contributors are displayed in the Portainer UI. Read-only: Portainer does not accept it through the settings API.",
 			},
 			"is_docker_desktop_extension": {
 				Type:        schema.TypeBool,
-				Optional:    true,
 				Computed:    true,
-				Deprecated:  settingsReadOnlyDeprecation,
-				Description: "Whether this Portainer instance runs as a Docker Desktop extension.",
+				Description: "Whether this Portainer instance runs as a Docker Desktop extension. Read-only: Portainer detects it at startup.",
 			},
 			"oauth_client_secret_wo": {
 				Type:          schema.TypeString,
@@ -653,7 +639,6 @@ func resourceSettingsApply(ctx context.Context, d *schema.ResourceData, meta int
 	payload := SettingsPayload{
 		EdgePortainerURL:          d.Get("edge_portainer_url").(string),
 		AuthenticationMethod:      d.Get("authentication_method").(int),
-		EnableTelemetry:           d.Get("enable_telemetry").(bool),
 		LogoURL:                   d.Get("logo_url").(string),
 		SnapshotInterval:          d.Get("snapshot_interval").(string),
 		TemplatesURL:              d.Get("templates_url").(string),
@@ -701,9 +686,8 @@ func resourceSettingsRead(ctx context.Context, d *schema.ResourceData, meta inte
 
 	d.SetId("portainer-settings")
 	fields := map[string]interface{}{
-		"edge_portainer_url":    result.EdgePortainerURL,
-		"authentication_method": result.AuthenticationMethod,
-		// "enable_telemetry": result.EnableTelemetry,
+		"edge_portainer_url":            result.EdgePortainerURL,
+		"authentication_method":         result.AuthenticationMethod,
 		"logo_url":                      result.LogoURL,
 		"snapshot_interval":             result.SnapshotInterval,
 		"templates_url":                 result.TemplatesURL,

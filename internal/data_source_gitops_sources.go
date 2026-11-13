@@ -26,6 +26,7 @@ func gitopsStatusSummarySchema(what string) *schema.Schema {
 				"error":   {Type: schema.TypeInt, Computed: true, Description: "Number of " + what + " whose last sync failed."},
 				"paused":  {Type: schema.TypeInt, Computed: true, Description: "Number of " + what + " whose syncing is paused."},
 				"unknown": {Type: schema.TypeInt, Computed: true, Description: "Number of " + what + " in an unknown status."},
+				"drifted": {Type: schema.TypeInt, Computed: true, Description: "Number of " + what + " whose deployed resources no longer match the source. Always 0 before Portainer Business Edition 3.0."},
 			},
 		},
 	}
@@ -37,12 +38,13 @@ type gitopsStatusSummary struct {
 	Error   int `json:"error"`
 	Paused  int `json:"paused"`
 	Unknown int `json:"unknown"`
+	Drifted int `json:"drifted"`
 }
 
 func (s gitopsStatusSummary) toList() []map[string]interface{} {
 	return []map[string]interface{}{{
 		"healthy": s.Healthy, "syncing": s.Syncing, "error": s.Error,
-		"paused": s.Paused, "unknown": s.Unknown,
+		"paused": s.Paused, "unknown": s.Unknown, "drifted": s.Drifted,
 	}}
 }
 

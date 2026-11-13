@@ -26,8 +26,8 @@ func TestDockerNodeUpdate_HappyPath(t *testing.T) {
 		t.Fatalf("Update/Create failed: %v", err)
 	}
 
-	if d.Id() != "1-node-abc" {
-		t.Errorf("expected ID %q, got %q", "1-node-abc", d.Id())
+	if d.Id() != "1:node-abc" {
+		t.Errorf("expected ID %q, got %q", "1:node-abc", d.Id())
 	}
 
 	post := mock.FindRequest("POST", "/endpoints/1/docker/nodes/node-abc/update")
@@ -107,8 +107,8 @@ func TestDockerNodeRead_HappyPath(t *testing.T) {
 	if got := d.Get("role"); got != "manager" {
 		t.Errorf("role: expected %q, got %v", "manager", got)
 	}
-	if d.Id() != "1-node-abc" {
-		t.Errorf("expected ID %q, got %q", "1-node-abc", d.Id())
+	if d.Id() != "1:node-abc" {
+		t.Errorf("expected ID %q, got %q", "1:node-abc", d.Id())
 	}
 }
 
@@ -160,7 +160,7 @@ func TestDockerNodeDelete_HappyPath(t *testing.T) {
 
 	r := resourceDockerNode()
 	d := r.TestResourceData()
-	d.SetId("1-node-abc")
+	d.SetId("1:node-abc")
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("node_id", "node-abc")
 
@@ -186,7 +186,7 @@ func TestDockerNodeDelete_HTTPError(t *testing.T) {
 
 	r := resourceDockerNode()
 	d := r.TestResourceData()
-	d.SetId("1-n1")
+	d.SetId("1:n1")
 	_ = d.Set("endpoint_id", 1)
 	_ = d.Set("node_id", "n1")
 

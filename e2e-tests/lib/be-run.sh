@@ -4,7 +4,9 @@
 # first, through portainer_licenses, since the other tests need it; each test
 # then applies, has to converge, and is destroyed.
 #
-# Needs TF_VAR_license_key (the GitHub secret PORTAINER_BE_LICENSE).
+# Needs TF_VAR_license_key (the GitHub secret PORTAINER_BE_LICENSE), and for
+# the Kubernetes tests TF_VAR_k8s_environment_id from be-k8s-setup.sh. The 3.0
+# tests run when PORTAINER_VERSION is 3.x.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -62,10 +64,66 @@ container_webhook() {
   docker rm -f e2e-be-webhook-target >/dev/null
 }
 
+alerting() {
+  terraform apply -auto-approve -input=false
+  bash ../lib/expect-converged.sh
+  local adopted custom template fields='{promqlTemplate, tiers, name}'
+  adopted="$(terraform output -raw adopted_id)"
+  custom="$(terraform output -raw custom_id)"
+  template="$(api GET "/observability/alerting/rules/${adopted}" | jq -c "${fields}")"
+  step "an update keeps what the configuration does not set"
+  terraform apply -auto-approve -input=false -var threshold=77
+  expect_plan 0 "the updated rules converge" -var threshold=77
+  [ "$(api GET "/observability/alerting/rules/${adopted}" | jq -c "${fields}")" = "${template}" ] ||
+    fail "the update of the adopted rule changed fields it does not configure"
+  terraform destroy -auto-approve -input=false -var threshold=77
+  step "destroy deletes the custom rule only"
+  api GET "/observability/alerting/rules/${adopted}" >/dev/null || fail "the adopted rule was deleted"
+  if api GET "/observability/alerting/rules/${custom}" >/dev/null 2>&1; then
+    fail "the custom rule was not deleted"
+  fi
+}
+
+gateway() {
+  terraform apply -auto-approve -input=false
+  bash ../lib/expect-converged.sh
+  step "a listener change updates the gateway in place"
+  terraform apply -auto-approve -input=false -var port=8080
+  expect_plan 0 "the updated gateway converges" -var port=8080
+  terraform destroy -auto-approve -input=false -var port=8080
+}
+
+d2k() {
+  terraform apply -auto-approve -input=false
+  bash ../lib/expect-converged.sh
+  step "a D2K environment imports by its environment ID"
+  terraform state rm portainer_d2k_environment.e2e >/dev/null
+  terraform import -input=false portainer_d2k_environment.e2e "$(api GET /endpoints | jq -r '.[] | select(.Name == "e2e-d2k") | .Id')"
+  expect_plan 0 "the imported D2K environment converges"
+  terraform destroy -auto-approve -input=false
+}
+
 run_test be_license license
 run_test be_settings_kube apply_converge_destroy
 run_test be_cloud_credentials cloud_credentials
 run_test be_endpoint_settings apply_converge_destroy
 run_test be_container_webhook container_webhook
+run_test be_alerting alerting
+run_test be_gitops apply_converge_destroy
+if [ -n "${TF_VAR_k8s_environment_id:-}" ]; then
+  run_test be_scoped_kubeconfig apply_converge_destroy
+fi
+
+if [[ "${PORTAINER_VERSION:-}" == 3.* ]]; then
+  if [ -z "${TF_VAR_k8s_environment_id:-}" ]; then
+    echo "❌ the 3.0 tests need TF_VAR_k8s_environment_id (e2e-tests/lib/be-k8s-setup.sh)"
+    exit 1
+  fi
+  run_test be_data_sources_30 apply_converge_destroy
+  run_test be_gateway gateway
+  run_test be_reconcile apply_converge_destroy
+  run_test be_d2k d2k
+  run_test be_kubernetes_30 apply_converge_destroy
+fi
 
 echo "✅ Business Edition tests passed."

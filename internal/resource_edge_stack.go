@@ -25,6 +25,7 @@ func resourceEdgeStack() *schema.Resource {
 		ReadContext:   resourceEdgeStackRead,
 		DeleteContext: resourceEdgeStackDelete,
 		UpdateContext: resourceEdgeStackUpdate,
+		CustomizeDiff: resourceEdgeStackCustomizeDiff,
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(15 * time.Minute),
 			Update: schema.DefaultTimeout(15 * time.Minute),
@@ -131,6 +132,18 @@ func resourceEdgeStack() *schema.Resource {
 				Optional:    true,
 				Elem:        &schema.Schema{Type: schema.TypeInt},
 				Description: "List of Portainer registry IDs used to pull images for this Edge stack.",
+			},
+			"kubernetes_prune": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Computed:    true,
+				Description: "Kubernetes deployments (deployment_type = 1) only, Portainer 3.0 or later: whether a deployment deletes the Kubernetes resources an earlier deployment applied that the manifest no longer declares. Portainer prunes when this is left out; leaving it out keeps the choice Portainer has recorded and sends nothing, so older Portainer versions are unaffected. Not sent for a helm_config stack.",
+			},
+			"kubernetes_force_apply": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Computed:    true,
+				Description: "Kubernetes deployments (deployment_type = 1) only, Portainer 3.0 or later: whether a deployment deletes and recreates a Kubernetes resource whose immutable fields changed instead of failing on it. Recreating destroys the resource and everything tied to its identity. Portainer leaves it off when this is left out; leaving it out keeps the choice Portainer has recorded and sends nothing. Not sent for a helm_config stack.",
 			},
 			"use_manifest_namespaces": {
 				Type:        schema.TypeBool,
@@ -290,6 +303,43 @@ func edgeStackHelmConfig(d *schema.ResourceData) (map[string]interface{}, bool) 
 	return config, true
 }
 
+// edgeStackDeployerOptions returns the DeployerOptions payload carrying the
+// Kubernetes apply policies the configuration sets, or nil when it sets none.
+// Nothing is sent then: Portainer keeps its recorded choice (or its default on
+// create), and a Portainer older than 3.0 never sees the fields. The Docker
+// options in the same object are not managed here, so it is only sent for a
+// Kubernetes deployment.
+func edgeStackDeployerOptions(d *schema.ResourceData) map[string]interface{} {
+	if d.Get("deployment_type").(int) != 1 {
+		return nil
+	}
+	opts := map[string]interface{}{}
+	if v := configuredBool(d, "kubernetes_prune"); v != nil {
+		opts["KubernetesPrune"] = *v
+	}
+	if v := configuredBool(d, "kubernetes_force_apply"); v != nil {
+		opts["KubernetesForceApply"] = *v
+	}
+	if len(opts) == 0 {
+		return nil
+	}
+	return opts
+}
+
+// resourceEdgeStackCustomizeDiff rejects the Kubernetes apply policies on a
+// Docker Compose edge stack, where Portainer ignores them.
+func resourceEdgeStackCustomizeDiff(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	if !d.NewValueKnown("deployment_type") || d.Get("deployment_type").(int) == 1 {
+		return nil
+	}
+	for _, key := range []string{"kubernetes_prune", "kubernetes_force_apply"} {
+		if diffConfigured(d, key) {
+			return fmt.Errorf("%s only applies to deployment_type = 1 (Kubernetes)", key)
+		}
+	}
+	return nil
+}
+
 func buildEnvVars(d *schema.ResourceData) []map[string]string {
 	envVars := []map[string]string{}
 	if envMap, ok := d.GetOk("environment"); ok {
@@ -359,6 +409,9 @@ func resourceEdgeStackCreate(ctx context.Context, d *schema.ResourceData, meta i
 			"useManifestNamespaces": useManifest,
 			"registries":            registries,
 		}
+		if opts := edgeStackDeployerOptions(d); opts != nil {
+			payload["deployerOptions"] = opts
+		}
 		if envMap, ok := d.GetOk("environment"); ok {
 			envVars := []map[string]string{}
 			for k, v := range envMap.(map[string]interface{}) {
@@ -391,6 +444,9 @@ func resourceEdgeStackCreate(ctx context.Context, d *schema.ResourceData, meta i
 		_ = writer.WriteField("Registries", toJSONString(registries))
 		_ = writer.WriteField("PrePullImage", strconv.FormatBool(d.Get("pre_pull_image").(bool)))
 		_ = writer.WriteField("RetryDeploy", strconv.FormatBool(d.Get("retry_deploy").(bool)))
+		if opts := edgeStackDeployerOptions(d); opts != nil {
+			_ = writer.WriteField("DeployerOptions", toJSONString(opts))
+		}
 
 		part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 		if err != nil {
@@ -456,6 +512,9 @@ func resourceEdgeStackCreate(ctx context.Context, d *schema.ResourceData, meta i
 		}
 		if sourceID != 0 {
 			payload["sourceID"] = sourceID
+		}
+		if opts := edgeStackDeployerOptions(d); opts != nil {
+			payload["deployerOptions"] = opts
 		}
 
 		if relPath, ok := d.GetOk("relative_path"); ok && relPath.(string) != "" {
@@ -543,6 +602,9 @@ func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta i
 		if v, ok := d.GetOk("stack_file_content"); ok {
 			payload["stackFileContent"] = v.(string)
 		}
+		if opts := edgeStackDeployerOptions(d); opts != nil {
+			payload["deployerOptions"] = opts
+		}
 
 		if err := doJSON(ctx, client, http.MethodPut, fmt.Sprintf("%s/edge_stacks/%s", client.Endpoint, d.Id()), payload, nil); err != nil {
 			return diag.FromErr(fmt.Errorf("failed to update edge stack: %w", err))
@@ -568,6 +630,9 @@ func resourceEdgeStackUpdate(ctx context.Context, d *schema.ResourceData, meta i
 			"rePullImage":    d.Get("pull_image").(bool),
 			"registries":     toIntSlice(d.Get("registries").([]interface{})),
 			"retryDeploy":    d.Get("retry_deploy").(bool),
+		}
+		if opts := edgeStackDeployerOptions(d); opts != nil {
+			payload["deployerOptions"] = opts
 		}
 
 		if relPath, ok := d.GetOk("relative_path"); ok && relPath.(string) != "" {
@@ -681,6 +746,12 @@ func resourceEdgeStackRead(ctx context.Context, d *schema.ResourceData, meta int
 			ForcePullImage bool   `json:"ForcePullImage"`
 			ForceUpdate    bool   `json:"ForceUpdate"`
 		} `json:"AutoUpdate,omitempty"`
+		// Portainer 3.0 and later. Older versions leave it out, and a nil
+		// Prune means pruning is on, so neither is read back unless returned.
+		KubernetesOptions *struct {
+			Prune      *bool `json:"Prune"`
+			ForceApply *bool `json:"ForceApply"`
+		} `json:"KubernetesOptions"`
 		HelmConfig *struct {
 			ChartURL     string `json:"ChartURL"`
 			ChartName    string `json:"ChartName"`
@@ -736,6 +807,19 @@ func resourceEdgeStackRead(ctx context.Context, d *schema.ResourceData, meta int
 	if len(envMap) > 0 {
 		if err := d.Set("environment", envMap); err != nil {
 			return diag.FromErr(err)
+		}
+	}
+
+	if stack.DeploymentType == 1 && stack.KubernetesOptions != nil {
+		if stack.KubernetesOptions.Prune != nil {
+			if err := d.Set("kubernetes_prune", *stack.KubernetesOptions.Prune); err != nil {
+				return diag.FromErr(err)
+			}
+		}
+		if stack.KubernetesOptions.ForceApply != nil {
+			if err := d.Set("kubernetes_force_apply", *stack.KubernetesOptions.ForceApply); err != nil {
+				return diag.FromErr(err)
+			}
 		}
 	}
 

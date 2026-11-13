@@ -186,6 +186,10 @@ func TestWriteOnly_Restore(t *testing.T) {
 	if got := req.Headers.Get("X-Setup-Token"); got != "setup-token" {
 		t.Errorf("X-Setup-Token: expected the write-only value, got %q", got)
 	}
+	// The setup token must not displace the API key.
+	if req.Headers.Get("X-API-Key") == "" {
+		t.Error("the API key header must still be sent alongside the setup token")
+	}
 	body := decodeBody(t, mock, "POST", "/restore")
 	if body["Password"] != "backup-pass" || body["FileContent"] != archive {
 		t.Errorf("expected the write-only archive and password, got %v", body)

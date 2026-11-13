@@ -89,8 +89,8 @@ func TestEndpointGroupAccessCov3_Create_TeamAndUser(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 	// hasTeam wins the ID-building branch.
-	if d.Id() != "7/team/11" {
-		t.Errorf("expected ID %q, got %q", "7/team/11", d.Id())
+	if d.Id() != "7:team:11" {
+		t.Errorf("expected ID %q, got %q", "7:team:11", d.Id())
 	}
 
 	put := mock.FindRequest("PUT", "/endpoint_groups/7")

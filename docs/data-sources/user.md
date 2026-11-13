@@ -47,3 +47,5 @@ resource "portainer_team_membership" "assign_dev" {
 |--------|---------|----------------------------|
 | `id`   | string  | ID of the Portainer user.  |
 | `role` | integer | Role of the user. `1` = admin, `2` = standard user. |
+| `created_authentication_method` | string | Authentication method used when the user was created: `internal`, `ldap` or `oauth`. Portainer 3.0+; empty on older releases. |
+| `last_authentication_method` | string | Authentication method used at the user's last login: `internal`, `ldap` or `oauth`. Portainer 3.0+; empty on older releases. |

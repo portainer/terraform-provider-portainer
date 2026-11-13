@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -33,7 +34,7 @@ func dataSourceSystem() *schema.Resource {
 			"server_edition": {
 				Type:        schema.TypeString,
 				Computed:    true,
-				Description: "Portainer edition, `CE` or `BE`.",
+				Description: "Portainer edition as the server reports it: `CE`, or `EE` for Business Edition.",
 			},
 			"database_version": {
 				Type:        schema.TypeString,
@@ -75,6 +76,16 @@ func dataSourceSystem() *schema.Resource {
 				Computed:    true,
 				Description: "Total number of nodes across every environment, which is what Portainer licences against.",
 			},
+			"addons_available": {
+				Type:        schema.TypeBool,
+				Computed:    true,
+				Description: "Whether addons can be installed on this instance.",
+			},
+			"addons_availability": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Why addons can or cannot be installed: `available`, `kubernetes-required`, `fips-mode` or `encryption-key-required`. Servers before 3.0 report no reason, only `available` or `unavailable`; empty when the server reports nothing.",
+			},
 			"admin_initialized": {
 				Type:        schema.TypeBool,
 				Computed:    true,
@@ -110,9 +121,10 @@ func dataSourceSystemRead(ctx context.Context, d *schema.ResourceData, meta inte
 	}
 
 	var info struct {
-		Agents     int    `json:"agents"`
-		EdgeAgents int    `json:"edgeAgents"`
-		Platform   string `json:"platform"`
+		Agents          int                `json:"agents"`
+		EdgeAgents      int                `json:"edgeAgents"`
+		Platform        string             `json:"platform"`
+		AddonsAvailable addonsAvailability `json:"addonsAvailable"`
 	}
 	if err := doJSON(ctx, client, http.MethodGet, client.Endpoint+"/system/info", nil, &info); err != nil {
 		return diag.FromErr(fmt.Errorf("failed to read the Portainer system info: %w", err))
@@ -134,23 +146,56 @@ func dataSourceSystemRead(ctx context.Context, d *schema.ResourceData, meta inte
 	}
 
 	if err := setFields(d, map[string]interface{}{
-		"instance_id":       status.InstanceID,
-		"version":           status.Version,
-		"server_version":    version.ServerVersion,
-		"server_edition":    version.ServerEdition,
-		"database_version":  version.DatabaseVersion,
-		"latest_version":    version.LatestVersion,
-		"update_available":  version.UpdateAvailable,
-		"version_support":   version.VersionSupport,
-		"agents":            info.Agents,
-		"edge_agents":       info.EdgeAgents,
-		"platform":          info.Platform,
-		"nodes":             nodes.Nodes,
-		"admin_initialized": adminInitialized,
+		"instance_id":         status.InstanceID,
+		"version":             status.Version,
+		"server_version":      version.ServerVersion,
+		"server_edition":      version.ServerEdition,
+		"database_version":    version.DatabaseVersion,
+		"latest_version":      version.LatestVersion,
+		"update_available":    version.UpdateAvailable,
+		"version_support":     version.VersionSupport,
+		"agents":              info.Agents,
+		"edge_agents":         info.EdgeAgents,
+		"platform":            info.Platform,
+		"addons_available":    info.AddonsAvailable == addonsAvailable,
+		"addons_availability": string(info.AddonsAvailable),
+		"nodes":               nodes.Nodes,
+		"admin_initialized":   adminInitialized,
 	}); err != nil {
 		return diag.FromErr(err)
 	}
 
 	d.SetId("portainer-system-" + status.InstanceID)
+	return nil
+}
+
+// addonsAvailable is the addonsAvailability of an instance addons can be
+// installed on.
+const addonsAvailable = "available"
+
+// addonsAvailability is system/info's addonsAvailable. Portainer 3.0 turned it
+// from a bool into a string naming the failing gate (`kubernetes-required`,
+// `fips-mode`, `encryption-key-required`); a 2.x bool is mapped to
+// `available` or `unavailable`, so both decode into the same value.
+type addonsAvailability string
+
+func (a *addonsAvailability) UnmarshalJSON(raw []byte) error {
+	if string(raw) == "null" {
+		*a = ""
+		return nil
+	}
+	var available bool
+	if err := json.Unmarshal(raw, &available); err == nil {
+		*a = "unavailable"
+		if available {
+			*a = addonsAvailable
+		}
+		return nil
+	}
+	var reason string
+	if err := json.Unmarshal(raw, &reason); err != nil {
+		return fmt.Errorf("addonsAvailable: expected a bool or a string, got %s", raw)
+	}
+	*a = addonsAvailability(reason)
 	return nil
 }

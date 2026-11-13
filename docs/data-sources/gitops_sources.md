@@ -41,6 +41,6 @@ output "sources_needing_attention" {
 | Name      | Type | Description                                                                                                                                                        |
 |-----------|------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `sources` | list | Sources matching the query. Each entry has `id`, `name`, `url`, `type`, `status`, `status_error`, `interval`, `last_sync`, `used_by` and `environments`.             |
-| `summary` | list | Exactly one element with the counts `healthy`, `syncing`, `error`, `paused` and `unknown`.                                                                          |
+| `summary` | list | Exactly one element with the counts `healthy`, `syncing`, `error`, `paused`, `unknown` and `drifted` (always 0 before Portainer BE 3.0).                                                                          |
 
 The summary comes from its own Portainer endpoint and is **not** filtered by the arguments above — it always describes every source.

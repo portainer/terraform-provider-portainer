@@ -1,8 +1,11 @@
 name: Business Edition E2E Tests
 
 # Tests what only Portainer Business Edition accepts (license, disable_kube_*,
-# cloud credentials, change windows, container webhooks) against a fresh
-# portainer-ee. It needs a license in the repository secret
+# cloud credentials, change windows, container webhooks, alerting, GitOps,
+# scoped kubeconfigs) against a fresh portainer-ee, 2.45 LTS and 3.0 - on 3.0
+# also D2K, the Gateway API, the reconcile engine and the 3.0 data sources,
+# with a k3d cluster connected through an Edge Agent. It needs a license in
+# the repository secret
 # PORTAINER_BE_LICENSE; without it (forks, Dependabot, no license yet) the
 # tests are skipped and the workflow still succeeds.
 
@@ -34,24 +37,32 @@ jobs:
           fi
 
   business-edition:
-    name: Business Edition
+    name: Business Edition ${{ matrix.portainer }}
     needs: license
     if: needs.license.outputs.present == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        portainer: ["2.45.3", "3.0.1"]
     env:
-      PORTAINER_VERSION: "2.45.3"
+      PORTAINER_VERSION: ${{ matrix.portainer }}
     steps:
       - name: ⬇️ Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: 🧰 E2E setup (provider and Terraform, no Portainer CE)
+      - name: 🧰 E2E setup (provider, Terraform and k3d, no Portainer CE)
         uses: ./.github/actions/e2e-setup
         with:
+          kubernetes: "true"
           start-portainer: "false"
           portainer-version: ${{ env.PORTAINER_VERSION }}
 
       - name: 🐳 Start Portainer Business Edition
         run: bash e2e-tests/lib/be-setup.sh >/dev/null
+
+      - name: ☸️ Connect k3d through an Edge Agent
+        run: bash e2e-tests/lib/be-k8s-setup.sh >/dev/null
 
       - name: 🧪 Business Edition tests
         env:

@@ -43,8 +43,8 @@ func TestEndpointGroupAccessCreate_Team_HappyPath(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	if d.Id() != "4/team/11" {
-		t.Errorf("expected ID %q, got %q", "4/team/11", d.Id())
+	if d.Id() != "4:team:11" {
+		t.Errorf("expected ID %q, got %q", "4:team:11", d.Id())
 	}
 
 	put := mock.FindRequest("PUT", "/endpoint_groups/4")
@@ -93,8 +93,8 @@ func TestEndpointGroupAccessCreate_User_HappyPath(t *testing.T) {
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
-	if d.Id() != "2/user/5" {
-		t.Errorf("expected ID %q, got %q", "2/user/5", d.Id())
+	if d.Id() != "2:user:5" {
+		t.Errorf("expected ID %q, got %q", "2:user:5", d.Id())
 	}
 
 	put := mock.FindRequest("PUT", "/endpoint_groups/2")
@@ -138,7 +138,7 @@ func TestEndpointGroupAccessRead_Team_HappyPath(t *testing.T) {
 
 	r := resourceEndpointGroupAccess()
 	d := r.TestResourceData()
-	d.SetId("4/team/11")
+	d.SetId("4:team:11")
 	_ = d.Set("endpoint_group_id", 4)
 	_ = d.Set("team_id", 11)
 
@@ -191,7 +191,7 @@ func TestEndpointGroupAccessRead_NotPresentClearsID(t *testing.T) {
 
 	r := resourceEndpointGroupAccess()
 	d := r.TestResourceData()
-	d.SetId("4/team/11")
+	d.SetId("4:team:11")
 	_ = d.Set("endpoint_group_id", 4)
 	_ = d.Set("team_id", 11)
 
@@ -221,7 +221,7 @@ func TestEndpointGroupAccessDelete_HappyPath(t *testing.T) {
 
 	r := resourceEndpointGroupAccess()
 	d := r.TestResourceData()
-	d.SetId("4/team/11")
+	d.SetId("4:team:11")
 	_ = d.Set("endpoint_group_id", 4)
 	_ = d.Set("team_id", 11)
 

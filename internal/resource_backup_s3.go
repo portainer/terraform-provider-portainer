@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -112,6 +113,12 @@ func resourceBackupS3Create(ctx context.Context, d *schema.ResourceData, meta in
 	return nil
 }
 
+// isRedacted reports a secret the API no longer returns: empty, or masked
+// with asterisks.
+func isRedacted(s string) bool {
+	return strings.Trim(s, "*") == ""
+}
+
 func resourceBackupS3Read(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
@@ -134,7 +141,9 @@ func resourceBackupS3Read(ctx context.Context, d *schema.ResourceData, meta inte
 	}
 	// A secret given write-only is not read back: storing it is what the
 	// write-only twin avoids, and the configuration has no value to compare.
-	if d.Get("secret_access_key_wo_version").(int) == 0 {
+	// Portainer 3.0 redacts both secrets in this response; a redacted value
+	// keeps the one in state rather than showing as a change on every plan.
+	if d.Get("secret_access_key_wo_version").(int) == 0 && !isRedacted(result.SecretAccessKey) {
 		if err := d.Set("secret_access_key", result.SecretAccessKey); err != nil {
 			return diag.FromErr(err)
 		}
@@ -148,7 +157,7 @@ func resourceBackupS3Read(ctx context.Context, d *schema.ResourceData, meta inte
 	if err := d.Set("s3_compatible_host", result.S3CompatibleHost); err != nil {
 		return diag.FromErr(err)
 	}
-	if d.Get("password_wo_version").(int) == 0 {
+	if d.Get("password_wo_version").(int) == 0 && !isRedacted(result.Password) {
 		if err := d.Set("password", result.Password); err != nil {
 			return diag.FromErr(err)
 		}

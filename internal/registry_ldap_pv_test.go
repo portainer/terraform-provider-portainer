@@ -227,7 +227,7 @@ func TestKubernetesPersistentVolume_SetsReclaimPolicy(t *testing.T) {
 	if err := rcCreate(r, d, mock.Client()); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
-	if d.Id() != "2/pv-data" {
+	if d.Id() != "2:pv-data" {
 		t.Errorf("id: got %q", d.Id())
 	}
 	if got := d.Get("phase"); got != "Bound" {

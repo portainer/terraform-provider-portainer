@@ -49,8 +49,8 @@ resource "portainer_endpoint_group_access" "dev_team_access" {
 
 ## Import
 
-Access entries can be imported as `<endpoint_group_id>/team/<team_id>` or `<endpoint_group_id>/user/<user_id>`:
+Access entries can be imported as `<endpoint_group_id>:team:<team_id>` or `<endpoint_group_id>:user:<user_id>`. The format from before v3.0.0, `<endpoint_group_id>/team/<team_id>`, is still accepted.
 
 ```shell
-terraform import portainer_endpoint_group_access.example 2/team/4
+terraform import portainer_endpoint_group_access.example 2:team:4
 ```

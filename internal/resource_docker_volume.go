@@ -69,13 +69,9 @@ func resourceDockerVolume() *schema.Resource {
 		UpdateContext: nil,
 		Importer: &schema.ResourceImporter{
 			StateContext: func(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-				// ID in format: <endpoint_id>-<volume_name>
-				id := d.Id()
-				var endpointID int
-				var name string
-				n, err := fmt.Sscanf(id, "%d-%s", &endpointID, &name)
-				if err != nil || n != 2 {
-					return nil, fmt.Errorf("invalid import ID format. Expected '<endpoint_id>-<volume_name>'")
+				endpointID, name, err := splitEndpointImportID(d.Id(), "<endpoint_id>:<volume_name>")
+				if err != nil {
+					return nil, err
 				}
 				if err := d.Set("endpoint_id", endpointID); err != nil {
 					return nil, err
@@ -83,7 +79,7 @@ func resourceDockerVolume() *schema.Resource {
 				if err := d.Set("name", name); err != nil {
 					return nil, err
 				}
-				d.SetId(fmt.Sprintf("%d-%s", endpointID, name))
+				d.SetId(fmt.Sprintf("%d:%s", endpointID, name))
 				return []*schema.ResourceData{d}, nil
 			},
 		},
@@ -100,12 +96,14 @@ func resourceDockerVolume() *schema.Resource {
 				ForceNew:    true,
 				Description: "Name of the Docker volume.",
 			},
+			// Computed rather than defaulting to "local": the engine picks its
+			// default driver, and on a D2K environment that is "d2k".
 			"driver": {
 				Type:        schema.TypeString,
 				Optional:    true,
+				Computed:    true,
 				ForceNew:    true,
-				Default:     "local",
-				Description: "Driver used by the Docker volume (e.g., local, nfs, btrfs).",
+				Description: "Driver used by the Docker volume (e.g., local, nfs, btrfs). Left unset, the engine's default driver is used: `local` on Docker, `d2k` on a D2K environment.",
 			},
 			"driver_opts": {
 				Type:        schema.TypeMap,
@@ -241,7 +239,12 @@ func resourceDockerVolumeCreate(ctx context.Context, d *schema.ResourceData, met
 		name = volume.Name
 	}
 
-	d.SetId(fmt.Sprintf("%d-%s", endpointID, name))
+	d.SetId(fmt.Sprintf("%d:%s", endpointID, name))
+	if response.Driver != "" {
+		if err := d.Set("driver", response.Driver); err != nil {
+			return diag.FromErr(err)
+		}
+	}
 
 	if response.Portainer.ResourceControl.ID != 0 {
 		if err := d.Set("resource_control_id", response.Portainer.ResourceControl.ID); err != nil {
@@ -289,7 +292,7 @@ func resourceDockerVolumeRead(ctx context.Context, d *schema.ResourceData, meta 
 		return diag.FromErr(err)
 	}
 
-	d.SetId(fmt.Sprintf("%d-%s", endpointID, result.Name))
+	d.SetId(fmt.Sprintf("%d:%s", endpointID, result.Name))
 
 	if result.Portainer.ResourceControl.ID != 0 {
 		if err := d.Set("resource_control_id", result.Portainer.ResourceControl.ID); err != nil {

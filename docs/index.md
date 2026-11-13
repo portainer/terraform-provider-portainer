@@ -135,6 +135,7 @@ provider "portainer" {
 | `portainer_addon_access` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_addon_config` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_addon_repair` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_addon_catalog_refresh` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_settings_default_registry` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_settings_additional_functionality` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_endpoint_trust` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
@@ -145,12 +146,12 @@ provider "portainer" {
 | `portainer_omni_node_reboot` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_pod_security_rule` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_gitops_workflow` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_gitops_workflow_reconcile` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_cluster_upgrade` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_user_memberships_sync` | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_chat`                               | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_cloud_credentials`                  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_cloud_provider_provision`           | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
-| `portainer_compose_convert`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_deploy`                             | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_check`                              | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_container_exec`                     | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
@@ -176,6 +177,8 @@ provider "portainer" {
 | `portainer_endpoint_snapshot`                  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_endpoints_edge_generate_key`        | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_environment`                        | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_d2k_environment`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_kubesolo_offline_bundle`            | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_application`             | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_clusterrole`             | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_clusterrolebinding`      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
@@ -184,6 +187,9 @@ provider "portainer" {
 | `portainer_kubernetes_delete_object`           | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_helm`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_ingress`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_kubernetes_gateway`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_kubernetes_gateway_http_route`      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
+| `portainer_kubernetes_scoped_kubeconfig`       | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_ingresscontrollers`      | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_job`                     | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_namespace`               | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
@@ -201,10 +207,6 @@ provider "portainer" {
 | `portainer_kubernetes_deployment_scale`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_kubernetes_deployment_rollback`                 | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_licenses`                           | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
-| `portainer_open_amt`                           | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
-| `portainer_open_amt_activate`                  | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
-| `portainer_open_amt_devices_action`            | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
-| `portainer_open_amt_devices_features`          | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_registry`                           | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_registry_access`                    | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
 | `portainer_resource_control`                   | ![Done](https://img.shields.io/badge/status-done-brightgreen)         |
@@ -250,6 +252,9 @@ provider "portainer" {
 | `portainer_user`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_team`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_environment`       | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubesolo_versions` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubesolo_offline_bundles` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubesolo_config`   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_endpoint_group`    | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_tag`               | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_registry`          | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
@@ -270,6 +275,9 @@ provider "portainer" {
 | `portainer_kubernetes_crd`    | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_manifest_dry_run`   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_ingress_classes`    | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_gateway_classes`    | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_scoped_kubeconfigs` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_kubernetes_namespace_access`   | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_resource_quotas`    | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_replicasets`        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_kubernetes_deployments`        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
@@ -287,18 +295,21 @@ provider "portainer" {
 | `portainer_gitops_sources`                | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_gitops_workflow`               | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_gitops_workflows`              | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_gitops_workflow_deployment_resources` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_gitops_source_connection`      | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_registry_connection` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_ldap_check`        | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_backup_azure_connection` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_addons` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_addon_chart_source` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_addon_catalog` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_edge_mtls_ca_certificate` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_edge_mtls_certificate` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_endpoint_mtls_certificate` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_endpoint_mtls_certificate_error` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_edge_waiting_room` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_alerting_rule_environments` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_alerting_rules` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_auto_updates` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_omni_machines` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_omni_machine` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
@@ -335,6 +346,7 @@ provider "portainer" {
 | `portainer_policy_conflicts` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_policy_observability_test` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_alerting_connectivity` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
+| `portainer_observability_environment` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_environment_logs` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_environment_metrics` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 | `portainer_docker_snapshot` | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
@@ -388,13 +400,12 @@ Podman works out of the box with most `portainer_docker_*` Terraform resources.
 > ⚠️ **Note**:  
 > Podman **does not support Docker Swarm** – any swarm-based features are **not compatible**.
 
-### Docker Compose to Kubernetes Conversion
+### Docker to Kubernetes with D2K
 
-You can now use the `portainer_compose_convert` resource to convert Docker Compose YAML directly into Kubernetes manifests using [Kompose](https://github.com/kubernetes/kompose).
+The `portainer_d2k_environment` resource (Portainer Business Edition 3.0 or later) installs d2k in a namespace of a Kubernetes environment and registers a Docker (or Docker Swarm) environment whose Docker API d2k serves on the cluster, so the existing `portainer_docker_*` and `portainer_stack` resources deploy Docker workloads onto Kubernetes directly.
 
-This is especially useful when migrating applications from Docker standalone or Swarm mode to Kubernetes – while keeping your deployment definitions fully managed as code in Terraform.
-> ℹ️ The resource uses Kompose internally and supports both the installed CLI binary.
-See full documentation: [docs/resources/compose_convert.md](https://github.com/portainer/terraform-provider-portainer/tree/main/docs/resources/compose_convert.md)
+It replaces the removed `portainer_compose_convert` (Kompose) resource. To convert an existing stack into Kubernetes manifests or a Helm chart instead, use the `portainer_stack_conversion` data source (Business Edition).
+See full documentation: [portainer_d2k_environment](https://registry.terraform.io/providers/portainer/portainer/latest/docs/resources/d2k_environment)
 
 ---
 

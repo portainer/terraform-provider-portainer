@@ -46,7 +46,9 @@ func resourcePortainerStackWebhookCreate(ctx context.Context, d *schema.Resource
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+	// Portainer 3.0 answers 202 with a JSON body ({stackId, message}), older
+	// versions 200 or 204.
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
 		return diag.FromErr(fmt.Errorf("failed to trigger webhook, status %d: %s", resp.StatusCode, string(body)))
 	}

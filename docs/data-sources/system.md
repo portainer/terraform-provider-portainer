@@ -45,6 +45,8 @@ This data source takes no arguments.
 | `edge_agents`       | number | Number of Edge agents connected.                                                                     |
 | `platform`          | string | Container platform Portainer itself runs on.                                                         |
 | `nodes`             | number | Total nodes across every environment, which is what Portainer licences against.                      |
+| `addons_available`  | bool   | Whether addons can be installed on this instance.                                                    |
+| `addons_availability` | string | Why addons can or cannot be installed: `available`, `kubernetes-required`, `fips-mode` or `encryption-key-required` (3.0). Servers before 3.0 only report `available` or `unavailable`. |
 | `admin_initialized` | bool   | Whether an administrator account exists. False means the instance is still awaiting initial setup.   |
 
 `/status` is Portainer's deprecated alias of `/system/status` and returns the same object, so only the current path is called.

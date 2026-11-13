@@ -103,7 +103,7 @@ terraform destroy
 | --------------------- | ------------- | ----------- | ---------------------------------------------------------------------- |
 | `endpoint_id`         | `int`         | ✅ yes       | ID of the Portainer environment (endpoint)                             |
 | `name`                | `string`      | ✅ yes       | Name of the Docker volume                                              |
-| `driver`              | `string`      | ✅ yes       | Volume driver to use (e.g., `local`, `custom`)                         |
+| `driver`              | `string`      | 🚫 no        | Volume driver to use (e.g., `local`, `custom`). Left unset, the engine's default driver is used: `local` on Docker, `d2k` on a D2K environment |
 | `driver_opts`         | `map(string)` | 🚫 optional | Driver-specific options (e.g., `device`, `type`, `o`)                  |
 | `labels`              | `map(string)` | 🚫 optional | Key-value metadata applied to the volume                               |
 | `cluster_volume_spec` | `block`       | 🚫 optional | Cluster-level volume configuration for scheduling, secrets, and access |
@@ -158,8 +158,8 @@ terraform destroy
 
 ## Import
 
-Docker volumes can be imported using a composite ID in the form `<endpoint_id>-<volume_name>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<volume_name>` is the Docker volume name:
+Docker volumes can be imported using a composite ID in the form `<endpoint_id>:<volume_name>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<volume_name>` is the Docker volume name. The format from before v3.0.0, `<endpoint_id>-<volume_name>`, is still accepted.
 
 ```shell
-terraform import portainer_docker_volume.example 1-my-volume
+terraform import portainer_docker_volume.example 1:my-volume
 ```

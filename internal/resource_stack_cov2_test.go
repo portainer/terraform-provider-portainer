@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -269,15 +270,21 @@ func TestStackCov2_Read_AccessControlFetchError(t *testing.T) {
 	}
 }
 
-// TestStackCov2_Import_NoMethod covers the import path with the 3-part form
-// "<endpoint>-<stack>-<deployment>" (no method segment), so the optional
-// d.Set("method", ...) branch is skipped.
+// TestStackCov2_Import_NoMethod covers the 3-part form
+// "<endpoint>-<stack>-<deployment>" (no method segment): a stack deployed
+// from Git is imported with method "repository", since method is required
+// and Read depends on it.
 func TestStackCov2_Import_NoMethod(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/stacks/21", RespondJSON(http.StatusOK, map[string]interface{}{
+		"Id": 21, "gitConfig": map[string]interface{}{"URL": "https://example.com/repo.git"},
+	}))
+
 	r := resourcePortainerStack()
 	d := r.TestResourceData()
 	d.SetId("7-21-swarm")
 
-	out, err := r.Importer.StateContext(context.Background(), d, nil)
+	out, err := r.Importer.StateContext(context.Background(), d, mock.Client())
 	if err != nil {
 		t.Fatalf("import failed: %v", err)
 	}
@@ -290,6 +297,26 @@ func TestStackCov2_Import_NoMethod(t *testing.T) {
 	}
 	if got := rd.Get("deployment_type"); got != "swarm" {
 		t.Errorf("deployment_type: expected swarm, got %v", got)
+	}
+	if got := rd.Get("method"); got != "repository" {
+		t.Errorf("method: expected repository for a Git stack, got %v", got)
+	}
+}
+
+// TestStackCov2_Import_NoMethodNotGit: a stack not deployed from Git cannot
+// tell string, file and URL apart, so the import asks for the method rather
+// than leaving it empty.
+func TestStackCov2_Import_NoMethodNotGit(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("GET", "/stacks/21", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 21}))
+
+	r := resourcePortainerStack()
+	d := r.TestResourceData()
+	d.SetId("7:21:standalone")
+
+	_, err := r.Importer.StateContext(context.Background(), d, mock.Client())
+	if err == nil || !strings.Contains(err.Error(), "7:21:standalone:string") {
+		t.Fatalf("expected an error asking for the method, got %v", err)
 	}
 }
 

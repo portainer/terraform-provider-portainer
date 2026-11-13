@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -27,11 +29,24 @@ func resourceEnvironment() *schema.Resource {
 			StateContext: schema.ImportStatePassthroughContext,
 		},
 		CustomizeDiff: resourceEnvironmentCustomizeDiff,
+		Timeouts: &schema.ResourceTimeout{
+			// Only used when delete_cluster_on_destroy waits for Portainer to
+			// uninstall KubeSolo and remove the environment in the background.
+			Delete: schema.DefaultTimeout(20 * time.Minute),
+		},
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:        schema.TypeString,
 				Required:    true,
 				Description: "Name of the Portainer environment (endpoint) as displayed in the UI.",
+			},
+			"delete_cluster_on_destroy": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+				Description: "Portainer 3.0+: on destroy, send `deleteCluster=true` with DELETE /endpoints/{id}. For a KubeSolo environment installed by Portainer this uninstalls KubeSolo from the machine before the environment is removed; " +
+					"Portainer does that in the background (HTTP 202) and the provider waits until the environment is gone, within the delete timeout. " +
+					"Portainer answers 409 while KubeSolo is still being installed. Older releases ignore the parameter and only remove the environment. Changing it never touches the environment itself.",
 			},
 			"environment_address": {
 				Type:        schema.TypeString,
@@ -517,6 +532,11 @@ func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta i
 	if err := d.Set("name", env.Name); err != nil {
 		return diag.FromErr(err)
 	}
+	// Destroy-time setting with no server-side counterpart: keep what state
+	// holds, and store the default after an import instead of planning it.
+	if err := d.Set("delete_cluster_on_destroy", d.Get("delete_cluster_on_destroy").(bool)); err != nil {
+		return diag.FromErr(err)
+	}
 	if err := d.Set("type", int(env.Type)); err != nil {
 		return diag.FromErr(err)
 	}
@@ -732,6 +752,12 @@ func uploadTLSFile(ctx context.Context, client *APIClient, folder, kind, content
 func resourceEnvironmentUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*APIClient)
 
+	// delete_cluster_on_destroy only changes what destroy does; when it is the
+	// only change there is nothing to send.
+	if d.HasChange("delete_cluster_on_destroy") && !d.HasChangeExcept("delete_cluster_on_destroy") {
+		return resourceEnvironmentRead(ctx, d, meta)
+	}
+
 	body := environmentUpdateBody{
 		Name:    d.Get("name").(string),
 		GroupID: d.Get("group_id").(int),
@@ -789,12 +815,56 @@ func resourceEnvironmentDelete(ctx context.Context, d *schema.ResourceData, meta
 	client := meta.(*APIClient)
 	id, _ := strconv.ParseInt(d.Id(), 10, 64)
 
-	if err := doJSON(ctx, client, http.MethodDelete, fmt.Sprintf("%s/endpoints/%d", client.Endpoint, id), nil, nil); err != nil {
+	deleteCluster := d.Get("delete_cluster_on_destroy").(bool)
+	url := fmt.Sprintf("%s/endpoints/%d", client.Endpoint, id)
+	if deleteCluster {
+		url += "?deleteCluster=true"
+	}
+	if err := doJSON(ctx, client, http.MethodDelete, url, nil, nil); err != nil {
 		if isAPINotFound(err) {
 			return nil
+		}
+		var se *apiStatusError
+		if deleteCluster && errors.As(err, &se) && se.StatusCode == http.StatusConflict {
+			return diag.FromErr(fmt.Errorf("failed to delete environment: KubeSolo is still being installed on the environment's machine; retry once the installation has finished: %w", err))
 		}
 		return diag.FromErr(fmt.Errorf("failed to delete environment: %w", err))
 	}
 
+	if deleteCluster {
+		// Portainer 3.0 answers 202 for a KubeSolo environment: it uninstalls
+		// KubeSolo and only then removes the environment, in the background.
+		// After a 204 (every other case) the first check already sees 404.
+		if err := waitEnvironmentRemoved(ctx, client, id, d.Timeout(schema.TimeoutDelete)); err != nil {
+			return diag.FromErr(err)
+		}
+	}
+
 	return nil
+}
+
+// environmentRemovePollInterval is how often waitEnvironmentRemoved checks;
+// tests shorten it.
+var environmentRemovePollInterval = 5 * time.Second
+
+// waitEnvironmentRemoved polls GET /endpoints/{id} until it answers 404, the
+// timeout elapses or ctx is done.
+func waitEnvironmentRemoved(ctx context.Context, client *APIClient, id int64, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	url := fmt.Sprintf("%s/endpoints/%d?excludeSnapshot=true", client.Endpoint, id)
+	for {
+		err := doJSON(ctx, client, http.MethodGet, url, nil, nil)
+		if isAPINotFound(err) {
+			return nil
+		}
+		if err != nil && ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("environment %d still exists %s after the delete request (deleteCluster=true); Portainer may still be uninstalling KubeSolo or the removal failed, check the environment in Portainer", id, timeout)
+		}
+		if err := sleepCtx(ctx, environmentRemovePollInterval); err != nil {
+			return err
+		}
+	}
 }

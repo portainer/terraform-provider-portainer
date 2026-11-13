@@ -537,6 +537,8 @@ Note that a stack can be reported as failed for reasons that have nothing to do 
 | `stack_file_content` | string | ✅ yes       | Inline Kubernetes manifest (YAML)    |
 | `namespace`          | string | ✅ yes       | Target namespace                     |
 | `compose_format`     | bool   | 🚫 optional | Use Compose format (default: `false`) |
+| `kubernetes_prune`                  | bool   | 🚫 optional | Portainer 3.0+: delete the Kubernetes resources an earlier deployment applied that the manifest no longer declares. Portainer prunes when left out; leaving it out sends nothing and keeps Portainer's recorded choice. Portainer only sets it on create, so a change replaces the stack. |
+| `kubernetes_force_apply`            | bool   | 🚫 optional | Portainer 3.0+: delete and recreate a resource whose immutable fields changed instead of failing the deployment (destroys the resource and everything tied to its identity). Off when left out; leaving it out sends nothing and keeps Portainer's recorded choice. Portainer only sets it on create, so a change replaces the stack. |
 
 #### Method: `repository`
 | Name                                | Type   | Required    | Description                                                                                             |
@@ -557,6 +559,8 @@ Note that a stack can be reported as failed for reasons that have nothing to do 
 | `update_interval`                   | string | 🚫 optional | Polling interval (enables GitOps polling, e.g. `30m`, `1h`)                                             |
 | `force_update`                      | bool   | 🚫 optional | Whether to force redeploy (default: `false`)                                                            |
 | `compose_format`                    | bool   | 🚫 optional | Compose format support (default: `false`)                                                               |
+| `kubernetes_prune`                  | bool   | 🚫 optional | Portainer 3.0+: delete the Kubernetes resources an earlier deployment applied that the manifest no longer declares. Portainer prunes when left out; leaving it out sends nothing and keeps Portainer's recorded choice. Changed in place. |
+| `kubernetes_force_apply`            | bool   | 🚫 optional | Portainer 3.0+: delete and recreate a resource whose immutable fields changed instead of failing the deployment (destroys the resource and everything tied to its identity). Off when left out; leaving it out sends nothing and keeps Portainer's recorded choice. Changed in place. |
 | `additional_files`                  | string | 🚫 optional | List of additional YAML/manifest file paths                                                             |
 | `helm_chart_path`                   | string | 🚫 optional | Path to a Helm chart folder in the Git repository (must contain `Chart.yaml`). When set, `file_path_in_repository` is not required. |
 | `additional_helm_values_files`      | list(string) | 🚫 optional | List of additional Helm values files (e.g. `values-prod.yaml`). Only used with `helm_chart_path`. |
@@ -569,6 +573,8 @@ Note that a stack can be reported as failed for reasons that have nothing to do 
 | `manifest_url`   | string | ✅ yes       | URL to remote K8s manifest |
 | `namespace`      | string | ✅ yes       | Target namespace           |
 | `compose_format` | bool   | 🚫 optional  | Compose format support     |
+| `kubernetes_prune`                  | bool   | 🚫 optional | Portainer 3.0+: delete the Kubernetes resources an earlier deployment applied that the manifest no longer declares. Portainer prunes when left out; leaving it out sends nothing and keeps Portainer's recorded choice. Portainer only sets it on create, so a change replaces the stack. |
+| `kubernetes_force_apply`            | bool   | 🚫 optional | Portainer 3.0+: delete and recreate a resource whose immutable fields changed instead of failing the deployment (destroys the resource and everything tied to its identity). Off when left out; leaving it out sends nothing and keeps Portainer's recorded choice. Portainer only sets it on create, so a change replaces the stack. |
 
 ## 🧮 Computed Outputs
 | Name          | Description                     |
@@ -587,8 +593,8 @@ Note that a stack can be reported as failed for reasons that have nothing to do 
 
 ## Import
 
-Stacks can be imported using their numeric ID:
+Stacks can be imported as `<endpoint_id>:<stack_id>:<deployment_type>[:<method>]`. The resource ID is the stack ID alone. `method` may be left out for a stack deployed from Git, which is imported with `method = "repository"`; any other stack needs it (`string`, `file` or `url`), since Portainer does not record which of the three created it. The format from before v3.0.0, `<endpoint_id>-<stack_id>-<deployment_type>[-<method>]`, is still accepted.
 
 ```shell
-terraform import portainer_stack.example 5
+terraform import portainer_stack.example 1:5:standalone:string
 ```

@@ -216,7 +216,16 @@ k3d-connect-portainer:
 k3d-export-ip:
 	@IP=$$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' k3d-mycluster-server-0); \
 	echo "💡 K3D Server IP: $$IP"; \
-	echo "portainer_environment_address = \"tcp://$$IP:9001\"" > e2e-tests/environment/terraform.tfvars
+	echo "portainer_environment_address = \"tcp://$$IP:9001\"" > e2e-tests/environment/terraform.tfvars; \
+	echo "⏳ Waiting for the agent to answer on $$IP:9001 (it restarts once after it comes up)"; \
+	OK=0; \
+	for i in $$(seq 1 60); do \
+		CODE=$$(docker run --rm --network k3d-mycluster curlimages/curl:8.11.1 -sk -m5 -o /dev/null -w '%{http_code}' "https://$$IP:9001/ping" || true); \
+		if [ "$$CODE" = 204 ]; then OK=$$((OK + 1)); else OK=0; fi; \
+		[ "$$OK" -ge 3 ] && echo "✅ Agent is answering" && exit 0; \
+		sleep 3; \
+	done; \
+	echo "❌ The agent never answered on $$IP:9001"; exit 1
 
 .PHONY: install-kubectl
 install-kubectl:
