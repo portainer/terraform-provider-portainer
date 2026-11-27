@@ -526,13 +526,17 @@ func (r *environmentResource) Create(ctx context.Context, req resource.CreateReq
 	op := environmentOp{client: r.client, prior: nil, wo: wo, azureWO: azureWO, configPublicIP: configPublicIP}
 	name := plan.Name.ValueString()
 
-	existingID, err := findExistingEnvironmentByName(ctx, r.client, name)
+	existing, err := findExistingEnvironmentByName(ctx, r.client, name)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create environment", fmt.Errorf("failed to check for existing environment: %w", err).Error())
 		return
 	}
-	if existingID != 0 {
-		m.ID = types.StringValue(strconv.Itoa(existingID))
+	if existing != nil {
+		m.ID = types.StringValue(strconv.FormatInt(existing.ID, 10))
+		op.adoptedTLS = &portainerTLSConfig{}
+		if existing.TLSConfig != nil {
+			op.adoptedTLS = existing.TLSConfig
+		}
 		if !op.update(ctx, &m, &resp.Diagnostics) {
 			return
 		}
@@ -1000,6 +1004,10 @@ type environmentOp struct {
 	wo             string
 	azureWO        string
 	configPublicIP types.String
+	// adoptedTLS is the TLS configuration of an existing environment that
+	// Create adopts by name; the TLS skip flags compare against it, as there
+	// is no prior state.
+	adoptedTLS *portainerTLSConfig
 }
 
 func (op *environmentOp) old() *environmentResourceModel {
@@ -1027,8 +1035,8 @@ func (op *environmentOp) update(ctx context.Context, m *environmentResourceModel
 		url := m.EnvironmentAddress.ValueString()
 		body.URL = &url
 		body.TLS = new(m.TLSEnabled.ValueBool())
-		body.TLSSkipVerify = new(m.TLSSkipVerify.ValueBool())
-		body.TLSSkipClientVerify = new(m.TLSSkipClientVerify.ValueBool())
+		body.TLSSkipVerify = op.tlsSkipFlag(m, m.TLSSkipVerify, func(b *environmentResourceModel) types.Bool { return b.TLSSkipVerify })
+		body.TLSSkipClientVerify = op.tlsSkipFlag(m, m.TLSSkipClientVerify, func(b *environmentResourceModel) types.Bool { return b.TLSSkipClientVerify })
 
 		if err := op.uploadTLSFiles(ctx, m); err != nil {
 			diags.AddError("Failed to update environment", fmt.Errorf("failed to upload TLS files for environment: %w", err).Error())
@@ -1077,6 +1085,43 @@ func (op *environmentOp) update(ctx context.Context, m *environmentResourceModel
 		return false
 	}
 	return true
+}
+
+// tlsSkipFlag is the tlsskipVerify / tlsskipClientVerify value of an update,
+// nil to leave it out (Portainer then keeps the current value); field picks
+// the flag from a model.
+//
+// With tls on, a true flag makes Portainer delete the environment's CA file
+// (tlsskipVerify) or client certificate and key (tlsskipClientVerify).
+// Business Edition fails the whole update with 500 "Unable to remove TLS CA
+// file from disk" when the file is missing, as it always is for an agent
+// environment (issue #165). A true flag is therefore sent only when it or
+// tls_enabled differs from what Portainer has: the prior state, or the
+// environment Create adopts by name. The update Create makes after its
+// multipart request, which already set the flags, sends none. A false flag
+// only points the TLS configuration at the uploaded files and reloads the
+// proxy of a Docker API environment, which a certificate rotation needs, so
+// it is always sent.
+func (op *environmentOp) tlsSkipFlag(m *environmentResourceModel, flag types.Bool, field func(*environmentResourceModel) types.Bool) *bool {
+	if !flag.ValueBool() {
+		return new(false)
+	}
+	base := op.prior
+	if base == nil && op.adoptedTLS != nil {
+		tls := op.adoptedTLS
+		base = &environmentResourceModel{
+			TLSEnabled:          types.BoolValue(tls.TLS),
+			TLSSkipVerify:       types.BoolValue(tls.TLS && tls.TLSSkipVerify),
+			TLSSkipClientVerify: types.BoolValue(tls.TLS && tls.TLSCert == ""),
+		}
+	}
+	if base == nil {
+		return nil
+	}
+	if environmentBoolChanged(flag, field(base)) || environmentBoolChanged(m.TLSEnabled, base.TLSEnabled) {
+		return new(true)
+	}
+	return nil
 }
 
 // setAzureCredentials adds the Azure credentials that changed. Portainer
@@ -1412,17 +1457,17 @@ func edgeKeyField(edgeKey string, i int) string {
 	return strings.TrimSpace(fields[i])
 }
 
-func findExistingEnvironmentByName(ctx context.Context, client *APIClient, name string) (int, error) {
+func findExistingEnvironmentByName(ctx context.Context, client *APIClient, name string) (*portainerEndpoint, error) {
 	envs, err := listEnvironments(ctx, client)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	for _, e := range envs {
-		if e.Name == name {
-			return int(e.ID), nil
+	for i := range envs {
+		if envs[i].Name == name {
+			return &envs[i], nil
 		}
 	}
-	return 0, nil
+	return nil, nil
 }
 
 // portainerEndpoint is the part of a Portainer environment (endpoint) the
