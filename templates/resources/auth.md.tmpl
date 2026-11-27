@@ -1,0 +1,45 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_auth resource allows you to authenticate to the Portainer API using a username and password.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_auth` resource allows you to authenticate to the Portainer API using a username and password.
+It returns a JWT token that can be used for other API calls or debug purposes.
+
+## Example Usage
+
+```hcl
+resource "portainer_auth" "login" {
+  username = "admin"
+  password = "password"
+}
+
+output "jwt_token" {
+  value     = portainer_auth.login.jwt
+  sensitive = true
+}
+```
+> ✅ Note: This resource does not persist anything in Portainer. It only returns a JWT token that can be used in subsequent API calls.
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/auth)
+
+## Lifecycle & Behavior
+- This resource authenticates via the /auth API endpoint using username/password.
+- It always re-authenticates on every terraform apply.
+- The result is a JWT token stored in state/output.
+To use the token:
+```hcl
+output "jwt_token" {
+  value     = portainer_auth.login.jwt
+  sensitive = true
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+See also: the [`portainer_auth` ephemeral resource](../ephemeral-resources/auth.md) keeps the secret out of the plan and the state (Terraform >= 1.10, OpenTofu >= 1.11).

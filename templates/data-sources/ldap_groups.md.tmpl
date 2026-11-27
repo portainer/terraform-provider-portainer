@@ -1,0 +1,43 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Searches an LDAP directory for groups.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Searches an LDAP directory for groups.
+
+## Example Usage
+
+```hcl
+data "portainer_ldap_groups" "teams" {
+  url       = "ldap.example.com:389"
+  reader_dn = "cn=readonly,dc=example,dc=com"
+  password  = var.ldap_password
+
+  group_search {
+    group_base_dn   = "ou=groups,dc=example,dc=com"
+    group_filter    = "(objectClass=groupOfNames)"
+    group_attribute = "member"
+  }
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+### `entries`
+
+| Name | Type | Description |
+|------|------|-------------|
+| `groups` | list(string) | Groups the entry belongs to. |
+| `name` | string | Name the directory reports for the entry. |
+
+### `group_search`
+
+These endpoints take the whole directory configuration with the request rather than reusing the instance's saved settings, which is what lets a configuration be tried out before it is committed with `portainer_ldap_settings`. `reader_dn` and `password` are omitted from the request when unset, so `anonymous_mode` really does bind anonymously rather than with a blank password.

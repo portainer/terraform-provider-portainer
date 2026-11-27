@@ -1,0 +1,54 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Manages the configuration entries an addon reads at runtime, for example a base domain or an API token.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Manages the configuration entries an addon reads at runtime, for example a base domain or an API token.
+
+## Example Usage
+
+```hcl
+resource "portainer_addon_config" "portal" {
+  addon_id = portainer_addon.portal.addon_id
+
+  entry {
+    key   = "BASE_DOMAIN"
+    value = "apps.example.com"
+  }
+
+  entry {
+    key       = "API_TOKEN"
+    value     = var.portal_api_token
+    sensitive = true
+  }
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `addon_id`: Changing it forces a new resource.
+- `entry.sensitive`: Defaults to `false`.
+
+## Arguments by Deployment Method
+
+### `entry`
+
+Creating the resource replaces the addon's stored configuration, which is what taking ownership of it means. Subsequent applies work entry by entry, so a key added outside Terraform is left alone rather than destroyed on every run. Destroying the resource clears the configuration.
+
+Portainer does not return the value of an entry marked `sensitive`. The provider keeps the configured value in state rather than blanking it, which is what keeps a plan from showing a change on every run - but it also means drift in a sensitive value cannot be detected.
+
+## Import
+
+```bash
+terraform import portainer_addon_config.portal portal-template
+```
+
+The import ID is the addon's catalog identifier. Sensitive values are not returned by Portainer, so they have to be supplied in the configuration after an import.

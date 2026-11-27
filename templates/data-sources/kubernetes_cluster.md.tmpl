@@ -1,0 +1,30 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Describes a Kubernetes cluster behind a Portainer environment: its version, whether RBAC is on, what Portainer counts in it, and how much room is left for a new workload.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Describes a Kubernetes cluster behind a Portainer environment: its version, whether RBAC is on, what Portainer counts in it, and how much room is left for a new workload.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_cluster" "prod" {
+  environment_id = 1
+}
+
+# RBAC-dependent resources are pointless without it.
+resource "portainer_kubernetes_namespace_access" "team" {
+  count = data.portainer_kubernetes_cluster.prod.rbac_enabled ? 1 : 0
+  # ...
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+The counters come from Portainer's dashboard endpoint and reflect what the API token can see, not necessarily the whole cluster.

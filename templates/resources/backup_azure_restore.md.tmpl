@@ -1,0 +1,37 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Restores a Portainer instance from an archive in Azure Blob Storage.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Restores a Portainer instance from an archive in Azure Blob Storage.
+
+## Example Usage
+
+```hcl
+resource "portainer_backup_azure_restore" "recover" {
+  auth_method          = "storageAccountKey"
+  storage_account_name = "acmebackups"
+  container_name       = "portainer"
+  blob_name            = "portainer-2026-09-15.tar.gz"
+  storage_account_key  = var.azure_storage_key
+  password             = var.backup_archive_password
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `client_secret`: Used with `servicePrincipalSecret`.
+- `client_certificate`: Used with `servicePrincipalCertificate`.
+- `id`: Synthetic identifier carrying a timestamp.
+
+## Attributes Reference
+
+A restore replaces the instance's entire database, so it belongs in a bootstrap configuration rather than alongside resources managing a running instance. Every argument forces a new resource.

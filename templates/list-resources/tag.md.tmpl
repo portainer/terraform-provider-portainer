@@ -1,0 +1,57 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_tag` list resource lists the Portainer tags for `terraform query`, so existing objects can be found and imported into the [`portainer_tag`](../resources/tag.md) resource. Each result carries the resource identity (`id`) and, with `include_resource = true`, the full resource as an import would read it.
+
+> **Requirements:** Terraform 1.14 or later (`terraform query`, `*.tfquery.hcl` files). Importing the results by identity needs Terraform 1.12 or later. OpenTofu does not support list resources.
+
+## Example Usage
+
+### List everything (`main.tfquery.hcl`)
+
+```hcl
+list "portainer_tag" "all" {
+  provider = portainer
+}
+```
+
+### Filter and include the full resource
+
+```hcl
+list "portainer_tag" "selected" {
+  provider         = portainer
+  include_resource = true
+
+  config {
+    name = "production"
+  }
+}
+```
+
+```shell
+terraform query
+# Write resource and import blocks for every result:
+terraform query -generate-config-out=generated.tf
+```
+
+## Arguments Reference
+
+Arguments of the `config` block; all are optional and combine. Without any, every object is listed. The `list` block itself takes Terraform's `provider`, `include_resource` (default `false`) and `limit` (default `100`).
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Each result has the display name the tag name and the identity:
+
+| Name | Description |
+|------|-------------|
+| `id` | Numeric Portainer ID, the resource's `id` and import ID. |
+
+With `include_resource = true` a result also holds every attribute of the [`portainer_tag`](../resources/tag.md) resource, read the way an import reads it.

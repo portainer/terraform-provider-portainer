@@ -1,0 +1,34 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Inspects one Omni machine, including the hardware and network detail needed to write a portainer_omni_cluster machine block.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Inspects one Omni machine, including the hardware and network detail needed to write a `portainer_omni_cluster` machine block.
+
+## Example Usage
+
+```hcl
+data "portainer_omni_machine" "cp_1" {
+  credential_id = portainer_cloud_credentials.omni.id
+  machine_name  = "cp-1"
+}
+
+output "system_disk" {
+  value = one([for d in data.portainer_omni_machine.cp_1.block_devices : d.linux_name if d.system_disk])
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `block_devices`: Block devices Omni sees, with `linux_name`, `model`, `size`, `type` and `system_disk`.
+- `memory_modules`: Memory modules, with `description` and `size_mb`.
+- `processors`: Processors, with `description`, `manufacturer`, `core_count`, `thread_count` and `frequency`.
+- `network_links`: Network links, with `linux_name`, `hardware_address`, `link_up` and `speed_mbps`.

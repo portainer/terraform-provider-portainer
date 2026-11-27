@@ -1,0 +1,35 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_kubernetes_ingress_classes data source lists the ingress classes available in a Kubernetes cluster, so an Ingress can reference a class that actually exists instead of hard-coding its name per environment.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_ingress_classes` data source lists the ingress classes available in a Kubernetes cluster, so an Ingress can reference a class that actually exists instead of hard-coding its name per environment.
+
+Requires Portainer **2.45.0** or newer.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_ingress_classes" "all" {
+  environment_id = 1
+}
+
+output "ingress_class_names" {
+  value = [for c in data.portainer_kubernetes_ingress_classes.all.ingress_classes : c.name]
+}
+
+# Fall back to the cluster default when nothing else is configured.
+locals {
+  ingress_class = coalesce(
+    var.ingress_class,
+    data.portainer_kubernetes_ingress_classes.all.default_ingress_class,
+  )
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+

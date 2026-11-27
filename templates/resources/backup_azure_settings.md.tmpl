@@ -1,0 +1,51 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Manages Portainer's scheduled backup to Azure Blob Storage: where the archives go, how they authenticate, and on what schedule.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Manages Portainer's scheduled backup to Azure Blob Storage: where the archives go, how they authenticate, and on what schedule.
+
+## Example Usage
+
+```hcl
+resource "portainer_backup_azure_settings" "nightly" {
+  auth_method          = "servicePrincipalSecret"
+  storage_account_name = "acmebackups"
+  container_name       = "portainer"
+
+  tenant_id     = var.azure_tenant_id
+  client_id     = var.azure_client_id
+  client_secret = var.azure_client_secret
+
+  cron_rule = "0 2 * * *"
+  password  = var.backup_archive_password
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## FIPS mode (Portainer BE 3.1+)
+
+A Portainer Business Edition 3.1 instance running in FIPS mode refuses unencrypted backups, and a schedule without a password stops running there. Set `password` (or `password_wo` with `password_wo_version`) when the instance runs in FIPS mode.
+
+## Attributes Reference
+
+Credentials are **not** read back from Portainer into state, even though the API returns them: state keeps what the configuration set. Removing the resource stops managing the settings — Portainer has no endpoint to clear them, so the schedule stays as last configured.
+
+Validate the credentials first with the `portainer_backup_azure_connection` data source.
+
+## Import
+
+The Azure Blob backup settings are instance-wide, so any import ID works:
+
+```shell
+terraform import portainer_backup_azure_settings.example portainer-backup-azure-settings
+```
+
+Secrets (the storage account key or client secret) are not read back; set them in the configuration after the import.

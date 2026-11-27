@@ -6,13 +6,12 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 // --- parseManifest -----------------------------------------------------------
 
 func TestParseManifest_Cov(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    string
@@ -60,6 +59,7 @@ apiVersion: v1
 // --- toIntSlice --------------------------------------------------------------
 
 func TestToIntSlice_Cov(t *testing.T) {
+	t.Parallel()
 	in := []interface{}{1, 2, 3}
 	got := toIntSlice(in)
 	want := []int{1, 2, 3}
@@ -75,6 +75,7 @@ func TestToIntSlice_Cov(t *testing.T) {
 // --- splitAndTrimCSV ---------------------------------------------------------
 
 func TestSplitAndTrimCSV_Cov(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		in   string
@@ -98,6 +99,7 @@ func TestSplitAndTrimCSV_Cov(t *testing.T) {
 // --- contains ----------------------------------------------------------------
 
 func TestContains_Cov(t *testing.T) {
+	t.Parallel()
 	arr := []string{"x", "y", "z"}
 	if !contains(arr, "y") {
 		t.Error("expected contains to find 'y'")
@@ -113,6 +115,7 @@ func TestContains_Cov(t *testing.T) {
 // --- mustMap -----------------------------------------------------------------
 
 func TestMustMap_Cov(t *testing.T) {
+	t.Parallel()
 	// nil -> empty map
 	if m := mustMap(nil); m == nil || len(m) != 0 {
 		t.Errorf("expected empty non-nil map for nil input, got %v", m)
@@ -131,6 +134,7 @@ func TestMustMap_Cov(t *testing.T) {
 // --- setAuthHeader -----------------------------------------------------------
 
 func TestSetAuthHeader_Cov(t *testing.T) {
+	t.Parallel()
 	newReq := func() *http.Request {
 		req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
 		return req
@@ -164,25 +168,10 @@ func TestSetAuthHeader_Cov(t *testing.T) {
 	}
 }
 
-// --- removeFromStateContext --------------------------------------------------
-
-func TestRemoveFromStateContext_Cov(t *testing.T) {
-	r := &schema.Resource{Schema: map[string]*schema.Schema{}}
-	d := r.TestResourceData()
-	d.SetId("123")
-
-	diags := removeFromStateContext(context.Background(), d, nil)
-	if diags != nil {
-		t.Errorf("expected nil diagnostics, got %v", diags)
-	}
-	if d.Id() != "" {
-		t.Errorf("expected ID cleared, got %q", d.Id())
-	}
-}
-
 // --- apiGET helpers ----------------------------------------------------------
 
 func TestApiGET_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("GET", "/things", RespondString(http.StatusOK, "application/json", `{"ok":true}`))
 
@@ -206,6 +195,7 @@ func TestApiGET_Cov(t *testing.T) {
 }
 
 func TestApiGET_NoAuth_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	client := mock.Client()
 	client.APIKey = ""
@@ -218,6 +208,7 @@ func TestApiGET_NoAuth_Cov(t *testing.T) {
 }
 
 func TestApiGET_JWT_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("GET", "/things", RespondString(http.StatusOK, "application/json", `{}`))
 
@@ -235,6 +226,7 @@ func TestApiGET_JWT_Cov(t *testing.T) {
 }
 
 func TestApiGETWithCode_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("GET", "/items", RespondString(http.StatusTeapot, "application/json", `boom`))
 
@@ -252,6 +244,7 @@ func TestApiGETWithCode_Cov(t *testing.T) {
 }
 
 func TestApiGETWithCode_NoAuth_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	client := mock.Client()
 	client.JWTToken = ""
@@ -263,6 +256,7 @@ func TestApiGETWithCode_NoAuth_Cov(t *testing.T) {
 }
 
 func TestApiGETCtx_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("GET", "/ctx", RespondString(http.StatusOK, "application/json", `ctxbody`))
 
@@ -277,6 +271,7 @@ func TestApiGETCtx_Cov(t *testing.T) {
 }
 
 func TestApiGETCtx_NoAuth_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	client := mock.Client()
 	client.APIKey = ""
@@ -289,6 +284,7 @@ func TestApiGETCtx_NoAuth_Cov(t *testing.T) {
 }
 
 func TestApiGETWithCodeCtx_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("GET", "/ctxcode", RespondString(http.StatusCreated, "application/json", `made`))
 
@@ -306,6 +302,7 @@ func TestApiGETWithCodeCtx_Cov(t *testing.T) {
 }
 
 func TestApiGETWithCodeCtx_NoAuth_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	client := mock.Client()
 	client.JWTToken = ""
@@ -317,6 +314,7 @@ func TestApiGETWithCodeCtx_NoAuth_Cov(t *testing.T) {
 }
 
 func TestApiPOSTWithCodeCtx_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("POST", "/create", RespondString(http.StatusOK, "application/json", `posted`))
 
@@ -345,6 +343,7 @@ func TestApiPOSTWithCodeCtx_Cov(t *testing.T) {
 }
 
 func TestApiPOSTWithCodeCtx_NoAuth_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	client := mock.Client()
 	client.JWTToken = ""
@@ -356,6 +355,7 @@ func TestApiPOSTWithCodeCtx_NoAuth_Cov(t *testing.T) {
 }
 
 func TestApiPUTWithCodeCtx_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("PUT", "/update", RespondString(http.StatusOK, "application/json", `put`))
 
@@ -378,6 +378,7 @@ func TestApiPUTWithCodeCtx_Cov(t *testing.T) {
 }
 
 func TestApiPUTWithCodeCtx_NoAuth_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	client := mock.Client()
 	client.JWTToken = ""
@@ -395,6 +396,7 @@ func TestApiPUTWithCodeCtx_NoAuth_Cov(t *testing.T) {
 // configuration, so a caller value in the branch it does not take would
 // otherwise survive. Both are dropped from the caller's map instead.
 func TestDoJSONWithHeaders_AuthWinsOverCallerHeaders(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("POST", "/thing", RespondString(http.StatusNoContent, "", ""))
 
@@ -431,6 +433,7 @@ func TestDoJSONWithHeaders_AuthWinsOverCallerHeaders(t *testing.T) {
 // even a caller that does report an *apiStatusError verbatim must not spill a
 // credential that travelled in the query string.
 func TestRedactURL_HidesCredentialsInQuery(t *testing.T) {
+	t.Parallel()
 	err := &apiStatusError{
 		Method:     "GET",
 		URL:        "https://portainer.example.com/api/omni/serviceaccount/validate?endpoint=https%3A%2F%2Fomni.example.com&serviceAccountKey=super-secret",
@@ -456,6 +459,7 @@ func TestRedactURL_HidesCredentialsInQuery(t *testing.T) {
 // TestRedactURL_LeavesOrdinaryURLsAlone keeps the redaction from mangling the
 // errors that carry no secret at all.
 func TestRedactURL_LeavesOrdinaryURLsAlone(t *testing.T) {
+	t.Parallel()
 	raw := "https://portainer.example.com/api/stacks/5?endpointId=1"
 	if got := redactURL(raw); got != raw {
 		t.Errorf("a URL with no sensitive parameter must be untouched, got %q", got)

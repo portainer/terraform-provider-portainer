@@ -112,6 +112,7 @@ func TestRetryTransport_StopsAfterMaxRetries(t *testing.T) {
 }
 
 func TestRetryTransport_ZeroRetriesDisables(t *testing.T) {
+	t.Parallel()
 	srv, calls, _ := statusSequence(t, 503)
 	resp, err := doRequest(t, &retryTransport{next: http.DefaultTransport}, http.MethodGet, srv.URL, "")
 	if err != nil {
@@ -194,6 +195,7 @@ func TestRetryTransport_ConnectionErrors(t *testing.T) {
 }
 
 func TestRetryTransport_HonoursRetryAfter(t *testing.T) {
+	t.Parallel()
 	if d := retryDelay(0, &http.Response{Header: http.Header{"Retry-After": []string{"7"}}}); d != 7*time.Second {
 		t.Errorf("expected Retry-After 7s, got %s", d)
 	}
@@ -232,6 +234,7 @@ func TestRetryTransport_CancelledDuringBackoff(t *testing.T) {
 }
 
 func TestRetryTransport_RequestTimeout(t *testing.T) {
+	t.Parallel()
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&calls, 1)
@@ -255,6 +258,7 @@ func TestRetryTransport_RequestTimeout(t *testing.T) {
 }
 
 func TestRetryTransport_RequestTimeoutCoversBodyRead(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	}))
@@ -272,13 +276,12 @@ func TestRetryTransport_RequestTimeoutCoversBodyRead(t *testing.T) {
 }
 
 func TestConfigureProvider_RetryAndTimeout(t *testing.T) {
-	d := newProviderData(t, map[string]interface{}{
+	out, diags := configureFramework(t, map[string]interface{}{
 		"endpoint":        "https://portainer.example.com",
 		"api_key":         "ptr_abc",
 		"max_retries":     5,
 		"request_timeout": "90s",
 	})
-	out, diags := configureProvider(context.Background(), d)
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -292,6 +295,7 @@ func TestConfigureProvider_RetryAndTimeout(t *testing.T) {
 }
 
 func TestValidateDuration(t *testing.T) {
+	t.Parallel()
 	for _, v := range []string{"", "90s", "2m", "1h30m"} {
 		if _, errs := validateDuration(v, "request_timeout"); len(errs) != 0 {
 			t.Errorf("%q: unexpected errors %v", v, errs)

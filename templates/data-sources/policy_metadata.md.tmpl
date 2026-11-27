@@ -1,0 +1,28 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reports the lowest agent version each policy type needs.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reports the lowest agent version each policy type needs.
+
+## Example Usage
+
+```hcl
+data "portainer_policy_metadata" "requirements" {}
+
+output "policy_minimum_agents" {
+  value = data.portainer_policy_metadata.requirements.minimum_agent_versions
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+An environment on an older agent than a policy type requires will not run that policy. `portainer_policy_conflicts` reports how many environments that affects for a given policy.

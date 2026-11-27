@@ -1,0 +1,28 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Lists the members of a team and identifies its leaders.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Lists the members of a team and identifies its leaders.
+
+## Example Usage
+
+```hcl
+data "portainer_team_memberships" "platform" {
+  team_id = portainer_team.platform.id
+}
+
+output "platform_leaders" {
+  value = data.portainer_team_memberships.platform.leader_user_ids
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `memberships`: Each entry has `id`, `user_id` and `role` (1 = team leader, 2 = team member).

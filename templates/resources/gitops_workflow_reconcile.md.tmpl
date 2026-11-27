@@ -1,0 +1,44 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Asks a GitOps workflow on the reconcile engine to read its sources again and every environment running it to reconcile now, instead of waiting for its reconcile_interval. That applies whatever the sources now describe and puts back anything that has drifted - also when drift_mode only reports drift.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Requires Portainer Business Edition 3.0 or later.** On Community Edition or an older server the reconcile fails with an error that says so. It only applies to a workflow on the `reconcile` engine.
+
+Asks a GitOps workflow on the reconcile engine to read its sources again and every environment running it to reconcile now, instead of waiting for its `reconcile_interval`. That applies whatever the sources now describe and puts back anything that has drifted - also when `drift_mode` only reports drift.
+
+> **See also:** the [`portainer_gitops_workflow_reconcile` action](../actions/gitops_workflow_reconcile.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+
+```hcl
+resource "portainer_gitops_workflow_reconcile" "now" {
+  workflow_id = portainer_gitops_workflow.apps.workflow_id
+
+  triggers = {
+    revision = var.source_revision
+  }
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `workflow_id`: Changing it forces a new resource.
+
+## Attributes Reference
+
+This resource exports no attributes beyond its `id`.
+
+## Lifecycle & Behavior
+
+A reconcile is a one-shot action, so without a `triggers` value the resource runs once and then stays put. Destroying it only removes it from state.
+
+Portainer does not wait for the environments: they re-apply at their next check-in. A successful apply means the request was accepted, not that every environment has applied it - read the workflow's status for that.
+
+On a server older than Portainer Business Edition 3.0 the apply fails with an error naming the requirement.

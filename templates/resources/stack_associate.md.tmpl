@@ -1,0 +1,40 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_stack_associate resource allows you to associate an orphaned stack to a new environment (endpoint) within Portainer. This is useful when you manually deploy a stack and want to register it under a specific environment in Portainer for further management.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_stack_associate` resource allows you to associate an **orphaned stack** to a new environment (endpoint) within Portainer. This is useful when you manually deploy a stack and want to register it under a specific environment in Portainer for further management.
+
+> **See also:** the [`portainer_stack_associate` action](../actions/stack_associate.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+---
+
+## ✅ Example Usage
+
+```hcl
+resource "portainer_stack_associate" "example" {
+  stack_id         = 12
+  endpoint_id      = 1
+  swarm_id         = "jpofkc0i9uo9wtx1zesuk649w"
+  orphaned_running = true
+}
+```
+
+## Lifecycle & Behavior
+The association is checked on refresh: a stack deleted since drops out of state, and a stack attached to another endpoint shows up as a change, which associates it again.
+
+For de-association of the Stack in docker swarm run:
+```hcl
+terraform apply
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `orphaned_running`: Defaults to `false`.
+- `id`: Same as `stack_id` used in input.

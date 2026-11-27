@@ -1,0 +1,28 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reads the latest snapshot Portainer took of a Docker environment.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reads the latest snapshot Portainer took of a Docker environment.
+
+## Example Usage
+
+```hcl
+data "portainer_docker_snapshot" "prod" {
+  endpoint_id = portainer_environment.prod.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Portainer's own API specification gives this response no fields at all, so it is carried through as JSON rather than flattened into attributes that could not stay accurate. Use `portainer_docker_snapshot_containers` for a typed view of the containers in it.
+
+A snapshot is what Portainer last saw, not a live query, so it can lag behind the environment.

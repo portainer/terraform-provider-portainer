@@ -1,0 +1,30 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_endpoints_edge_generate_key` ephemeral resource generates a general Edge key (`POST /endpoints/edge/generate-key`) without writing it to the plan or the state, unlike the [`portainer_endpoints_edge_generate_key` resource](../resources/endpoints_edge_generate_key.md). The key lets an Edge Agent join the Portainer instance, so it is a credential.
+
+> **Requirements:** Terraform >= 1.10 or OpenTofu >= 1.11 (ephemeral resources).
+
+## Example Usage
+
+```hcl
+ephemeral "portainer_endpoints_edge_generate_key" "edge" {}
+
+# e.g. pass it to a write-only attribute or a provisioner of the machine that runs the agent
+```
+
+## Lifecycle & Behavior
+
+Portainer only computes the key; it stores nothing for it, so there is nothing to close. A key is generated in every `plan` and `apply`.
+
+## Arguments Reference
+
+This ephemeral resource takes no arguments.
+
+{{ .SchemaMarkdown | trimspace }}

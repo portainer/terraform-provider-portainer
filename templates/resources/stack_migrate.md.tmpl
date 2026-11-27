@@ -1,0 +1,45 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_stack_migrate resource triggers migration of a stack from one Portainer environment (endpoint) to another. It re-creates the stack in the target environment before removing the original.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_stack_migrate` resource triggers migration of a stack from one Portainer environment (endpoint) to another. It re-creates the stack in the target environment before removing the original.
+
+> Note: This is an action resource. It performs the migration on `terraform apply` and does not track ongoing state. Each apply triggers a new migration.
+
+> **See also:** the [`portainer_stack_migrate` action](../actions/stack_migrate.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+
+```hcl
+resource "portainer_stack_migrate" "move" {
+  stack_id           = 5
+  target_endpoint_id = 2
+}
+```
+
+### Migrate with rename
+
+```hcl
+resource "portainer_stack_migrate" "move_renamed" {
+  stack_id           = 5
+  target_endpoint_id = 2
+  stack_name         = "my-stack-production"
+}
+```
+
+### Migrate to a Swarm environment
+
+```hcl
+resource "portainer_stack_migrate" "move_swarm" {
+  stack_id           = 5
+  target_endpoint_id = 3
+  swarm_id           = "jpofkc0i9uo9wtx1zesuk649w"
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

@@ -1,0 +1,49 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_kubernetes_pod_logs data source reads the log output of a Kubernetes pod through Portainer, the equivalent of kubectl logs. It is most useful for surfacing why a workload failed as part of a plan or an output, rather than having to open the UI.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_pod_logs` data source reads the log output of a Kubernetes pod through Portainer, the equivalent of `kubectl logs`. It is most useful for surfacing why a workload failed as part of a plan or an output, rather than having to open the UI.
+
+The API's `follow` parameter is deliberately **not** exposed: it keeps the response open until the client disconnects, which would hang a plan or an apply.
+
+Requires Portainer **2.45.0** or newer.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_pod_logs" "web" {
+  environment_id = 1
+  namespace      = "default"
+  pod_name       = "web-6b8f7d9c4d-abcde"
+  container      = "web"
+  tail_lines     = 200
+  timestamps     = true
+}
+
+output "web_log_tail" {
+  value = data.portainer_kubernetes_pod_logs.web.logs
+}
+```
+
+### Debug a crash-looping container
+
+```hcl
+data "portainer_kubernetes_pod_logs" "crashed" {
+  environment_id = 1
+  namespace      = "default"
+  pod_name       = "web-6b8f7d9c4d-abcde"
+  container      = "web"
+  previous       = true
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Logs are stored in Terraform state in plain text. Set `tail_lines` to keep the state small, and treat the state as sensitive if the workload logs secrets.

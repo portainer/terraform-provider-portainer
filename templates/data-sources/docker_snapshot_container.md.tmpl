@@ -1,0 +1,27 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reads one container from the latest snapshot of a Docker environment.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reads one container from the latest snapshot of a Docker environment.
+
+## Example Usage
+
+```hcl
+data "portainer_docker_snapshot_container" "web" {
+  endpoint_id  = portainer_environment.prod.id
+  container_id = "abc123"
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Mounts, network settings and the host configuration follow Docker's own schema rather than Portainer's and nest deeply, so `details` carries the whole entry as JSON alongside the attributes above.

@@ -1,0 +1,34 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_auth` ephemeral resource logs in to Portainer with a username and password (`POST /auth`) for the duration of one Terraform run, and logs out (`POST /auth/logout`, authenticated with the issued token) when the run ends, which makes Portainer revoke the JWT. The token is never written to the plan or the state, unlike with the [`portainer_auth` resource](../resources/auth.md).
+
+> **Requirements:** Terraform >= 1.10 or OpenTofu >= 1.11 (ephemeral resources).
+
+## Example Usage
+
+```hcl
+ephemeral "portainer_auth" "session" {
+  username = var.portainer_user
+  password = var.portainer_password
+}
+
+provider "restapi" {
+  uri     = var.portainer_url
+  headers = { Authorization = "Bearer ${ephemeral.portainer_auth.session.jwt}" }
+}
+```
+
+## Lifecycle & Behavior
+
+- Every `plan` and every `apply` logs in and out again.
+- A failed logout is reported as a warning, not an error: the JWT then expires on its own (Portainer's session timeout, 8 hours by default). Portainer versions that do not revoke tokens on logout accept the call too.
+- There is no renewal: a Portainer JWT outlasts any run.
+
+{{ .SchemaMarkdown | trimspace }}

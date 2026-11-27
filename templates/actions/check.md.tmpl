@@ -1,0 +1,56 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_check` action waits until the services of a stack run the expected image revision in the desired state, and fails the apply when they do not within `max_retries` checks. Use it after a rollout, for example after the `portainer_deploy` action.
+
+> **Requirements:** Terraform >= 1.14 (actions). OpenTofu does not support actions; there, and with older Terraform, use the [`portainer_check` resource](../resources/check.md), which runs the same operation when it is created.
+
+## Example Usage
+
+### Run it from a lifecycle `action_trigger`
+
+```hcl
+action "portainer_check" "rollout" {
+  config {
+    endpoint_id   = 1
+    stack_name    = "shop"
+    services_list = "web,api"
+    revision      = var.revision
+  }
+}
+
+resource "terraform_data" "revision" {
+  input = var.revision
+
+  lifecycle {
+    action_trigger {
+      events  = [after_create, after_update]
+      actions = [action.portainer_deploy.release, action.portainer_check.rollout]
+    }
+  }
+}
+```
+
+### Run it on demand
+
+```shell
+terraform apply -invoke action.portainer_check.rollout
+```
+
+## Lifecycle & Behavior
+
+- The action runs only when it is invoked: from an `action_trigger` on the events listed there, or with `terraform apply -invoke`. A plan lists the invocations it would run; nothing is stored in state, so there is nothing to destroy and no `triggers` argument is needed to run it again.
+- It sends the same requests as the `portainer_check` resource does when it is created, with the same defaults, and fails the apply with the same errors.
+- Every check is shown as a progress message while the action waits.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Actions have no attributes: nothing they return can be referenced elsewhere in the configuration.

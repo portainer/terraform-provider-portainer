@@ -1,0 +1,28 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reports what an edge update schedule could do: how much of the fleet is behind, and which agent versions are on offer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reports what an edge update schedule could do: how much of the fleet is behind, and which agent versions are on offer.
+
+## Example Usage
+
+```hcl
+data "portainer_edge_update_schedule_info" "fleet" {}
+
+output "agents_behind" {
+  value = data.portainer_edge_update_schedule_info.fleet.outdated_count
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+This folds Portainer's two argument-less endpoints - the fleet state and the supported agent versions - into one read, because they answer the same question. The versions are sorted so two identical plans produce identical output.

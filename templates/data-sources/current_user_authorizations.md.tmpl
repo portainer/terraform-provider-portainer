@@ -1,0 +1,39 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reports what the token's own user may do on an environment, both cluster-wide and per namespace.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reports what the token's own user may do on an environment, both cluster-wide and per namespace.
+
+## Example Usage
+
+```hcl
+data "portainer_current_user_authorizations" "prod" {
+  endpoint_id = portainer_environment.prod.id
+}
+
+output "can_manage_prod" {
+  value = contains(data.portainer_current_user_authorizations.prod.authorizations, "EndpointResourcesAccess")
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+### `namespace_authorizations`
+
+| Name | Type | Description |
+|------|------|-------------|
+| `authorizations` | list(string) | Authorizations the user holds in that namespace, sorted. |
+| `namespace` | string | Name of the namespace. |
+
+This folds Portainer's two endpoints - the environment-wide authorizations and the per-namespace map - into one read, because they answer the same question about the same user on the same environment.
+
+`namespace_authorizations` is empty for administrators, for non-Kubernetes environments, and when the user has cluster-wide access; an empty list there does not mean no access.

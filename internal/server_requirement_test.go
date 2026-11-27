@@ -10,6 +10,7 @@ import (
 )
 
 func TestVersionLess(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		a, b string
 		want bool
@@ -31,6 +32,7 @@ func TestVersionLess(t *testing.T) {
 // TestExplainUnsupported: a 404 from a server too old or of the wrong edition
 // names the requirement; on a server that meets it, the error is unchanged.
 func TestExplainUnsupported(t *testing.T) {
+	t.Parallel()
 	notFound := &apiStatusError{Method: "POST", URL: "http://x/api/endpoints/d2k", StatusCode: http.StatusNotFound, Body: "404 page not found"}
 	cases := map[string]struct {
 		version, edition string
@@ -71,37 +73,67 @@ func TestExplainUnsupported(t *testing.T) {
 	})
 }
 
-// TestExplainUnsupported_CatalogAndAlerting: the add-on catalog (BE 2.45.2+)
-// and the alert rules (BE) name their requirement on a server without them
-// instead of failing with a bare 404.
-func TestExplainUnsupported_CatalogAndAlerting(t *testing.T) {
-	cases := []struct {
-		name, method, path, version, edition, want string
-		run                                        func(*MockServer) error
+// TestExplainUnsupported_AnyEdition: a requirement without an edition (the
+// deployment scale API, 2.45) explains the 404 of the 2.39 LTS line on either
+// edition and leaves a real 404 on a newer server alone.
+func TestExplainUnsupported_AnyEdition(t *testing.T) {
+	t.Parallel()
+	notFound := &apiStatusError{Method: "PUT", URL: "http://x/api/kubernetes/4/namespaces/default/deployments/web/scale", StatusCode: http.StatusNotFound, Body: "404 page not found"}
+	cases := map[string]struct {
+		version, edition string
+		explained        bool
 	}{
-		{"catalog", "GET", "/addons/catalog", "2.45.1", "EE", "Business Edition 2.45.2 or later", func(m *MockServer) error {
-			r := dataSourceAddonCatalog()
-			return rcRead(r, r.TestResourceData(), m.Client())
-		}},
-		{"catalog refresh", "POST", "/addons/catalog/refresh", "2.45.3", "CE", "Business Edition 2.45.2 or later", func(m *MockServer) error {
-			r := resourceAddonCatalogRefresh()
-			return rcCreate(r, r.TestResourceData(), m.Client())
-		}},
-		{"alerting rules", "GET", "/observability/alerting/rules", "2.45.3", "CE", "requires Portainer Business Edition;", func(m *MockServer) error {
-			r := dataSourceAlertingRules()
-			return rcRead(r, r.TestResourceData(), m.Client())
-		}},
+		"community 2.39": {"2.39.9", "CE", true},
+		"business 2.39":  {"2.39.9", "EE", true},
+		"community 2.45": {"2.45.4", "CE", false},
+		"business 3.1.0": {"3.1.0", "EE", false},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
 			mock := NewMockServer(t)
-			mock.On(tc.method, tc.path, RespondString(http.StatusNotFound, "text/plain", "404 page not found"))
 			mock.On("GET", "/system/version", RespondJSON(http.StatusOK, map[string]interface{}{
 				"ServerVersion": tc.version, "ServerEdition": tc.edition,
 			}))
-			if err := tc.run(mock); err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Errorf("expected an error naming %q, got %v", tc.want, err)
+			err := explainUnsupported(context.Background(), mock.Client(), notFound, "portainer_kubernetes_deployment_scale", requires245)
+			explained := strings.Contains(err.Error(), "requires Portainer 2.45 or later; this server is Portainer "+tc.edition+" "+tc.version)
+			if explained != tc.explained {
+				t.Errorf("explained = %v, want %v: %v", explained, tc.explained, err)
 			}
 		})
+	}
+}
+
+// TestExplainUnsupported_Hint: a server that meets the requirement but whose
+// router has no such route (an API behind a feature flag) gets the hint; an
+// application 404 such as a deleted object does not.
+func TestExplainUnsupported_Hint(t *testing.T) {
+	t.Parallel()
+	mock := NewMockServer(t)
+	mock.On("GET", "/system/version", RespondJSON(http.StatusOK, map[string]interface{}{"ServerVersion": "3.1.0", "ServerEdition": "EE"}))
+	noRoute := &apiStatusError{Method: "GET", URL: "http://x/api/oidc_clients", StatusCode: http.StatusNotFound, Body: "404 page not found"}
+	err := explainUnsupported(context.Background(), mock.Client(), noRoute, "portainer_oidc_client", requiresBE31OIDC)
+	if !strings.Contains(err.Error(), "--feat=oidc") || !strings.Contains(err.Error(), "EE 3.1.0") {
+		t.Errorf("expected the feature flag hint, got %v", err)
+	}
+	missing := &apiStatusError{Method: "GET", URL: "http://x/api/oidc_clients/7", StatusCode: http.StatusNotFound, Body: `{"message":"Unable to find an OIDC client"}`}
+	if err := explainUnsupported(context.Background(), mock.Client(), missing, "portainer_oidc_client", requiresBE31OIDC); !errors.Is(err, missing) || strings.Contains(err.Error(), "feature flag") {
+		t.Errorf("an application 404 must stay as it is, got %v", err)
+	}
+}
+
+// TestExplainRemovedAPI: the router 404 of a removed API names the server and
+// where the API still exists; an application 404 is left alone.
+func TestExplainRemovedAPI(t *testing.T) {
+	t.Parallel()
+	mock := NewMockServer(t)
+	mock.On("GET", "/system/version", RespondJSON(http.StatusOK, map[string]interface{}{"ServerVersion": "3.1.0", "ServerEdition": "EE"}))
+	noRoute := &apiStatusError{Method: "POST", URL: "http://x/api/chat", StatusCode: http.StatusNotFound, Body: "404 page not found"}
+	err := explainRemovedAPI(context.Background(), mock.Client(), noRoute, "portainer_chat", "gone")
+	if !strings.Contains(err.Error(), "portainer_chat is not available on Portainer EE 3.1.0: gone") || !errors.Is(err, noRoute) {
+		t.Errorf("unexpected error %v", err)
+	}
+	appErr := &apiStatusError{StatusCode: http.StatusNotFound, Body: `{"message":"not found"}`}
+	if err := explainRemovedAPI(context.Background(), mock.Client(), appErr, "x", "gone"); err != appErr { //nolint:errorlint // the same value, unwrapped, is expected
+		t.Errorf("an application 404 must stay as it is, got %v", err)
 	}
 }

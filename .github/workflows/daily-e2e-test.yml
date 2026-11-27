@@ -23,17 +23,17 @@ jobs:
           # 1.11 is the oldest Terraform with write-only attribute support.
           - cli: terraform
             version: "~1.11.0"
-            portainer: "2.45.3"
+            portainer: "2.45.4"
           - cli: terraform
             version: latest
-            portainer: "2.45.3"
+            portainer: "2.45.4"
           - cli: opentofu
             version: latest
-            portainer: "2.45.3"
+            portainer: "2.45.4"
           # The previous LTS line, which the provider still supports.
           - cli: terraform
             version: latest
-            portainer: "2.39.8"
+            portainer: "2.39.9"
     env:
       PORTAINER_VERSION: ${{ matrix.portainer }}
 
@@ -120,7 +120,22 @@ jobs:
           FULL_CYCLE_DIRS=("edge_string" "edge_file" "edge_repository" "kubernetes_application" "kubernetes_deployment_scale" "user_api_key" "endpoint_group_membership" "data_team_memberships" "custom_template_file" "kubernetes_clusterrole" "kubernetes_clusterrolebinding" "kubernetes_configmaps" "kubernetes_cronjob" "kubernetes_helm" "kubernetes_ingress" "kubernetes_ingresscontrollers" "kubernetes_job" "kubernetes_namespace_ingresscontrollers" "kubernetes_namespace_system" "kubernetes_role" "kubernetes_rolebinding" "kubernetes_secret" "kubernetes_service" "kubernetes_serviceaccounts" "kubernetes_storage" "kubernetes_volume"
           "custom_template_string" "custom_template_repository" "docker_image" "docker_network" "docker_plugin" "docker_volume" "stack_standalone_string" "stack_standalone_file" "stack_standalone_repository" "endpoint_group" "tag" "user-team-teammembership" "registry" "environment_tags")
 
+          # The previous LTS line (2.39) has no deployment read/scale API and no
+          # /endpoints/summary or /users/{id}/effective-access, which these use.
+          SKIP_DIRS=()
+          if [[ "${PORTAINER_VERSION}" == 2.39.* ]]; then
+            SKIP_DIRS=("kubernetes_deployment_scale" "data_portainer_readonly")
+          fi
+          skipped() {
+            if [[ " ${SKIP_DIRS[*]} " == *" $1 "* ]]; then
+              echo "⏭️ Skipping e2e-tests/$1: not available in Portainer ${PORTAINER_VERSION}"
+              return 0
+            fi
+            return 1
+          }
+
           for dir in "${FULL_CYCLE_DIRS[@]}"; do
+            skipped "$dir" && continue
             if [ -d "e2e-tests/$dir" ]; then
               echo "▶️ Running full Terraform cycle in e2e-tests/$dir"
               cd "e2e-tests/$dir"
@@ -134,6 +149,7 @@ jobs:
           done
 
           for dir in "${APPLY_ONLY_DIRS[@]}"; do
+            skipped "$dir" && continue
             if [ -d "e2e-tests/$dir" ]; then
               echo "▶️ Running apply-only Terraform in e2e-tests/$dir"
               cd "e2e-tests/$dir"

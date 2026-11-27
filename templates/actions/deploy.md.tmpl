@@ -1,0 +1,59 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_deploy` action rolls an image revision out to services of a stack (Docker Swarm or standalone) and optionally writes it into a stack environment variable, as the `portainer_deploy` resource does.
+
+> **Requirements:** Terraform >= 1.14 (actions). OpenTofu does not support actions; there, and with older Terraform, use the [`portainer_deploy` resource](../resources/deploy.md), which runs the same operation when it is created.
+
+## Example Usage
+
+### Run it from a lifecycle `action_trigger`
+
+```hcl
+action "portainer_deploy" "release" {
+  config {
+    endpoint_id   = 1
+    stack_name    = "shop"
+    stack_env_var = "REVISION"
+    services_list = "web,api"
+    revision      = var.revision
+    force_update  = true
+  }
+}
+
+resource "terraform_data" "revision" {
+  input = var.revision
+
+  lifecycle {
+    action_trigger {
+      events  = [after_create, after_update]
+      actions = [action.portainer_deploy.release]
+    }
+  }
+}
+```
+
+### Run it on demand
+
+```shell
+terraform apply -invoke action.portainer_deploy.release
+```
+
+## Lifecycle & Behavior
+
+- The action runs only when it is invoked: from an `action_trigger` on the events listed there, or with `terraform apply -invoke`. A plan lists the invocations it would run; nothing is stored in state, so there is nothing to destroy and no `triggers` argument is needed to run it again.
+- It sends the same requests as the `portainer_deploy` resource does when it is created, with the same defaults, and fails the apply with the same errors.
+- The summary of what was updated is shown as a progress message.
+- The deployment runs within a 15 minute timeout, the resource's default.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Actions have no attributes: nothing they return can be referenced elsewhere in the configuration.

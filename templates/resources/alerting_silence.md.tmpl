@@ -1,0 +1,76 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_alerting_silence resource creates and manages alert silences in Portainer. A silence suppresses alerts matching specified label matchers for a given time window.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_alerting_silence` resource creates and manages alert silences in Portainer. A silence suppresses alerts matching specified label matchers for a given time window.
+
+All fields are immutable (`ForceNew`). Changing any field will destroy the existing silence and create a new one.
+
+## Example Usage
+
+### Silence all critical alerts for maintenance
+```hcl
+resource "portainer_alerting_silence" "maintenance" {
+  alert_manager_url = "http://alertmanager.monitoring.svc:9093"
+  comment           = "Scheduled maintenance window"
+  created_by        = "terraform"
+  starts_at         = "2026-04-12T00:00:00Z"
+  ends_at           = "2026-04-12T06:00:00Z"
+
+  matchers {
+    name     = "severity"
+    value    = "critical"
+    is_regex = false
+    is_equal = true
+  }
+}
+```
+
+### Silence alerts matching a regex pattern
+```hcl
+resource "portainer_alerting_silence" "regex_silence" {
+  alert_manager_url = "http://alertmanager.monitoring.svc:9093"
+  comment           = "Suppress disk alerts on test nodes"
+  created_by        = "terraform"
+  starts_at         = "2026-04-12T00:00:00Z"
+  ends_at           = "2026-04-13T00:00:00Z"
+
+  matchers {
+    name     = "alertname"
+    value    = "DiskSpace.*"
+    is_regex = true
+    is_equal = true
+  }
+
+  matchers {
+    name     = "environment"
+    value    = "test"
+    is_regex = false
+    is_equal = true
+  }
+}
+```
+
+## Lifecycle & Behavior
+- **Create**: Sends `POST /observability/alerting/silence` with the silence definition.
+- **Read**: Verifies the silence exists by querying `GET /observability/alerting/alerts?status=silenced`.
+- **Delete**: Sends `DELETE /observability/alerting/silence/{id}?alertManagerURL=<url>`.
+- **Update**: Not supported. All fields force recreation.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `matchers.is_equal`: Whether to match for equality (default: `true`) or inequality.
+- `id`: The silence ID returned by AlertManager.
+
+## Import
+Silences can be imported using the silence ID:
+```bash
+terraform import portainer_alerting_silence.maintenance <silence-id>
+```

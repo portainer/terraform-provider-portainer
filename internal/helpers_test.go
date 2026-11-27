@@ -7,6 +7,7 @@ import (
 // --------------- toIntSlice ---------------
 
 func TestToIntSlice(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    []interface{}
@@ -36,6 +37,7 @@ func TestToIntSlice(t *testing.T) {
 // --------------- splitAndTrimCSV ---------------
 
 func TestSplitAndTrimCSV(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    string
@@ -70,6 +72,7 @@ func TestSplitAndTrimCSV(t *testing.T) {
 // --------------- contains ---------------
 
 func TestContains(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		arr      []string
@@ -97,6 +100,7 @@ func TestContains(t *testing.T) {
 // --------------- mustMap ---------------
 
 func TestMustMap(t *testing.T) {
+	t.Parallel()
 	t.Run("nil returns empty map", func(t *testing.T) {
 		result := mustMap(nil)
 		if result == nil {
@@ -153,6 +157,7 @@ func TestMustMap(t *testing.T) {
 // --------------- parseManifest ---------------
 
 func TestParseManifest(t *testing.T) {
+	t.Parallel()
 	t.Run("valid JSON", func(t *testing.T) {
 		input := `{"apiVersion": "v1", "kind": "Pod"}`
 		result, err := parseManifest(input)

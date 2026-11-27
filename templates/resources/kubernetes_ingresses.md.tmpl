@@ -1,0 +1,86 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_kubernetes_ingress resource allows you to deploy one-off Kubernetes Ingress workloads into a specified namespace on a Kubernetes environment (endpoint) managed via Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_ingress` resource allows you to deploy one-off Kubernetes `Ingress` workloads into a specified namespace on a Kubernetes environment (endpoint) managed via Portainer.
+
+---
+
+## 🧩 Example Usage
+
+```hcl
+resource "portainer_kubernetes_ingress" "example" {
+  environment_id = 4
+  namespace      = "default"
+  name           = "example-ingress"
+  class_name     = "nginx"
+
+  annotations = {
+    "nginx.ingress.kubernetes.io/rewrite-target" = "/"
+  }
+
+  labels = {
+    "app" = "frontend"
+  }
+
+  hosts = ["example.com"]
+
+  tls {
+    hosts       = ["example.com"]
+    secret_name = "example-tls"
+  }
+
+  paths {
+    host         = "example.com"
+    path         = "/"
+    path_type    = "Prefix"
+    port         = 80
+    service_name = "frontend-service"
+  }
+}
+```
+
+---
+
+## ⚙️ Lifecycle & Behavior
+
+* The ingress is managed through the **Portainer Kubernetes API**.
+* Changes to the configuration (e.g., annotations, hosts, paths) are applied **in place**.
+* Only the configured `annotations` keys are managed: before an update the provider reads the live ingress and sends annotations added by others (controllers, cert-manager, kubectl, Portainer) back unchanged, while keys removed from the configuration are deleted.
+* To apply changes:
+
+  ```sh
+  terraform apply
+  ```
+* To remove the ingress:
+
+  ```sh
+  terraform destroy
+  ```
+
+---
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `class_name`: The ingress class name (e.g. `nginx`, `traefik`).
+- `tls.hosts`: List of hostnames included in this TLS configuration (e.g., `["example.com"]`).
+- `paths.host`: The hostname to match for this path (e.g., `example.com`).
+- `paths.path`: The URL path to route (e.g., `/`, `/api`).
+- `id`: ID of the ingress in the format `environment_id:namespace:name`.
+
+## Import
+
+Kubernetes Ingress resources can be imported using the composite ID `environmentID:namespace:name`:
+
+```shell
+terraform import portainer_kubernetes_ingresses.example 1:default:my-ingress
+```
+
+Import reads every argument back except `labels`: Portainer does not store them. Drift in configured hosts, paths, TLS, class and annotations is detected; annotations added by others are ignored and kept on apply.

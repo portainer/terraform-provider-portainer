@@ -1,0 +1,163 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Manages a GitOps workflow: a named set of artifacts, each built from files in a GitOps source and deployed onto a set of edge groups.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition.** Portainer CE has the workflow create, read and update endpoints, but
+> neither of the two removal endpoints this resource destroys through - so the resource as a
+> whole needs Business Edition.
+
+Manages a GitOps workflow: a named set of artifacts, each built from files in a GitOps source and deployed onto a set of edge groups.
+
+On Portainer Business Edition 3.0 or later a workflow can instead run on the **reconcile engine**, which keeps Edge Kubernetes environments continuously matching the source and reports or corrects drift. It targets Edge groups, environment groups or individual environments, and can deploy an artifact as a Helm chart.
+
+## Example Usage
+
+```hcl
+resource "portainer_gitops_workflow" "platform" {
+  name       = "platform"
+  on_destroy = "destroy"
+
+  artifact {
+    name            = "monitoring"
+    type            = "edgeStack"
+    deployment_type = "compose"
+    edge_group_ids  = [portainer_edge_group.shops.id]
+
+    file {
+      source_id = portainer_gitops_source.platform.id
+      path      = "monitoring/portainer.yaml"
+      ref       = "refs/heads/main"
+    }
+
+    config {
+      pre_pull_image = true
+      registry_ids   = [portainer_registry.internal.id]
+
+      environment = {
+        LOG_LEVEL = "info"
+      }
+
+      parallel {
+        batch_count    = 5
+        delay          = "30"
+        failure_action = "continue"
+      }
+    }
+  }
+}
+```
+
+### Reconcile engine (Portainer BE 3.0+)
+
+```hcl
+resource "portainer_gitops_workflow" "apps" {
+  name               = "apps"
+  engine             = "reconcile"
+  reconcile_interval = "5m"
+
+  artifact {
+    name                  = "crds"
+    deployment_type       = "kubernetes"
+    environment_group_ids = [portainer_endpoint_group.production.id]
+
+    file {
+      source_id = portainer_gitops_source.platform.id
+      path      = "crds"
+      ref       = "refs/heads/main"
+    }
+  }
+
+  artifact {
+    name                  = "web"
+    deployment_type       = "kubernetes"
+    environment_group_ids = [portainer_endpoint_group.production.id]
+    dependencies          = ["crds"]
+
+    file {
+      source_id = portainer_gitops_source.platform.id
+      path      = "charts/web"
+      ref       = "refs/heads/main"
+    }
+
+    helm {
+      chart_path   = "charts/web"
+      release_name = "web"
+      namespace    = "web"
+      values_files = ["charts/web/values-prod.yaml"]
+
+      upgrade {
+        retries  = 2
+        strategy = "rollback"
+      }
+    }
+
+    config {
+      drift_mode       = "enabled"
+      ignore_paths     = ["/spec/replicas"]
+      timeout          = "5m"
+      kubernetes_prune = true
+    }
+  }
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `install`: What happens when the first install fails: `retries`, `remediate_last_failure`, `strategy`.
+- `upgrade`: What happens when an upgrade fails: `retries`, `remediate_last_failure`, `strategy`.
+- `parallel`: Staggered rollout settings: `batch_count`, `batch_increment_by`, `delay`, `timeout`, `failure_action`.
+- `kubernetes_prune`: Defaults to `.`.
+
+## Arguments by Deployment Method
+
+### `artifact`
+
+#### `artifact.helm`
+
+`install` and `upgrade` take:
+
+## Lifecycle & Behavior
+
+**`on_destroy` is a real choice.** Portainer has two removal endpoints that do different things: `destroy` tears the deployed stacks down along with the workflow, `detach` leaves them running and only unlinks them from GitOps. The default is `destroy`, which is what removing a resource normally means in Terraform.
+
+**An artifact cannot be renamed.** Portainer's update payload has no name field at all, so renaming one in the configuration forces the workflow to be replaced. Without that, the new name would be accepted into state and never sent, leaving the configuration and Portainer quietly disagreeing.
+
+**Only artifact identifiers are read back.** The update payload keys artifacts by the identifier Portainer assigned, so those are read into state. The rest of an artifact is driven by the configuration: Portainer normalises the file and config fields, and reading them back would make a stable configuration churn.
+
+**Migrating to the reconcile engine is one-way.** Changing `engine` from `edgeStack` (or unset) to `reconcile` is an in-place update: Portainer removes the workflow's Edge stacks and the reconcile engine adopts what they deployed, without recreating anything. Portainer cannot move a workflow back, so changing `engine` away from `reconcile` replaces the workflow. `reconcile_interval` is required to create or migrate a reconcile workflow; removing it later leaves the recorded interval alone. Use `portainer_gitops_workflow_reconcile` to reconcile on demand.
+
+**`engine` is derived, not read.** Portainer reports no engine of its own, so the provider derives it from the artifact types: a reconciled artifact is a `gitopsDeployment`. An unset `engine` stays unset in state for an Edge stack workflow, so a Portainer 2.45 workflow plans no change. When the reconcile engine was asked for but the server still reports Edge stacks - Portainer before 3.0 ignores the field - the apply fails and names the requirement.
+
+**File patterns (Portainer BE 3.1+).** From Portainer Business Edition 3.1 an artifact's `file.path` can be a glob pattern, for example `manifests/*.yaml`, which picks up every matching file of the source. The provider passes the path through unchanged and does not validate it; an older Portainer treats the pattern as a literal file name.
+
+**Portainer 2.45 compatibility.** None of the 3.0 attributes is sent unless configured, so a configuration that does not use them sends exactly what it did before. They are not read back either, like the rest of an artifact. `kubernetes_prune`, `kubernetes_force_apply` and `remediate_last_failure` are only sent when configured, so a configured `false` reaches Portainer while a removed one leaves Portainer's recorded choice alone.
+
+## Import
+
+```bash
+terraform import portainer_gitops_workflow.platform 4
+```
+
+The import ID is the workflow identifier. An imported workflow has no artifact blocks in state, so they have to be supplied in the configuration before the first apply.
+
+### Import by identity
+
+Terraform 1.12 and later can also import by resource identity: the object's numeric ID as `id` in an `import` block. The ID string above keeps working.
+
+```hcl
+import {
+  to       = portainer_gitops_workflow.example
+  identity = {
+    id = "4"
+  }
+}
+```
+
+`terraform query` (Terraform 1.14+) with the [`portainer_gitops_workflow` list resource](../list-resources/gitops_workflow.md) finds the objects to import and can generate the `import` blocks (`terraform query -generate-config-out=generated.tf`). The identity is stored in the state from v3.1.0 on; state written by v3.0.0 gets it on the next refresh, without a plan change. OpenTofu supports neither resource identity nor list resources; it keeps importing by ID.

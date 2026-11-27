@@ -1,0 +1,28 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_backup resource allows you to trigger a backup of your Portainer instance directly via Terraform.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_backup` resource allows you to trigger a backup of your Portainer instance directly via Terraform.
+> ⚠️ Note: The backup is saved locally at the path specified by output_path.
+The backup is encrypted using the password.
+
+> **See also:** the [`portainer_backup` action](../actions/backup.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+```hcl
+resource "portainer_backup" "backup" {
+  password    = "your-backup-password"
+  output_path = "backup.tar.gz"
+}
+```
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/backup)
+
+## Lifecycle & Behavior
+This resource performs a one-time backup when it is created. Its ID stays in state and nothing is read back, so later applies with an unchanged configuration do not back up again. To take another backup, change `password` or `output_path` (both force a new resource), bump `password_wo_version`, or run `terraform apply -replace=portainer_backup.<name>`. On Terraform 1.14 and later, the `portainer_backup` action backs up every time it is invoked.
+
+{{ .SchemaMarkdown | trimspace }}

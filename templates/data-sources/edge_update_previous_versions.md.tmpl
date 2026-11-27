@@ -1,0 +1,33 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reports the agent version each environment ran before its last update, which is what a rollback would return it to.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reports the agent version each environment ran before its last update, which is what a rollback would return it to.
+
+## Example Usage
+
+```hcl
+data "portainer_edge_update_previous_versions" "shops" {
+  edge_group_ids = [portainer_edge_group.shops.id]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+### `previous_versions`
+
+| Name | Type | Description |
+|------|------|-------------|
+| `endpoint_id` | string | Identifier of the environment. |
+| `version` | string | Agent version it ran before the update. |
+
+Portainer answers with a map of environment to version; the provider sorts it into a list so the output is stable between two identical plans.

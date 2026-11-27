@@ -1,0 +1,28 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reports how much is in a Kubernetes cluster: applications, namespaces, services, ingresses, ConfigMaps, secrets and volumes.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Reports how much is in a Kubernetes cluster: applications, namespaces, services, ingresses, ConfigMaps, secrets and volumes.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_resource_counts" "prod" {
+  endpoint_id = portainer_environment.prod.id
+}
+
+output "cluster_size" {
+  value = data.portainer_kubernetes_resource_counts.prod
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Portainer answers each of these from its own endpoint, so one read makes seven calls. They are folded into a single data source because they answer a single question; pulling them apart would mean seven data sources that are each one number.

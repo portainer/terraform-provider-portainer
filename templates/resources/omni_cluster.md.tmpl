@@ -1,0 +1,97 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Provisions a Talos cluster through Siderolabs Omni. Creating one also creates the Portainer environment that fronts it, whose identifier is reported back as endpoint_id.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Provisions a Talos cluster through Siderolabs Omni. Creating one also creates the Portainer environment that fronts it, whose identifier is reported back as `endpoint_id`.
+
+## Example Usage
+
+```hcl
+data "portainer_omni_talos_versions" "supported" {
+  credential_id = portainer_cloud_credentials.omni.id
+}
+
+resource "portainer_omni_cluster" "edge_fleet" {
+  credential_id      = portainer_cloud_credentials.omni.id
+  name               = "edge-fleet"
+  talos_version      = data.portainer_omni_talos_versions.supported.talos_versions[0]
+  kubernetes_version = "v1.31.0"
+
+  labels = {
+    environment = "production"
+  }
+
+  control_plane {
+    machine {
+      name             = "cp-1"
+      hostname         = "cp-1"
+      install_disk     = "/dev/sda"
+      nameservers      = ["1.1.1.1"]
+      system_disk_size = 50
+
+      interface {
+        interface = "eth0"
+        addresses = ["10.0.0.11/24"]
+
+        route {
+          network = "0.0.0.0/0"
+          gateway = "10.0.0.1"
+        }
+      }
+    }
+  }
+
+  worker {
+    name = "pool-a"
+
+    machine {
+      name         = "worker-1"
+      install_disk = "/dev/sda"
+
+      interface {
+        interface = "eth0"
+        dhcp      = true
+      }
+
+      user_disk {
+        volume_name = "data"
+        size        = 0 # take whatever space is left
+      }
+    }
+  }
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `credential_id`: Changing it forces a new resource.
+- `cluster_config`: Only read at creation, so changing it forces a new resource.
+
+## Lifecycle & Behavior
+
+**Validation runs first by default.** Provisioning a Talos cluster touches real machines and takes a long time, so the configuration is sent to Portainer's validation endpoint before anything is created. A rejected configuration fails the apply without provisioning. Set `validate_before_create = false` to skip the check.
+
+**The machine blocks are never read back.** Portainer's read reports the cluster's spec and status, not the machines it was built from. Terraform therefore cannot detect drift in the machine list: a node removed outside Terraform will not show up in a plan. What the read does populate is the version, feature, backup and status attributes above.
+
+**Updates are sent as a difference.** Portainer's update endpoint is imperative - it takes machines to add and machine names to remove. The provider works that difference out from the change to the `machine` blocks, so adding one machine sends one machine rather than the whole list.
+
+**Use the machine data sources to fill the blocks in.** `portainer_omni_machines` lists what Omni has available, and `portainer_omni_machine` reports the block devices and network links a machine actually has, which is where `install_disk` and `interface` values come from.
+
+**Cancelling a provision in flight is not exposed.** Portainer has an endpoint for it, but it is an interactive escape hatch rather than declarative state: Terraform's answer to a provision that will not finish is to destroy the resource, which is the delete endpoint.
+
+## Import
+
+```bash
+terraform import portainer_omni_cluster.edge_fleet 3:edge-fleet
+```
+
+The import ID is `<credential id>:<cluster name>`. The format from before v3.0.0, `<credential id>/<cluster name>`, is still accepted. The ID of a cluster created before v3.0.0 moves to the new format on the next refresh. An imported cluster has no machine blocks in state, so they have to be supplied in the configuration - and because they are never read back, the first plan after an import will not show them as a change.

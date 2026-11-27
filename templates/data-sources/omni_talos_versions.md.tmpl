@@ -1,0 +1,37 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Lists the Talos versions a credential can provision.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Lists the Talos versions a credential can provision.
+
+## Example Usage
+
+```hcl
+data "portainer_omni_talos_versions" "supported" {
+  credential_id = portainer_cloud_credentials.omni.id
+}
+
+output "newest_talos" {
+  value = reverse(data.portainer_omni_talos_versions.supported.talos_versions)[0]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+### `compatibility`
+
+| Name | Type | Description |
+|------|------|-------------|
+| `talos_version` | string | A Talos version on offer. |
+| `kubernetes_versions` | list(string) | Kubernetes versions Portainer lists against that Talos version. |
+
+Portainer returns this as a map of version to version list. The sorting is done by the provider so the output is stable between plans; Portainer itself does not define an order.

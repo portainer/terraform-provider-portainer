@@ -1,0 +1,61 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Installs, upgrades and uninstalls an addon from the Portainer add-on store. Portainer installs an addon as a Helm release, so the resource is essentially a managed release pinned to a catalog entry.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Installs, upgrades and uninstalls an addon from the Portainer add-on store. Portainer installs an addon as a Helm release, so the resource is essentially a managed release pinned to a catalog entry.
+
+## Example Usage
+
+```hcl
+resource "portainer_addon" "portal" {
+  addon_id = "portal-template"
+  version  = "1.2.3"
+
+  values = jsonencode({
+    ingress = {
+      enabled = true
+      host    = "apps.example.com"
+    }
+    replicas = 2
+  })
+}
+```
+
+Installing from a private registry instead of the catalog's public chart reference:
+
+```hcl
+resource "portainer_addon" "portal" {
+  addon_id          = "portal-template"
+  registry_id       = portainer_registry.internal.id
+  chart             = "portainer/charts/portal"
+  image_registry_id = portainer_registry.internal.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `addon_id`: Changing it forces a new resource.
+- `force_uninstall`: Defaults to `false`.
+- `prune_config_on_uninstall`: Defaults to `false`, so the configuration survives a reinstall.
+- `public_url`: Portainer BE 3.1+, with Portainer itself running on Kubernetes (add-ons are not available otherwise). Set through its own endpoint, so changing only the URL does not reinstall the addon. Only sent when configured (an older Portainer is never asked), read back while configured, and cleared in Portainer when removed from the configuration. Portainer signs users in to the addon only by redirecting them to this URL.
+
+## Attributes Reference
+
+`lifecycle_status` and `health_status` are independent: an addon can report `installed` while its probe says `unhealthy`, and it can be `upgrading` while the previous version still serves traffic. A `credential-invalid` health status is what `portainer_addon_repair` fixes.
+
+## Import
+
+```bash
+terraform import portainer_addon.portal portal-template
+```
+
+The import ID is the addon's catalog identifier.

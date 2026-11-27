@@ -1,0 +1,40 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_registry_configure resource applies the authentication and TLS configuration of an existing registry, which is a separate Portainer endpoint from the registry object itself.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_registry_configure` resource applies the authentication and TLS configuration of an existing registry, which is a separate Portainer endpoint from the registry object itself.
+
+## Example Usage
+
+```hcl
+resource "portainer_registry" "harbor" {
+  name = "harbor"
+  url  = "registry.example.com"
+  type = 3
+}
+
+resource "portainer_registry_configure" "harbor" {
+  registry_id    = portainer_registry.harbor.id
+  authentication = true
+  username       = "robot$ci"
+  password       = var.registry_password
+  tls            = true
+  tls_ca_cert    = file("ca.pem")
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `registry_id`: Changing it replaces the resource.
+- `id`: Composite identifier in the form `<registry_id>/configure`.
+
+## Attributes Reference
+
+Portainer has no endpoint to read a registry's configuration back or to clear it, so this resource cannot detect drift, and destroying it only stops managing the configuration — the registry keeps the settings it was given.

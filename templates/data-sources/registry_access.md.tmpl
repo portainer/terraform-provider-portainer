@@ -1,0 +1,41 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_registry_access data source allows you to retrieve the access role (policy) of a specific team or user on a registry within a specific endpoint.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_registry_access` data source allows you to retrieve the access role (policy) of a specific team or user on a registry within a specific endpoint.
+
+### Example Usage
+
+```hcl
+// Querying a team's access to a registry
+data "portainer_registry_access" "team_access" {
+  registry_id = 3
+  endpoint_id = 1
+  team_id     = 2
+}
+
+output "team_role" {
+  value = data.portainer_registry_access.team_access.role_id
+}
+
+// Querying a user's access to a registry
+data "portainer_registry_access" "user_access" {
+  registry_id = 3
+  endpoint_id = 1
+  user_id     = 5
+}
+```
+
+---
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `team_id`: ID of the team (must provide team or user).
+- `user_id`: ID of the user (must provide team or user).

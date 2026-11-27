@@ -1,0 +1,30 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Runs a local backup once, outside the schedule.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Runs a local backup once, outside the schedule.
+
+> **See also:** the [`portainer_backup_local_run` action](../actions/backup_local_run.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+
+```hcl
+resource "portainer_backup_local_run" "before_upgrade" {
+  triggers = {
+    version = var.portainer_version
+  }
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Without a `triggers` value the resource runs once and then stays put, since a backup is a one-shot action.

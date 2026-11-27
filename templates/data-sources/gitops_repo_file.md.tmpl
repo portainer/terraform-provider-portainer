@@ -1,0 +1,37 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_gitops_repo_file data source reads a file from a Git repository and returns its content. This is useful for previewing compose files, configuration files, or any other file stored in Git before deploying.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_gitops_repo_file` data source reads a file from a Git repository and returns its content. This is useful for previewing compose files, configuration files, or any other file stored in Git before deploying.
+
+## Example Usage
+
+```hcl
+data "portainer_gitops_repo_file" "compose" {
+  repository_url = "https://github.com/portainer/portainer.git"
+  reference      = "refs/heads/main"
+  target_file    = "docker-compose.yml"
+}
+
+output "compose_content" {
+  value = data.portainer_gitops_repo_file.compose.file_content
+}
+```
+
+### With authentication
+```hcl
+data "portainer_gitops_repo_file" "private_file" {
+  repository_url = "https://github.com/my-org/private-repo.git"
+  reference      = "refs/heads/main"
+  target_file    = "deploy/values.yaml"
+  username       = "my-user"
+  password       = var.git_password
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

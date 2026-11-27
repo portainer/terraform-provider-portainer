@@ -1,0 +1,35 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Searches a git repository for file paths, which is how a configuration discovers what it can deploy.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Searches a git repository for file paths, which is how a configuration discovers what it can deploy.
+
+## Example Usage
+
+```hcl
+data "portainer_gitops_repo_file_search" "stacks" {
+  repository = "https://github.com/example/platform"
+  reference  = "refs/heads/main"
+  include    = "yml,yaml"
+  keyword    = "portainer"
+}
+
+output "deployable_files" {
+  value = data.portainer_gitops_repo_file_search.stacks.paths
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+The credentials are omitted from the request when unset, so a public repository is never cloned with a blank username and password. Supply `source_id` instead to reuse a GitOps source's credentials.
+
+`force` re-clones rather than answering from Portainer's cache. The returned paths are sorted so two identical plans produce identical output.

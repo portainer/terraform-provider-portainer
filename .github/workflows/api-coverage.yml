@@ -1,7 +1,9 @@
 name: Portainer API coverage
 
 # Checks that every path of the Portainer API is either called by the provider
-# or listed with a reason in internal/tools/apicoveragelint/ignore.txt.
+# or listed with a reason in internal/tools/apicoveragelint/ignore.txt, and
+# that every request field of a called operation is either sent by the
+# provider or listed with a reason in ignore-fields.txt next to it.
 #
 # Pull requests check against the pinned versions below, so a Portainer
 # release never fails an unrelated pull request. The weekly run checks the
@@ -25,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # <edition>/<version> pairs from https://api-docs.portainer.io
-      PINNED_SPECS: "ee/3.0.1 ee/2.45.3 ce/2.45.3"
+      PINNED_SPECS: "ee/3.1.0 ee/3.0.1 ee/2.45.4 ce/2.45.4"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,18 +50,33 @@ jobs:
             ce="$(curl -sSf https://api-docs.portainer.io/ce-versions.json | jq -r '.[0].id')"
             specs="${specs} ee/${ee} ce/${ce}"
           fi
-          mkdir -p specs
           for spec in $(echo "${specs}" | tr ' ' '\n' | sort -u); do
-            curl -sSf --retry 3 -o "specs/${spec//\//-}.yaml" "https://api-docs.portainer.io/versions/${spec}/openapi.yaml"
-            echo "${spec}"
+            # openapi.yaml only $refs one file per area (tags.yaml, ...), which
+            # holds the operations and request schemas; the tool reads them
+            # from the same directory and never fetches anything itself.
+            dir="specs/${spec//\//-}"
+            base="https://api-docs.portainer.io/versions/${spec}"
+            mkdir -p "${dir}"
+            curl -sSf --retry 3 -o "${dir}/openapi.yaml" "${base}/openapi.yaml"
+            refs="$(grep -E '^[[:space:]]+\$ref:' "${dir}/openapi.yaml" \
+              | sed -E "s/.*\\\$ref:[[:space:]]*['\"]?([^'\"#]+)#.*/\\1/" | grep -E '^[A-Za-z0-9_.-]+\.yaml$' | sort -u || true)"
+            for ref in ${refs}; do
+              curl -sSf --retry 3 -o "${dir}/${ref}" "${base}/${ref}"
+            done
+            echo "${spec}: $(echo "${refs}" | grep -c . || true) referenced files"
           done
 
       - name: Check coverage
         run: |
           args=()
-          for f in specs/*.yaml; do args+=(-spec "$f"); done
+          for f in specs/*/openapi.yaml; do args+=(-spec "$f"); done
           go run ./internal/tools/apicoveragelint "${args[@]}" . | tee api-coverage.out
           status=${PIPESTATUS[0]}
+          # The other direction: every path the provider calls is in a spec,
+          # so an API Portainer removes is noticed too.
+          go run ./internal/tools/apicoveragelint -reverse "${args[@]}" . | tee -a api-coverage.out
+          reverse=${PIPESTATUS[0]}
+          if [ "$status" -eq 0 ]; then status=$reverse; fi
           {
             echo "## Portainer API coverage"
             echo ""

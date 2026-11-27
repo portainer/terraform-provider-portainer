@@ -1,0 +1,57 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_delete_object` action deletes Kubernetes objects of one type by name in an environment.
+
+> ⚠️ This is a destructive action: the objects cannot be recovered.
+
+> **Requirements:** Terraform >= 1.14 (actions). OpenTofu does not support actions; there, and with older Terraform, use the [`portainer_kubernetes_delete_object` resource](../resources/kubernetes_delete_object.md), which runs the same operation when it is created.
+
+## Example Usage
+
+### Run it from a lifecycle `action_trigger`
+
+```hcl
+action "portainer_kubernetes_delete_object" "legacy" {
+  config {
+    environment_id = 1
+    resource_type  = "services"
+    namespace      = "shop"
+    names          = ["legacy-web", "legacy-api"]
+  }
+}
+
+resource "portainer_kubernetes_application" "web" {
+  # ...
+
+  lifecycle {
+    action_trigger {
+      events  = [before_create]
+      actions = [action.portainer_kubernetes_delete_object.legacy]
+    }
+  }
+}
+```
+
+### Run it on demand
+
+```shell
+terraform apply -invoke action.portainer_kubernetes_delete_object.legacy
+```
+
+## Lifecycle & Behavior
+
+- The action runs only when it is invoked: from an `action_trigger` on the events listed there, or with `terraform apply -invoke`. A plan lists the invocations it would run; nothing is stored in state, so there is nothing to destroy and no `triggers` argument is needed to run it again.
+- It sends the same requests as the `portainer_kubernetes_delete_object` resource does when it is created, with the same defaults, and fails the apply with the same errors.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Actions have no attributes: nothing they return can be referenced elsewhere in the configuration.

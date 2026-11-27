@@ -1,0 +1,27 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_team_membership data source allows you to retrieve information about a user's membership in a specific team.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_team_membership` data source allows you to retrieve information about a user's membership in a specific team.
+
+### Example Usage
+
+```hcl
+data "portainer_team_membership" "my_membership" {
+  team_id = 1
+  user_id = 5
+}
+
+output "user_role_in_team" {
+  value = data.portainer_team_membership.my_membership.role
+}
+```
+
+---
+
+{{ .SchemaMarkdown | trimspace }}

@@ -1,0 +1,39 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_stack_delete_by_name resource removes Kubernetes stacks by name, which is the only way to clear a stack Terraform does not have an ID for — typically one deployed outside Portainer and only discovered by it.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_stack_delete_by_name` resource removes Kubernetes stacks by name, which is the only way to clear a stack Terraform does not have an ID for — typically one deployed outside Portainer and only discovered by it.
+
+This is an **action resource**: the work happens when it is created, and destroying it does nothing. It is not a way to manage a stack's lifecycle; use `portainer_stack` for stacks Terraform owns. Reach for this only to clean up something Terraform never created, usually before adopting a namespace.
+
+> **See also:** the [`portainer_stack_delete_by_name` action](../actions/stack_delete_by_name.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+
+```hcl
+resource "portainer_stack_delete_by_name" "legacy" {
+  name        = "legacy-app"
+  namespace   = "legacy-apps"
+  endpoint_id = 4
+  external    = true
+}
+```
+
+## Arguments Reference
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `id`: Synthetic identifier in the form `<endpoint_id>/<name>/deleted/<timestamp>`.
+
+All arguments force a new resource.
+
+## Attributes Reference
+
+A stack that is already gone is treated as success — that is the state this resource asks for.

@@ -1,0 +1,30 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_helm_git_dryrun data source allows you to perform a dry-run validation of a Helm chart deployment from a Git repository before actually applying it. This is useful for previewing the rendered manifest and detecting configuration issues early.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_helm_git_dryrun` data source allows you to perform a dry-run validation of a Helm chart deployment from a Git repository before actually applying it. This is useful for previewing the rendered manifest and detecting configuration issues early.
+
+## Example Usage
+
+```hcl
+data "portainer_helm_git_dryrun" "test" {
+  endpoint_id    = 1
+  repository_url = "https://github.com/my-org/helm-charts.git"
+  reference_name = "refs/heads/main"
+  chart_path     = "charts/my-app"
+  release_name   = "my-app"
+  namespace      = "default"
+  values_files   = ["values.yaml", "values-prod.yaml"]
+}
+
+output "rendered_manifest" {
+  value = data.portainer_helm_git_dryrun.test.manifest
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

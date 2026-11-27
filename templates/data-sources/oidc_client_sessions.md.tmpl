@@ -1,0 +1,42 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Requires Portainer Business Edition 3.1 or later.** On Community Edition or an older server the read fails with an error that says so.
+
+**Portainer Business Edition 3.1.0 serves the OIDC provider only when started with the `oidc` feature flag**: `--feat=oidc` (or the environment variable `FEATURE_FLAG=oidc`; Helm chart: `--set "feature.flags[0]=--feat=oidc"`). Without it every OIDC API call fails with an error that says so.
+
+Lists the sessions of a client of Portainer's built-in OIDC provider (`GET /oidc_clients/{id}/sessions`): one per sign-in. Sessions are ended with [`portainer_oidc_client_sessions_end`](../resources/oidc_client_sessions_end.md).
+
+## Example Usage
+
+```hcl
+data "portainer_oidc_client_sessions" "grafana" {
+  client_id = tonumber(portainer_oidc_client.grafana.id)
+}
+
+output "grafana_signed_in_users" {
+  value = distinct(data.portainer_oidc_client_sessions.grafana.sessions[*].username)
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+### `sessions`
+
+| Name | Type | Description |
+|------|------|-------------|
+| `id` | number | Identifier of the session. |
+| `user_id` | number | Portainer user the session belongs to. |
+| `username` | string | Name of that user. |
+| `created_at` | number | Unix time the user signed in. |
+| `expires_at` | number | Unix time the session ends. |
+| `last_used_at` | number | Unix time the session was last used. |
+| `refreshable` | bool | Whether the client can renew the session with a refresh token. |

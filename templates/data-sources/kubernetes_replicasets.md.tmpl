@@ -1,0 +1,35 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_kubernetes_replicasets data source lists Kubernetes replica sets in a namespace. Its main use is discovering the rollout history of a deployment: each replica set carries the revision it represents, which is exactly what portainer_kubernetes_deployment_rollback takes as its target.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_replicasets` data source lists Kubernetes replica sets in a namespace. Its main use is discovering the rollout history of a deployment: each replica set carries the revision it represents, which is exactly what `portainer_kubernetes_deployment_rollback` takes as its target.
+
+Requires Portainer **2.45.0** or newer.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_replicasets" "web" {
+  environment_id = 1
+  namespace      = "default"
+  deployment     = "web"
+}
+
+output "web_revisions" {
+  value = {
+    for rs in data.portainer_kubernetes_replicasets.web.replicasets : rs.name => rs.revision
+  }
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+
+## Attributes Reference
+
+`revision` comes from the `deployment.kubernetes.io/revision` annotation and is `0` for a replica set that no deployment owns.

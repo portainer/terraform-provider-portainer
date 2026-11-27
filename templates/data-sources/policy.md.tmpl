@@ -1,0 +1,42 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_policy data source allows you to look up an existing Portainer Fleet Governance Policy by ID or name.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_policy` data source allows you to look up an existing Portainer Fleet Governance Policy by ID or name.
+
+## Example Usage
+
+### Look up a policy by name
+
+```hcl
+data "portainer_policy" "k8s_rbac" {
+  name = "Production RBAC"
+}
+
+output "policy_id" {
+  value = data.portainer_policy.k8s_rbac.id
+}
+```
+
+### Look up a policy by ID
+
+```hcl
+data "portainer_policy" "example" {
+  policy_id = 42
+}
+
+output "policy_name" {
+  value = data.portainer_policy.example.name
+}
+```
+
+## Arguments Reference
+
+Exactly one of `policy_id` or `name` must be specified.
+
+{{ .SchemaMarkdown | trimspace }}

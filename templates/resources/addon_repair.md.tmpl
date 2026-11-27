@@ -1,0 +1,36 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reissues the credential an installed addon authenticates to Portainer with. Run it when an addon reports health_status = "credential-invalid".
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reissues the credential an installed addon authenticates to Portainer with. Run it when an addon reports `health_status = "credential-invalid"`.
+
+> **See also:** the [`portainer_addon_repair` action](../actions/addon_repair.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+
+```hcl
+resource "portainer_addon_repair" "portal" {
+  addon_id = portainer_addon.portal.addon_id
+
+  triggers = {
+    health = portainer_addon.portal.health_status
+  }
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `addon_id`: Changing it forces a new resource.
+
+## Attributes Reference
+
+A repair is a one-shot action, so without a `triggers` value the resource runs once and then stays put.

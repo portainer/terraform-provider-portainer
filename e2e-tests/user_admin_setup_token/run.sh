@@ -21,14 +21,14 @@ cleanup() {
 trap cleanup EXIT
 cleanup
 
-step "Start a fresh Portainer ${PORTAINER_VERSION:-2.45.3}"
-docker run -d --name "${CONTAINER}" -p "${PORT}:9443" "portainer/portainer-ce:${PORTAINER_VERSION:-2.45.3}" >/dev/null
+step "Start a fresh Portainer ${PORTAINER_VERSION:-2.45.4}"
+docker run -d --name "${CONTAINER}" -p "${PORT}:9443" "portainer/portainer-ce:${PORTAINER_VERSION:-2.45.4}" >/dev/null
 UP=""
 for _ in $(seq 1 60); do
   curl -sk -o /dev/null "${TF_VAR_portainer_url}/api/system/status" && UP=1 && break
   sleep 1
 done
-[ -n "${UP}" ] || fail "Portainer ${PORTAINER_VERSION:-2.45.3} did not come up on port ${PORT}"
+[ -n "${UP}" ] || fail "Portainer ${PORTAINER_VERSION:-2.45.4} did not come up on port ${PORT}"
 TOKEN=""
 for _ in $(seq 1 30); do
   TOKEN="$(docker logs "${CONTAINER}" 2>&1 | sed -E 's/\x1b\[[0-9;]*m//g' | grep -o -E 'setup_token=[0-9a-f]+' | head -1 | cut -d= -f2 || true)"

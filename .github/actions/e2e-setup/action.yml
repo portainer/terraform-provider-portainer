@@ -19,7 +19,7 @@ inputs:
   portainer-version:
     description: "Portainer CE image tag to test against."
     required: false
-    default: "2.45.3"
+    default: "2.45.4"
   start-portainer:
     description: "Start the shared Portainer CE instance (docker compose). Jobs that run their own instance set it to 'false'."
     required: false

@@ -1,0 +1,50 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_endpoints_edge_generate_key resource allows administrators to generate a general-purpose Edge key, which can be used to register Portainer Edge Agents.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+## Overview
+The `portainer_endpoints_edge_generate_key` resource allows administrators to generate a general-purpose Edge key, which can be used to register Portainer Edge Agents.
+
+> Currently working only for Portainer BE edition
+
+---
+
+## 📘 Example Usage
+
+```hcl
+resource "portainer_endpoints_edge_generate_key" "generated" {}
+
+output "edge_key" {
+  value     = portainer_endpoints_edge_generate_key.generated.edge_key
+  sensitive = true
+}
+```
+
+---
+
+## ⚙️ Lifecycle & Behavior
+
+This resource triggers the creation of a new general-purpose Edge key every time the resource is applied. There are no inputs required. The generated key is exposed as an output.
+
+---
+
+## 🧾 Arguments Reference
+
+This resource does not accept any input arguments.
+
+---
+
+## 📤 Attributes Reference
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `id`: Always set to `"portainer-generated-edge-key"`
+
+See also: the [`portainer_endpoints_edge_generate_key` ephemeral resource](../ephemeral-resources/endpoints_edge_generate_key.md) keeps the secret out of the plan and the state (Terraform >= 1.10, OpenTofu >= 1.11).

@@ -1,0 +1,32 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reports how a Kubernetes or Talos upgrade of an Omni cluster is going.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reports how a Kubernetes or Talos upgrade of an Omni cluster is going.
+
+## Example Usage
+
+```hcl
+data "portainer_omni_upgrade_status" "talos" {
+  credential_id = portainer_cloud_credentials.omni.id
+  cluster       = portainer_omni_cluster.edge_fleet.name
+  component     = "talos"
+}
+
+output "talos_upgrade_step" {
+  value = data.portainer_omni_upgrade_status.talos.step
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Portainer tracks the Kubernetes and Talos upgrades separately and they can be at different steps, which is why `component` selects between them rather than both being reported at once.

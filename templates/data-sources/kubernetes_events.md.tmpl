@@ -1,0 +1,33 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reads Kubernetes events, cluster-wide or for one namespace. Events are usually what explains a workload that will not start.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Reads Kubernetes events, cluster-wide or for one namespace. Events are usually what explains a workload that will not start.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_events" "prod" {
+  environment_id = 1
+  namespace      = "prod"
+}
+
+output "problems" {
+  value = [
+    for e in data.portainer_kubernetes_events.prod.events : "${e.kind}/${e.name}: ${e.reason} - ${e.message}"
+    if e.type == "Warning"
+  ]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+
+## Attributes Reference
+
+Kubernetes discards events after about an hour by default, so this describes the recent past only — an empty list is not evidence that nothing went wrong.

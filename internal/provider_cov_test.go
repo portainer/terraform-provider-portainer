@@ -5,31 +5,93 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
-// --- Provider sanity ---------------------------------------------------------
+// --- frameworkProvider.Configure ---------------------------------------------
 
-func TestProvider_InternalValidate_Cov(t *testing.T) {
-	if err := Provider().InternalValidate(); err != nil {
-		t.Fatalf("provider failed InternalValidate: %v", err)
+// configureFramework runs the provider's Configure with the given provider
+// block attributes, the PORTAINER_* variables cleared.
+func configureFramework(t *testing.T, raw map[string]interface{}) (interface{}, diag.Diagnostics) {
+	t.Helper()
+	clearPortainerEnv(t)
+	return configureRaw(t, raw)
+}
+
+func clearPortainerEnv(t *testing.T) {
+	for _, env := range []string{"PORTAINER_ENDPOINT", "PORTAINER_API_KEY", "PORTAINER_USER", "PORTAINER_PASSWORD", "PORTAINER_SKIP_SSL_VERIFY", "PORTAINER_MAX_RETRIES", "PORTAINER_REQUEST_TIMEOUT"} {
+		t.Setenv(env, "")
 	}
 }
 
-// --- configureProvider -------------------------------------------------------
-
-func newProviderData(t *testing.T, raw map[string]interface{}) *schema.ResourceData {
+// configureRaw runs the provider's Configure with the given provider block
+// attributes (strings, ints, or map[string]interface{} for custom_headers) and
+// returns what it hands resources.
+func configureRaw(t *testing.T, raw map[string]interface{}) (interface{}, diag.Diagnostics) {
 	t.Helper()
-	return schema.TestResourceDataRaw(t, Provider().Schema, raw)
+	ctx := context.Background()
+	p := NewFrameworkProvider()
+	var sresp provider.SchemaResponse
+	p.Schema(ctx, provider.SchemaRequest{}, &sresp)
+	typ := sresp.Schema.Type().TerraformType(ctx).(tftypes.Object)
+	vals := map[string]tftypes.Value{}
+	for name, at := range typ.AttributeTypes {
+		switch v := raw[name].(type) {
+		case nil:
+			vals[name] = tftypes.NewValue(at, nil)
+		case string:
+			vals[name] = tftypes.NewValue(at, v)
+		case int:
+			vals[name] = tftypes.NewValue(at, int64(v))
+		case map[string]interface{}:
+			m := map[string]tftypes.Value{}
+			for k, e := range v {
+				m[k] = tftypes.NewValue(tftypes.String, e)
+			}
+			vals[name] = tftypes.NewValue(at, m)
+		default:
+			t.Fatalf("unsupported value %T for %s", v, name)
+		}
+	}
+	var resp provider.ConfigureResponse
+	p.Configure(ctx, provider.ConfigureRequest{Config: tfsdk.Config{Schema: sresp.Schema, Raw: tftypes.NewValue(typ, vals)}}, &resp)
+	return resp.ResourceData, resp.Diagnostics
+}
+
+func TestConfigureProvider_MissingEndpoint_Cov(t *testing.T) {
+	_, diags := configureFramework(t, map[string]interface{}{"api_key": "ptr_abc"})
+	if !diags.HasError() {
+		t.Fatal("expected an error without an endpoint")
+	}
+}
+
+func TestConfigureProvider_EnvDefaults_Cov(t *testing.T) {
+	mock := NewMockServer(t)
+	mock.On("POST", "/auth", RespondJSON(http.StatusOK, map[string]interface{}{"jwt": "jwt-env"}))
+	clearPortainerEnv(t)
+	t.Setenv("PORTAINER_ENDPOINT", mock.URL)
+	t.Setenv("PORTAINER_USER", "admin")
+	t.Setenv("PORTAINER_PASSWORD", "secret")
+
+	out, diags := configureRaw(t, nil)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	if client := out.(*APIClient); client.JWTToken != "jwt-env" {
+		t.Errorf("expected the JWT of the environment's credentials, got %q", client.JWTToken)
+	}
 }
 
 func TestConfigureProvider_APIKeyMode_Cov(t *testing.T) {
-	d := newProviderData(t, map[string]interface{}{
+	d := map[string]interface{}{
 		"endpoint": "https://portainer.example.com",
 		"api_key":  "ptr_abc",
-	})
+	}
 
-	out, diags := configureProvider(context.Background(), d)
+	out, diags := configureFramework(t, d)
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -50,12 +112,12 @@ func TestConfigureProvider_APIKeyMode_Cov(t *testing.T) {
 }
 
 func TestConfigureProvider_EndpointAlreadyHasAPI_Cov(t *testing.T) {
-	d := newProviderData(t, map[string]interface{}{
+	d := map[string]interface{}{
 		"endpoint": "https://portainer.example.com/api",
 		"api_key":  "ptr_abc",
-	})
+	}
 
-	out, diags := configureProvider(context.Background(), d)
+	out, diags := configureFramework(t, d)
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -66,15 +128,15 @@ func TestConfigureProvider_EndpointAlreadyHasAPI_Cov(t *testing.T) {
 }
 
 func TestConfigureProvider_CustomHeaders_Cov(t *testing.T) {
-	d := newProviderData(t, map[string]interface{}{
+	d := map[string]interface{}{
 		"endpoint": "https://portainer.example.com",
 		"api_key":  "ptr_abc",
 		"custom_headers": map[string]interface{}{
 			"CF-Access-Client-Id": "id123",
 		},
-	})
+	}
 
-	out, diags := configureProvider(context.Background(), d)
+	out, diags := configureFramework(t, d)
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -92,13 +154,13 @@ func TestConfigureProvider_UserPasswordMode_Cov(t *testing.T) {
 		"jwt": "jwt-from-server",
 	}))
 
-	d := newProviderData(t, map[string]interface{}{
+	d := map[string]interface{}{
 		"endpoint":     mock.URL,
 		"api_user":     "admin",
 		"api_password": "secret",
-	})
+	}
 
-	out, diags := configureProvider(context.Background(), d)
+	out, diags := configureFramework(t, d)
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -124,52 +186,52 @@ func TestConfigureProvider_UserPasswordAuthFails_Cov(t *testing.T) {
 	mock := NewMockServer(t)
 	mock.On("POST", "/auth", RespondString(http.StatusUnauthorized, "application/json", `{"message":"invalid creds"}`))
 
-	d := newProviderData(t, map[string]interface{}{
+	d := map[string]interface{}{
 		"endpoint":     mock.URL,
 		"api_user":     "admin",
 		"api_password": "wrong",
-	})
+	}
 
-	_, diags := configureProvider(context.Background(), d)
+	_, diags := configureFramework(t, d)
 	if !diags.HasError() {
 		t.Fatal("expected diagnostics on auth failure")
 	}
 }
 
 func TestConfigureProvider_MutualExclusion_Cov(t *testing.T) {
-	d := newProviderData(t, map[string]interface{}{
+	d := map[string]interface{}{
 		"endpoint": "https://portainer.example.com",
 		"api_key":  "ptr_abc",
 		"api_user": "admin",
-	})
+	}
 
-	_, diags := configureProvider(context.Background(), d)
+	_, diags := configureFramework(t, d)
 	if !diags.HasError() {
 		t.Fatal("expected error when api_key and api_user are both set")
 	}
 }
 
 func TestConfigureProvider_UserWithoutPassword_Cov(t *testing.T) {
-	d := newProviderData(t, map[string]interface{}{
+	d := map[string]interface{}{
 		"endpoint": "https://portainer.example.com",
 		"api_user": "admin",
 		// no api_password
-	})
+	}
 
-	_, diags := configureProvider(context.Background(), d)
+	_, diags := configureFramework(t, d)
 	if !diags.HasError() {
 		t.Fatal("expected error when api_user is set without api_password")
 	}
 }
 
 func TestConfigureProvider_PasswordWithoutUser_Cov(t *testing.T) {
-	d := newProviderData(t, map[string]interface{}{
+	d := map[string]interface{}{
 		"endpoint":     "https://portainer.example.com",
 		"api_password": "secret",
 		// no api_user
-	})
+	}
 
-	_, diags := configureProvider(context.Background(), d)
+	_, diags := configureFramework(t, d)
 	if !diags.HasError() {
 		t.Fatal("expected error when api_password is set without api_user")
 	}
@@ -193,6 +255,7 @@ func (c *captureRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 }
 
 func TestHeaderTransport_RoundTrip_Cov(t *testing.T) {
+	t.Parallel()
 	cap := &captureRoundTripper{}
 	ht := &headerTransport{
 		Transport: cap,
@@ -222,6 +285,7 @@ func TestHeaderTransport_RoundTrip_Cov(t *testing.T) {
 // --- (*APIClient).DoRequest --------------------------------------------------
 
 func TestDoRequest_HappyPath_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("POST", "/widgets", RespondJSON(http.StatusOK, map[string]interface{}{"Id": 1}))
 
@@ -255,6 +319,7 @@ func TestDoRequest_HappyPath_Cov(t *testing.T) {
 }
 
 func TestDoRequest_NilBodyAndCustomHeaders_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("GET", "/ping", RespondString(http.StatusOK, "application/json", `pong`))
 
@@ -279,6 +344,7 @@ func TestDoRequest_NilBodyAndCustomHeaders_Cov(t *testing.T) {
 }
 
 func TestDoRequest_JWTAuth_Cov(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("GET", "/secured", RespondString(http.StatusOK, "application/json", `{}`))
 
@@ -299,6 +365,7 @@ func TestDoRequest_JWTAuth_Cov(t *testing.T) {
 }
 
 func TestDoRequest_NonGenericError_Cov(t *testing.T) {
+	t.Parallel()
 	// Invalid method triggers http.NewRequest error.
 	client := &APIClient{Endpoint: "http://example.com", APIKey: "k"}
 	resp, err := client.DoRequest(context.Background(), "BAD METHOD WITH SPACES", "/x", nil, nil)

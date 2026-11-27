@@ -1,0 +1,26 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reports whether observability is enabled for an environment, which provider serves it, and the non-secret connection details, from GET /observability/environments/{id}. With an Observability policy in place, this is where the address of the OneUptime instance and the environment's cluster in it come from - useful for dashboards or links built by the same configuration.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Requires Portainer Business Edition 2.45 or later.** On Community Edition or an older server the read fails with an error that says so.
+
+Reports whether observability is enabled for an environment, which provider serves it, and the non-secret connection details, from `GET /observability/environments/{id}`. With an [Observability policy](../resources/policy.md) in place, this is where the address of the OneUptime instance and the environment's cluster in it come from - useful for dashboards or links built by the same configuration.
+
+## Example Usage
+
+```hcl
+data "portainer_observability_environment" "prod" {
+  environment_id = 3
+}
+
+output "observability_url" {
+  value = data.portainer_observability_environment.prod.enabled ? data.portainer_observability_environment.prod.url : null
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

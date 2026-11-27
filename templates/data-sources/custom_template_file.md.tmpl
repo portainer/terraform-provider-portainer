@@ -1,0 +1,24 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reads the stack file stored behind a custom template.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Reads the stack file stored behind a custom template.
+
+## Example Usage
+
+```hcl
+data "portainer_custom_template_file" "web" {
+  template_id = portainer_custom_template.web.id
+}
+
+output "web_template_body" {
+  value = data.portainer_custom_template_file.web.file_content
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

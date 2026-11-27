@@ -1,0 +1,83 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Requires Portainer Business Edition 3.1 or later.** On Community Edition or an older server the create fails with an error that says so. The OIDC provider itself is switched on with the `oidc_provider` block of [`portainer_settings`](settings.md) (`public_url`).
+
+**Portainer Business Edition 3.1.0 serves the OIDC provider only when started with the `oidc` feature flag**: `--feat=oidc` (or the environment variable `FEATURE_FLAG=oidc`; Helm chart: `--set "feature.flags[0]=--feat=oidc"`). Without it every OIDC API call fails with an error that says so.
+
+Registers an application or add-on (Grafana, Vault, an internal portal, ...) that signs users in through Portainer's built-in OIDC provider. Portainer generates the OAuth client ID and a first client secret; the application is configured with them and with the issuer `<public_url>/api/oidc`.
+
+## Example Usage
+
+```hcl
+resource "portainer_settings" "this" {
+  oidc_provider {
+    public_url = "https://portainer.example.com"
+  }
+}
+
+resource "portainer_oidc_client" "grafana" {
+  name             = "Grafana"
+  description      = "Dashboards"
+  redirect_uris    = ["https://grafana.example.com/login/generic_oauth"]
+  homepage_url     = "https://grafana.example.com"
+  show_in_launcher = true
+  groups_claim     = true
+
+  team_access_policies = {
+    (portainer_team.ops.id) = 1
+  }
+}
+
+output "grafana_oauth_client_id" {
+  value = portainer_oidc_client.grafana.client_id
+}
+
+output "grafana_oauth_client_secret" {
+  value     = portainer_oidc_client.grafana.client_secret
+  sensitive = true
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `client_secret`: Portainer returns the first secret only in the response to the create request. It is kept in state (marked sensitive) from that apply on, and is null after an import. Treat the state as a secret, or add a secret with [`portainer_oidc_client_secret`](oidc_client_secret.md) and use that one.
+- `secret_expires_at`: Only the create request takes it, so changing it replaces the client (with a new `client_id` and secret).
+- `enabled`: Portainer creates every client switched on; with `enabled = false` the provider switches it off by an update right after the create.
+- `user_access_policies`, `team_access_policies`: Who may sign in when `all_users` is `false`. Portainer stores a role ID with each policy, as for environments.
+- `id`: Numeric Portainer ID of the client: the import ID, and the `client_id` that `portainer_oidc_client_secret`, `portainer_oidc_client_sessions_end` and `portainer_oidc_client_sessions` take. The OAuth client ID is the `client_id` attribute.
+
+## Attributes Reference
+
+Every update sends the whole configuration: arguments removed from it are cleared in Portainer. A client deleted outside Terraform disappears from state on the next refresh.
+
+## Import
+
+OIDC clients can be imported using their numeric ID. The first client secret cannot be imported: Portainer never returns it again, so `client_secret` and `client_secret_id` stay null.
+
+```shell
+terraform import portainer_oidc_client.example 3
+```
+
+### Import by identity
+
+Terraform 1.12 and later can also import by resource identity: the object's numeric ID as `id` in an `import` block. The ID string above keeps working.
+
+```hcl
+import {
+  to       = portainer_oidc_client.example
+  identity = {
+    id = "3"
+  }
+}
+```
+
+The [`portainer_oidc_client` list resource](../list-resources/oidc_client.md) (Terraform 1.14+) finds the clients to import.

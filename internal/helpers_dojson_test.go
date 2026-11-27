@@ -12,6 +12,7 @@ import (
 // body is marshaled and sent with Content-Type + auth header, and the response
 // is decoded into out.
 func TestDoJSON_PostWithBodyDecodesResponse(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("POST", "/things", RespondJSON(http.StatusOK, map[string]interface{}{
 		"id":   7,
@@ -52,6 +53,7 @@ func TestDoJSON_PostWithBodyDecodesResponse(t *testing.T) {
 
 // TestDoJSON_GetNoBody covers a read with no request body and no Content-Type.
 func TestDoJSON_GetNoBody(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("GET", "/things/1", RespondJSON(http.StatusOK, map[string]interface{}{"name": "x"}))
 
@@ -74,6 +76,7 @@ func TestDoJSON_GetNoBody(t *testing.T) {
 // TestDoJSON_NilOutSkipsDecode covers an action-style call where the caller does
 // not care about the response payload.
 func TestDoJSON_NilOutSkipsDecode(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("PUT", "/things/1/associate", RespondJSON(http.StatusOK, map[string]interface{}{"ignored": true}))
 
@@ -88,6 +91,7 @@ func TestDoJSON_NilOutSkipsDecode(t *testing.T) {
 // TestDoJSON_ErrorStatusIncludesBody covers the >= 400 path: the error must
 // carry the status code and the raw response body for diagnostics.
 func TestDoJSON_ErrorStatusIncludesBody(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("POST", "/things", RespondString(http.StatusBadRequest, "application/json", `{"message":"bad input"}`))
 
@@ -107,6 +111,7 @@ func TestDoJSON_ErrorStatusIncludesBody(t *testing.T) {
 // TestDoJSON_NoAuthConfigured covers the guard that fails before any HTTP call
 // when neither an API key nor a JWT token is configured.
 func TestDoJSON_NoAuthConfigured(t *testing.T) {
+	t.Parallel()
 	client := &APIClient{
 		Endpoint:   "http://127.0.0.1:0",
 		HTTPClient: http.Client{},

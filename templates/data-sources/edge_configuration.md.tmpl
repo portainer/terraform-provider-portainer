@@ -1,0 +1,26 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_edge_configuration data source allows you to look up an existing Portainer Edge configuration by its name.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_edge_configuration` data source allows you to look up an existing Portainer Edge configuration by its name.
+
+## Example Usage
+
+### Look up an Edge configuration by name
+
+```hcl
+data "portainer_edge_configuration" "base_config" {
+  name = "base-security-policy"
+}
+
+output "config_id" {
+  value = data.portainer_edge_configuration.base_config.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

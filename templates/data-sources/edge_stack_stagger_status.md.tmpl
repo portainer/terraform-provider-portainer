@@ -1,0 +1,26 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reports how an edge stack's staggered rollout is going.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reports how an edge stack's staggered rollout is going.
+
+## Example Usage
+
+```hcl
+data "portainer_edge_stack_stagger_status" "monitoring" {
+  edge_stack_id = portainer_edge_stack.monitoring.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+This only means anything for an edge stack deployed with a stagger configuration.

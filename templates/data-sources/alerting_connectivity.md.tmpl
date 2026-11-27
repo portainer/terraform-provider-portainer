@@ -1,0 +1,28 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Tests whether Portainer can reach an Alertmanager.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Tests whether Portainer can reach an Alertmanager.
+
+## Example Usage
+
+```hcl
+data "portainer_alerting_connectivity" "main" {
+  url = "http://alertmanager.example.com:9093"
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+`fail_on_error` defaults to `true`. Set it to `false` to read `reachable` and `error` instead of stopping the plan.
+
+Portainer does not describe this response's shape in its API specification, so `details` carries it as JSON.

@@ -1,0 +1,35 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Aggregates a metric over a time window for an environment.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Aggregates a metric over a time window for an environment.
+
+## Example Usage
+
+```hcl
+data "portainer_environment_metrics" "cpu" {
+  endpoint_id = portainer_environment.prod.id
+  metric      = "cpu"
+  aggregation = "avg"
+  group_by    = "namespace"
+  from        = "2026-01-01T00:00:00Z"
+  to          = "2026-01-02T00:00:00Z"
+}
+
+output "cpu_by_namespace" {
+  value = jsondecode(data.portainer_environment_metrics.cpu.data)
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+The shape of the returned series depends on `metric` and `group_by`, so `data` is carried through as JSON rather than flattened into attributes that would only fit one kind of query. A window with no data reads as `[]`.

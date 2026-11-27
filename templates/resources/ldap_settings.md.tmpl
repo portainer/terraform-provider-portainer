@@ -1,0 +1,51 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_ldap_settings resource manages the LDAP authentication configuration in Portainer. It sets the authentication method to LDAP and configures all LDAP-related settings including server URLs, search settings, group mappings, and TLS.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_ldap_settings` resource manages the LDAP authentication configuration in Portainer. It sets the authentication method to LDAP and configures all LDAP-related settings including server URLs, search settings, group mappings, and TLS.
+
+## Example Usage
+
+```hcl
+resource "portainer_ldap_settings" "ldap" {
+  url       = "ldap://ldap.example.com:389"
+  reader_dn = "cn=readonly,dc=example,dc=com"
+  password  = "ldap-readonly-password"
+
+  search_settings {
+    base_dn             = "dc=example,dc=com"
+    filter              = "(objectClass=person)"
+    user_name_attribute = "uid"
+  }
+
+  group_search_settings {
+    group_base_dn   = "ou=groups,dc=example,dc=com"
+    group_filter    = "(objectClass=groupOfNames)"
+    group_attribute = "member"
+  }
+
+  tls_config {
+    tls             = true
+    tls_skip_verify = false
+  }
+}
+```
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/ldap_settings)
+
+## Lifecycle & Behavior
+This resource updates the Portainer global settings to configure LDAP authentication. Deleting this resource only removes it from Terraform state; it does not revert LDAP settings.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+The LDAP settings are a singleton resource; import using the fixed ID `portainer-ldap-settings`:
+
+```shell
+terraform import portainer_ldap_settings.example portainer-ldap-settings
+```

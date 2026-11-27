@@ -1,0 +1,30 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_gitops_workflow data source reads a single GitOps workflow by ID, with the status of each of its three phases.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_gitops_workflow` data source reads a single GitOps workflow by ID, with the status of each of its three phases.
+
+## Example Usage
+
+```hcl
+data "portainer_gitops_workflow" "web" {
+  workflow_id = 5
+}
+
+# Block a downstream change until the workflow has converged.
+resource "portainer_kubernetes_deployment_scale" "web" {
+  count = data.portainer_gitops_workflow.web.healthy ? 1 : 0
+
+  environment_id  = 1
+  namespace       = "prod"
+  deployment_name = "web"
+  replicas        = 3
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

@@ -1,0 +1,26 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Inspects one persistent volume claim.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Inspects one persistent volume claim.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_persistent_volume_claim" "data" {
+  endpoint_id = portainer_environment.prod.id
+  namespace   = "apps"
+  name        = "data"
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+An empty `owning_applications` on a `Bound` claim means the storage is allocated but nothing is mounting it.

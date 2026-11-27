@@ -1,0 +1,34 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_ldap_check data source asks Portainer to bind to an LDAP directory with the given settings, as a pre-flight check before those settings are committed with portainer_ldap_settings.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_ldap_check` data source asks Portainer to bind to an LDAP directory with the given settings, as a pre-flight check before those settings are committed with `portainer_ldap_settings`.
+
+Unlike the other connection checks in this provider, `fail_on_error` defaults to **true** here: a check that silently reports a broken directory would let a broken authentication configuration be applied in the same plan.
+
+## Example Usage
+
+```hcl
+data "portainer_ldap_check" "corp" {
+  url       = "ldap.example.com:389"
+  reader_dn = "cn=reader,dc=example,dc=com"
+  password  = var.ldap_password
+  start_tls = true
+}
+
+resource "portainer_ldap_settings" "corp" {
+  depends_on = [data.portainer_ldap_check.corp]
+  # ...
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+The endpoint answers `204` on success and `400`/`500` with a message otherwise, so the outcome is the status code rather than a response body.

@@ -1,0 +1,52 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_endpoint_association` action de-associates an Edge environment from its agent while keeping the environment record, so another agent can associate with it.
+
+> **Requirements:** Terraform >= 1.14 (actions). OpenTofu does not support actions; there, and with older Terraform, use the [`portainer_endpoint_association` resource](../resources/endpoint_association.md), which runs the same operation when it is created.
+
+## Example Usage
+
+### Run it from a lifecycle `action_trigger`
+
+```hcl
+action "portainer_endpoint_association" "edge" {
+  config {
+    endpoint_id = 12
+  }
+}
+
+resource "terraform_data" "edge_host" {
+  input = var.edge_host_serial
+
+  lifecycle {
+    action_trigger {
+      events  = [before_update]
+      actions = [action.portainer_endpoint_association.edge]
+    }
+  }
+}
+```
+
+### Run it on demand
+
+```shell
+terraform apply -invoke action.portainer_endpoint_association.edge
+```
+
+## Lifecycle & Behavior
+
+- The action runs only when it is invoked: from an `action_trigger` on the events listed there, or with `terraform apply -invoke`. A plan lists the invocations it would run; nothing is stored in state, so there is nothing to destroy and no `triggers` argument is needed to run it again.
+- It sends the same requests as the `portainer_endpoint_association` resource does when it is created, with the same defaults, and fails the apply with the same errors.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Actions have no attributes: nothing they return can be referenced elsewhere in the configuration.

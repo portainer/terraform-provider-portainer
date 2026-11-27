@@ -31,3 +31,6 @@ coverage.out
 
 # Portainer
 portainer_data/
+
+# provider mirror of the upgrade tests (scripts/tf-test-mirror.sh)
+.tfmirror/

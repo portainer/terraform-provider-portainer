@@ -1,0 +1,57 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_helm_rollback` action rolls a Helm release back to an earlier revision (the previous one when `revision` is unset).
+
+> **Requirements:** Terraform >= 1.14 (actions). OpenTofu does not support actions; there, and with older Terraform, use the [`portainer_helm_rollback` resource](../resources/helm_rollback.md), which runs the same operation when it is created.
+
+## Example Usage
+
+### Run it from a lifecycle `action_trigger`
+
+```hcl
+action "portainer_helm_rollback" "web" {
+  config {
+    endpoint_id  = 1
+    release_name = "web"
+    namespace    = "shop"
+    wait         = true
+  }
+}
+
+resource "terraform_data" "rollback" {
+  input = var.rollback_requested
+
+  lifecycle {
+    action_trigger {
+      events    = [after_update]
+      condition = var.rollback_requested
+      actions   = [action.portainer_helm_rollback.web]
+    }
+  }
+}
+```
+
+### Run it on demand
+
+```shell
+terraform apply -invoke action.portainer_helm_rollback.web
+```
+
+## Lifecycle & Behavior
+
+- The action runs only when it is invoked: from an `action_trigger` on the events listed there, or with `terraform apply -invoke`. A plan lists the invocations it would run; nothing is stored in state, so there is nothing to destroy and no `triggers` argument is needed to run it again.
+- It sends the same requests as the `portainer_helm_rollback` resource does when it is created, with the same defaults, and fails the apply with the same errors.
+- Like the resource, unset or zero values are not sent, so `recreate = false` leaves Portainer's default.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Actions have no attributes: nothing they return can be referenced elsewhere in the configuration.

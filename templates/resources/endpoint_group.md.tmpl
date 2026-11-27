@@ -1,0 +1,74 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_endpoint_group resource allows you to manage environment (endpoint) groups in Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_endpoint_group` resource allows you to manage environment (endpoint) groups in Portainer.
+
+## Example Usage
+
+### Create Endpoint Group
+```hcl
+resource "portainer_endpoint_group" "your-group" {
+  name        = "your-group"
+  description = "Description for your group"
+}
+```
+
+### Create Endpoint Group with tags
+
+```hcl
+resource "portainer_tag" "your-tag" {
+  name = "your-tag"
+}
+
+resource "portainer_endpoint_group" "your-group" {
+  name        = "Your group"
+  description = "Group for something"
+  tag_ids     = [portainer_tag.your-group.id]
+}
+```
+
+## Lifecycle & Behavior
+
+Endpoint groups are updated if any attributes change (e.g. name, description, tag_ids).
+
+- To delete a group created via Terraform, simply run:
+```hcl
+terraform destroy
+```
+
+- To update name or tags, modify the fields and re-apply:
+```hcl
+terraform apply
+```
+> ⚠️ Portainer does not support in-place updates for endpoint groups via API. All changes will recreate the group.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Endpoint groups can be imported using their numeric ID:
+
+```shell
+terraform import portainer_endpoint_group.example 2
+```
+
+### Import by identity
+
+Terraform 1.12 and later can also import by resource identity: the object's numeric ID as `id` in an `import` block. The ID string above keeps working.
+
+```hcl
+import {
+  to       = portainer_endpoint_group.example
+  identity = {
+    id = "2"
+  }
+}
+```
+
+`terraform query` (Terraform 1.14+) with the [`portainer_endpoint_group` list resource](../list-resources/endpoint_group.md) finds the objects to import and can generate the `import` blocks (`terraform query -generate-config-out=generated.tf`). The identity is stored in the state from v3.1.0 on; state written by v3.0.0 gets it on the next refresh, without a plan change. OpenTofu supports neither resource identity nor list resources; it keeps importing by ID.

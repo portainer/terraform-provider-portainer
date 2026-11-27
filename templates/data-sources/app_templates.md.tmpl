@@ -1,0 +1,32 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Lists Portainer's application template catalogue, and optionally fetches the stack file of one template.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Lists Portainer's application template catalogue, and optionally fetches the stack file of one template.
+
+## Example Usage
+
+```hcl
+data "portainer_app_templates" "catalogue" {}
+
+output "available_templates" {
+  value = [for t in data.portainer_app_templates.catalogue.templates : t.title]
+}
+
+# Deploy a stack straight from a catalogue template.
+data "portainer_app_templates" "wordpress" {
+  template_id = 12
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+
+## Attributes Reference
+
+Portainer models the file endpoint as a `POST` even though it only reads, which is why fetching a template's file has no side effect despite the verb.

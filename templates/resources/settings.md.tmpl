@@ -1,0 +1,91 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_settings resource allows you to manage global Portainer settings, including authentication, UI branding, LDAP, and more.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_settings` resource allows you to manage global Portainer settings, including authentication, UI branding, LDAP, and more.
+
+## Example Usage
+```hcl
+resource "portainer_settings" "example" {
+  authentication_method = 1
+  logo_url              = "https://www.portainer.io/hubfs/portainer-logo-black.svg"
+  snapshot_interval     = "15m"
+  user_session_timeout  = "8h"
+
+  internal_auth_settings {
+    required_password_length = 18
+  }
+
+  ldap_settings {
+    anonymous_mode     = true
+    auto_create_users  = true
+    password           = "readonly"
+    reader_dn          = "cn=readonly-account,dc=example,dc=com"
+    start_tls          = true
+    url                = "ldap.example.com:389"
+  }
+}
+```
+
+## Lifecycle & Behavior
+Settings of Portainer are modify if any of the arguments change by run:
+```hcl
+terraform apply
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `snapshot_interval`: How often to run container snapshots (e.g., `"15m"`)
+- `helm_repository_url`: Defaults to `Helm repository URL`.
+- `ldap_password_wo`: Requires `ldap_password_wo_version` and an `ldap_settings` block.
+- `oauth_client_secret_wo`: Requires `oauth_client_secret_wo_version` and an `oauth_settings` block.
+- `black_listed_labels`: Container labels (`name`/`value` pairs) that Portainer should hide from the UI.
+- `ldap_settings.password`: Password for bind account (use `reader_dn`)
+- `oauth_settings.scopes`: Scopes requested during auth (e.g., `openid email profile roles`)
+- `id`: Always `"portainer-settings"`
+
+## Arguments by Deployment Method
+
+### `auto_patch_settings` Block
+
+Business Edition only. Only the values set in the block are sent; the others keep Portainer's value and are read back.
+
+### `edge` Block
+
+Business Edition only. Only the values set in the block are sent; the others keep Portainer's value and are read back.
+
+#### `mtls` Nested Block
+
+Portainer stores the certificates as files and never returns them: `ca_cert`, `cert` and `key` keep their configured value in state.
+
+### `oidc_provider` Block
+
+Business Edition 3.1 or later. Configures Portainer's built-in OIDC provider, which signs users in to the clients of [`portainer_oidc_client`](oidc_client.md) and to add-ons. Only the values set in the block are sent (as the `OIDCProvider*` fields of `PUT /settings`); the others keep Portainer's value and are read back from `OIDCProviderSettings`. Without the block nothing is sent and nothing is read back.
+
+```hcl
+resource "portainer_settings" "this" {
+  oidc_provider {
+    public_url                      = "https://portainer.example.com"
+    access_token_lifetime           = "15m"
+    refresh_token_idle_lifetime     = "24h"
+    refresh_token_absolute_lifetime = "168h"
+  }
+}
+```
+
+The OIDC issuer is `public_url` followed by `/api/oidc`. Portainer Business Edition 3.1.0 serves the OIDC provider only when started with the `oidc` feature flag (`--feat=oidc`, `FEATURE_FLAG=oidc`, or `--set "feature.flags[0]=--feat=oidc"` with the Helm chart). An empty `public_url` turns the provider off; an empty lifetime restores Portainer's default.
+
+## Import
+
+The Portainer settings are a singleton resource; import using the fixed ID `portainer-settings`:
+
+```shell
+terraform import portainer_settings.example portainer-settings
+```

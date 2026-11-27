@@ -1,0 +1,35 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Counts environments by health, by platform and by group — the fleet-level view of a Portainer instance.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Counts environments by health, by platform and by group — the fleet-level view of a Portainer instance.
+
+Requires Portainer **2.41.0** or newer (Community or Business Edition); older servers, such as the 2.39 LTS line, fail with an error naming the requirement.
+
+## Example Usage
+
+```hcl
+data "portainer_endpoints_summary" "fleet" {}
+
+output "unreachable_environments" {
+  value = data.portainer_endpoints_summary.fleet.down
+}
+
+output "environments_per_group" {
+  value = {
+    for g in data.portainer_endpoints_summary.fleet.by_group : g.group_name => g.count
+  }
+}
+```
+
+## Arguments Reference
+
+This data source takes no arguments.
+
+{{ .SchemaMarkdown | trimspace }}
+

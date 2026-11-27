@@ -1,0 +1,30 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_registry data source allows you to look up an existing Portainer registry by its name.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_registry` data source allows you to look up an existing Portainer registry by its name.
+
+## Example Usage
+
+### Look up a registry by name
+
+```hcl
+data "portainer_registry" "dockerhub" {
+  name = "DockerHub"
+}
+
+output "registry_url" {
+  value = data.portainer_registry.dockerhub.url
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `type`: Type of registry (e.g., `1`=Quay, `3`=Custom, `6`=DH).

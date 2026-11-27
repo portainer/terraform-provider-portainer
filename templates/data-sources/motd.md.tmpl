@@ -1,0 +1,26 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_motd data source reads Portainer's message of the day — the banner shown to users after they log in.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_motd` data source reads Portainer's message of the day — the banner shown to users after they log in.
+
+## Example Usage
+
+```hcl
+data "portainer_motd" "this" {}
+
+output "portainer_announcement" {
+  value = data.portainer_motd.this.message
+}
+```
+
+## Arguments Reference
+
+This data source takes no arguments.
+
+{{ .SchemaMarkdown | trimspace }}

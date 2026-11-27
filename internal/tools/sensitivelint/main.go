@@ -1,7 +1,12 @@
-// Command sensitivelint reports schema fields whose name implies a secret
+// Command sensitivelint reports schema attributes whose name implies a secret
 // (password, token, api_key, private_key, client_secret, jwt, ...) but that
 // are not marked Sensitive: true. Marking such fields sensitive keeps their
 // values out of CLI plan output.
+//
+// It reads the schemas as Terraform receives them, from the provider server
+// (internal.NewProviderServer, GetProviderSchema): the provider block and
+// every resource, data source, ephemeral resource, list resource and action,
+// attributes of nested blocks included.
 //
 // A field whose name matches a secret pattern must either set Sensitive: true
 // or appear in the allowlist below (for names that look secret-y but are not,
@@ -11,25 +16,24 @@
 //
 //	0 — no violations
 //	1 — one or more fields look like secrets but are not Sensitive
-//	2 — invalid invocation or I/O error
+//	2 — the provider schema could not be loaded
 //
 // Usage:
 //
 //	sensitivelint [paths...]
 //
-// Without arguments the tool scans "./internal/".
+// The paths (CI passes ./internal/) are accepted for compatibility and
+// ignored: the schema comes from the compiled provider.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
+
+	"github.com/portainer/terraform-provider-portainer/internal"
 )
 
 // secretPatterns are substrings that, when present in a field name, suggest
@@ -74,6 +78,12 @@ var allowlist = map[string]bool{
 	// Swarm secrets by NAME, never the secret value itself.
 	"secrets": true, // TypeList of {key, secret-name} references
 	"secret":  true, // name of the Swarm secret providing the value
+	// OIDC provider: times and durations of secrets and tokens, not their values.
+	"secret_expires_at":               true, // Unix time the first OIDC client secret expires
+	"old_secret_grace_period":         true, // duration a regenerated OIDC client secret keeps working
+	"access_token_lifetime":           true, // duration OIDC access tokens last
+	"refresh_token_idle_lifetime":     true, // duration an OIDC session lasts unused
+	"refresh_token_absolute_lifetime": true, // duration an OIDC session lasts at most
 }
 
 // nameExclusionSuffixes mark a field as non-secret regardless of pattern
@@ -108,151 +118,46 @@ func looksSecret(name string) bool {
 	return false
 }
 
-type violation struct {
-	file string
-	line int
-	name string
-}
-
 func main() {
 	flag.Parse()
-	args := flag.Args()
-	if len(args) == 0 {
-		args = []string{"./internal/"}
+
+	schemas, err := internal.LintSchemas(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "sensitivelint: %v\n", err)
+		os.Exit(2)
 	}
 
-	fset := token.NewFileSet()
-	var violations []violation
-
-	for _, root := range args {
-		err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				name := d.Name()
-				if name == "vendor" || name == "tools" || strings.HasPrefix(name, ".") {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-				return nil
-			}
-
-			f, err := parser.ParseFile(fset, path, nil, 0)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "parse %s: %v\n", path, err)
-				return nil
-			}
-
-			ast.Inspect(f, func(n ast.Node) bool {
-				cl, ok := n.(*ast.CompositeLit)
-				if !ok || !isSchemaMap(cl.Type) {
-					return true
-				}
-				for _, elt := range cl.Elts {
-					kv, ok := elt.(*ast.KeyValueExpr)
-					if !ok {
-						continue
-					}
-					name := fieldNameFromKey(kv.Key)
-					if !looksSecret(name) {
-						continue
-					}
-					inner := unwrapSchemaLit(kv.Value)
-					if inner == nil || hasSensitiveTrue(inner) {
-						continue
-					}
-					pos := fset.Position(inner.Pos())
-					violations = append(violations, violation{file: pos.Filename, line: pos.Line, name: name})
-				}
-				return true
-			})
-			return nil
-		})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "walk %s: %v\n", root, err)
-			os.Exit(2)
-		}
-	}
-
+	violations := check(schemas)
 	if len(violations) == 0 {
 		fmt.Println("sensitivelint: OK — every secret-like field is marked Sensitive.")
 		return
 	}
-
-	sort.Slice(violations, func(i, j int) bool {
-		if violations[i].file != violations[j].file {
-			return violations[i].file < violations[j].file
-		}
-		return violations[i].line < violations[j].line
-	})
 	for _, v := range violations {
-		fmt.Printf("%s:%d: secret-like field %q is not marked Sensitive: true\n", v.file, v.line, v.name)
+		fmt.Println(v)
 	}
 	fmt.Fprintf(os.Stderr, "\nsensitivelint: %d secret-like field(s) missing Sensitive: true.\n", len(violations))
 	os.Exit(1)
 }
 
-func isSchemaMap(t ast.Expr) bool {
-	mt, ok := t.(*ast.MapType)
-	if !ok {
-		return false
-	}
-	keyIdent, ok := mt.Key.(*ast.Ident)
-	if !ok || keyIdent.Name != "string" {
-		return false
-	}
-	star, ok := mt.Value.(*ast.StarExpr)
-	if !ok {
-		return false
-	}
-	sel, ok := star.X.(*ast.SelectorExpr)
-	if !ok {
-		return false
-	}
-	pkg, ok := sel.X.(*ast.Ident)
-	if !ok || pkg.Name != "schema" {
-		return false
-	}
-	return sel.Sel.Name == "Schema"
-}
-
-func unwrapSchemaLit(e ast.Expr) *ast.CompositeLit {
-	switch v := e.(type) {
-	case *ast.CompositeLit:
-		return v
-	case *ast.UnaryExpr:
-		if cl, ok := v.X.(*ast.CompositeLit); ok {
-			return cl
+// check returns one line per secret-like attribute not marked Sensitive.
+// Nested blocks carry no Sensitive flag in the protocol, so only attributes
+// (top-level or inside blocks) are checked; an attribute is matched by its own
+// name, as the field names of a nested schema were before.
+func check(schemas []internal.LintSchema) []string {
+	var out []string
+	for _, s := range schemas {
+		for _, f := range s.Fields() {
+			// Action attributes cannot be Sensitive (and the framework rejects
+			// write-only ones): a secret there is as sensitive as the
+			// expression that sets it.
+			if s.Kind == "action" {
+				continue
+			}
+			if f.Block || f.Sensitive || !looksSecret(f.Name) {
+				continue
+			}
+			out = append(out, fmt.Sprintf("%s %s: secret-like field %q is not marked Sensitive: true", s.Kind, s.TypeName, f.Path))
 		}
 	}
-	return nil
-}
-
-func hasSensitiveTrue(cl *ast.CompositeLit) bool {
-	for _, elt := range cl.Elts {
-		kv, ok := elt.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		ident, ok := kv.Key.(*ast.Ident)
-		if !ok || ident.Name != "Sensitive" {
-			continue
-		}
-		lit, ok := kv.Value.(*ast.Ident)
-		return ok && lit.Name == "true"
-	}
-	return false
-}
-
-func fieldNameFromKey(k ast.Expr) string {
-	switch v := k.(type) {
-	case *ast.BasicLit:
-		return strings.Trim(v.Value, "`\"")
-	case *ast.Ident:
-		return v.Name
-	}
-	return ""
+	return out
 }

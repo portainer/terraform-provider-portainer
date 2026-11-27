@@ -1,0 +1,25 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Inspects one storage class.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Inspects one storage class.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_storage_class" "fast" {
+  endpoint_id = portainer_environment.prod.id
+  name        = "fast-ssd"
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+`allow_volume_expansion` is what decides whether an existing claim of this class can be resized later.

@@ -1,0 +1,55 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_backup` action downloads an encrypted backup archive of the Portainer instance to a file on the machine running Terraform.
+
+> **Requirements:** Terraform >= 1.14 (actions). OpenTofu does not support actions; there, and with older Terraform, use the [`portainer_backup` resource](../resources/backup.md), which runs the same operation when it is created.
+
+## Example Usage
+
+### Run it from a lifecycle `action_trigger`
+
+```hcl
+action "portainer_backup" "before_upgrade" {
+  config {
+    output_path = "portainer-backup.tar.gz"
+    password    = var.backup_password
+  }
+}
+
+# Back Portainer up before the Helm release that runs it is upgraded.
+resource "helm_release" "portainer" {
+  # ...
+
+  lifecycle {
+    action_trigger {
+      events  = [before_update]
+      actions = [action.portainer_backup.before_upgrade]
+    }
+  }
+}
+```
+
+### Run it on demand
+
+```shell
+terraform apply -invoke action.portainer_backup.before_upgrade
+```
+
+## Lifecycle & Behavior
+
+- The action runs only when it is invoked: from an `action_trigger` on the events listed there, or with `terraform apply -invoke`. A plan lists the invocations it would run; nothing is stored in state, so there is nothing to destroy and no `triggers` argument is needed to run it again.
+- It sends the same requests as the `portainer_backup` resource does when it is created, with the same defaults, and fails the apply with the same errors.
+- `password` is required: unlike the resource, the action has no `password_wo` twin, since nothing of an action is stored in state. Set it from a sensitive variable so Terraform redacts it in its output.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Actions have no attributes: nothing they return can be referenced elsewhere in the configuration.

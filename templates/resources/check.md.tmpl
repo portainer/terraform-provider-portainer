@@ -1,0 +1,109 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_check resource validates that one or more containers (in standalone mode) or services (in swarm mode) are running with the expected image revision (tag) and desired runtime state in a Portainer-managed environment.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_check` resource validates that one or more containers (in standalone mode) or services (in swarm mode) are running with the **expected image revision (tag)** and **desired runtime state** in a Portainer-managed environment.
+
+> You can use it in both **Docker Standalone** and **Docker Swarm** deployments.
+> It’s especially useful for CI/CD pipelines to verify that a deployment or update has completed successfully before proceeding to the next step.
+
+---
+
+> **See also:** the [`portainer_check` action](../actions/check.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## 🚀 Example Usage
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/deployment)
+
+### ✅ Check service status in Docker Swarm
+
+```hcl
+resource "portainer_check" "swarm_check" {
+  endpoint_id     = 1
+  stack_name      = "my-swarm-stack"
+  services_list   = "web,api"
+  revision        = "1.29"
+  desired_state   = "running"
+  max_retries     = 3
+  wait            = 10
+  wait_between_checks = 5
+}
+```
+
+### ✅ Check container status in Docker Standalone
+
+```hcl
+resource "portainer_check" "standalone_check" {
+  endpoint_id     = 1
+  stack_name      = "nginx"
+  services_list   = "web"
+  revision        = "1.29"
+  desired_state   = "running"
+  wait            = 10
+  max_retries     = 3
+  wait_between_checks = 5
+}
+```
+
+---
+
+## ⚙️ Lifecycle & Behavior
+
+This resource is **stateless** — it performs runtime verification during `terraform apply` (or `tofu apply` for OpenTofu) and does **not** persist state in Portainer.
+
+When executed:
+
+1. It waits for the optional `wait` period before starting.
+2. It determines whether the target environment is **Swarm** or **Standalone**.
+3. It checks the matching services or containers for:
+
+   * Correct **image tag** (`revision`)
+   * Correct **state** (e.g., `running`)
+4. If all targets match → ✅ success.
+   Otherwise → ❌ fails after `max_retries`.
+
+> 💡 **Pro Tip:** Combine `portainer_check` after a `portainer_deploy` or `portainer_container_exec` to ensure deployment integrity.
+
+---
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `revision`: Expected image tag (e.g., `"1.29"`) that should be currently running.
+- `services_list`: Example: `"web,api"`.
+- `desired_state`: Defaults to `"running"`.
+- `wait`: Defaults to `30`.
+- `wait_between_checks`: Defaults to `30`.
+- `max_retries`: Defaults to `3`.
+
+## 🧩 Example with Outputs
+
+```hcl
+output "check_result" {
+  value = portainer_check.standalone_check.output
+}
+```
+
+This will show you a detailed report like:
+
+```
+Docker Standalone detected — using container check logic.
+DEBUG: checking container="nginx-web-1" (image="nginx:1.29", state="running")
+Container "nginx-web-1" OK — revision "1.29", state "running"
+```
+
+---
+
+## 🧠 Summary
+
+| Feature     | Description                                                          |
+| ----------- | -------------------------------------------------------------------- |
+| Mode        | Works in **Standalone** and **Swarm** environments                   |
+| Purpose     | Ensures containers/services run with the correct image tag and state |
+| Behavior    | Stateless verification (no Portainer state change)                   |
+| Typical Use | Post-deployment validation in CI/CD pipelines                        |

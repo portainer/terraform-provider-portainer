@@ -14,7 +14,6 @@
 /addons/{id}/config/{key}           # single-key patch; portainer_addon_config replaces the whole config
 
 # Sessions, interactive and streaming endpoints.
-/auth/logout                        # session handling
 /auth/oauth/validate                # OAuth login flow of the UI
 /websocket/attach                   # interactive
 /websocket/exec                     # interactive
@@ -23,7 +22,6 @@
 /websocket/pod                      # interactive
 
 # Called by Edge agents, not by users.
-/endpoints/edge/async               # Edge agent check-in
 /endpoints/{id}/edge/status         # Edge agent check-in
 /endpoints/{id}/edge/alerts         # Edge agent report
 /endpoints/{id}/edge/alerts/state   # Edge agent report

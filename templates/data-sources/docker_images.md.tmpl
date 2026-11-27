@@ -1,0 +1,30 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Lists the images stored in a Docker environment, optionally marking which ones a container is using.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Lists the images stored in a Docker environment, optionally marking which ones a container is using.
+
+## Example Usage
+
+```hcl
+data "portainer_docker_images" "prod" {
+  environment_id = 1
+  with_usage     = true
+}
+
+output "reclaimable_bytes" {
+  value = sum([for i in data.portainer_docker_images.prod.images : i.size if !i.used])
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+
+## Attributes Reference
+
+`used` is always false unless `with_usage` is set — do not read it as "nothing is running" when the flag is off. An image with no `tags` is dangling.

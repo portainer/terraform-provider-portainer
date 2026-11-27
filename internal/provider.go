@@ -10,344 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
-
-// Provider defines the Portainer Terraform provider schema and resources.
-func Provider() *schema.Provider {
-	return &schema.Provider{
-		Schema: map[string]*schema.Schema{
-			"endpoint": {
-				Type:         schema.TypeString,
-				Required:     true,
-				DefaultFunc:  schema.EnvDefaultFunc("PORTAINER_ENDPOINT", nil),
-				Description:  "URL of the Portainer instance (e.g. https://portainer.example.com). '/api' will be appended automatically if missing.",
-				ValidateFunc: validation.IsURLWithHTTPorHTTPS,
-			},
-			"api_key": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Sensitive:   true,
-				DefaultFunc: schema.EnvDefaultFunc("PORTAINER_API_KEY", nil),
-				Description: "API key to authenticate with Portainer. Mutually exclusive with 'user' and 'password'.",
-			},
-			"api_user": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Sensitive:   true,
-				DefaultFunc: schema.EnvDefaultFunc("PORTAINER_USER", nil),
-				Description: "Username for authentication. Must be used together with 'password'.",
-			},
-			"api_password": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Sensitive:   true,
-				DefaultFunc: schema.EnvDefaultFunc("PORTAINER_PASSWORD", nil),
-				Description: "Password for authentication. Must be used together with 'user'.",
-			},
-			"skip_ssl_verify": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				DefaultFunc: schema.EnvDefaultFunc("PORTAINER_SKIP_SSL_VERIFY", false),
-				Description: "Verify the SSL/TLS certificate for the Portainer endpoint",
-			},
-			"custom_headers": {
-				Type:        schema.TypeMap,
-				Optional:    true,
-				Elem:        &schema.Schema{Type: schema.TypeString},
-				Description: "Custom headers to add to all requests (e.g. for Cloudflare Access or other security proxies).",
-			},
-			"max_retries": {
-				Type:         schema.TypeInt,
-				Optional:     true,
-				DefaultFunc:  schema.EnvDefaultFunc("PORTAINER_MAX_RETRIES", 3),
-				ValidateFunc: validation.IntBetween(0, 10),
-				Description:  "How many times a request that failed transiently is retried, with exponential backoff (1s, 2s, 4s, ...). Only retries that cannot apply a change twice are made: a refused connection for any method, 429/503 for GET/PUT/DELETE, and 502/504 or a dropped connection for GET only. 0 disables retries. Defaults to 3.",
-			},
-			"request_timeout": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				DefaultFunc:  schema.EnvDefaultFunc("PORTAINER_REQUEST_TIMEOUT", ""),
-				ValidateFunc: validateDuration,
-				Description:  "Time limit for a single HTTP request to Portainer, including reading the response, as a Go duration (e.g. \"2m\"). Empty (the default) sets no per-request limit; requests are still cancelled when the Terraform operation times out. Avoid short values when pulling large images or installing Helm charts, which Portainer handles in one request.",
-			},
-		},
-		ResourcesMap: map[string]*schema.Resource{
-			"portainer_user_admin":                              resourceUserAdmin(),
-			"portainer_user":                                    resourceUser(),
-			"portainer_team":                                    resourceTeam(),
-			"portainer_environment":                             resourceEnvironment(),
-			"portainer_d2k_environment":                         resourceD2KEnvironment(),
-			"portainer_kubesolo_offline_bundle":                 resourceKubeSoloOfflineBundle(),
-			"portainer_endpoint_group":                          resourceEndpointGroup(),
-			"portainer_tag":                                     resourceTag(),
-			"portainer_registry":                                resourceRegistry(),
-			"portainer_backup":                                  resourceBackup(),
-			"portainer_addon":                                   resourceAddon(),
-			"portainer_addon_access":                            resourceAddonAccess(),
-			"portainer_addon_config":                            resourceAddonConfig(),
-			"portainer_addon_repair":                            resourceAddonRepair(),
-			"portainer_addon_catalog_refresh":                   resourceAddonCatalogRefresh(),
-			"portainer_backup_s3":                               resourceBackupS3(),
-			"portainer_backup_azure_settings":                   resourceBackupAzureSettings(),
-			"portainer_backup_azure_execute":                    resourceBackupAzureExecute(),
-			"portainer_backup_azure_restore":                    resourceBackupAzureRestore(),
-			"portainer_backup_local_settings":                   resourceBackupLocalSettings(),
-			"portainer_backup_local_run":                        resourceBackupLocalRun(),
-			"portainer_backup_s3_restore":                       resourceBackupS3Restore(),
-			"portainer_edge_group":                              resourceEdgeGroup(),
-			"portainer_edge_job":                                resourceEdgeJob(),
-			"portainer_auth":                                    resourceAuth(),
-			"portainer_edge_stack":                              resourceEdgeStack(),
-			"portainer_custom_template":                         resourceCustomTemplate(),
-			"portainer_stack":                                   resourcePortainerStack(),
-			"portainer_deploy":                                  resourceDeploy(),
-			"portainer_check":                                   resourceCheck(),
-			"portainer_container_exec":                          resourceContainerExec(),
-			"portainer_docker_node":                             resourceDockerNode(),
-			"portainer_docker_network":                          resourceDockerNetwork(),
-			"portainer_docker_image":                            resourceDockerImage(),
-			"portainer_docker_volume":                           resourceDockerVolume(),
-			"portainer_docker_plugin":                           resourceDockerPlugin(),
-			"portainer_settings":                                resourceSettings(),
-			"portainer_settings_default_registry":               resourceSettingsDefaultRegistry(),
-			"portainer_settings_additional_functionality":       resourceSettingsAdditionalFunctionality(),
-			"portainer_ssrf_allowlist":                          resourceSSRFAllowList(),
-			"portainer_omni_cluster":                            resourceOmniCluster(),
-			"portainer_omni_node_reboot":                        resourceOmniNodeReboot(),
-			"portainer_kubernetes_pod_security_rule":            resourceKubernetesPodSecurityRule(),
-			"portainer_kubernetes_cluster_upgrade":              resourceKubernetesClusterUpgrade(),
-			"portainer_gitops_workflow":                         resourceGitopsWorkflow(),
-			"portainer_gitops_workflow_reconcile":               resourceGitopsWorkflowReconcile(),
-			"portainer_user_memberships_sync":                   resourceUserMembershipsSync(),
-			"portainer_ssl":                                     resourceSSLSettings(),
-			"portainer_team_membership":                         resourceTeamMembership(),
-			"portainer_webhook":                                 resourceWebhook(),
-			"portainer_webhook_execute":                         resourceWebhookExecute(),
-			"portainer_licenses":                                resourceLicenses(),
-			"portainer_cloud_credentials":                       resourceCloudCredentials(),
-			"portainer_endpoint_settings":                       resourceEndpointSettings(),
-			"portainer_endpoint_trust":                          resourceEndpointTrust(),
-			"portainer_endpoint_snapshot":                       resourceEndpointsSnapshot(),
-			"portainer_endpoint_association":                    resourceEndpointAssociation(),
-			"portainer_stack_associate":                         resourceStackAssociate(),
-			"portainer_endpoint_service_update":                 resourceEndpointServiceUpdate(),
-			"portainer_kubernetes_namespace":                    resourceKubernetesNamespace(),
-			"portainer_kubernetes_helm":                         resourceKubernetesHelm(),
-			"portainer_kubernetes_ingresscontrollers":           resourceKubernetesIngressControllers(),
-			"portainer_kubernetes_environment_config":           resourceKubernetesEnvironmentConfig(),
-			"portainer_kubernetes_namespace_ingresscontrollers": resourceKubernetesNamespaceIngressControllers(),
-			"portainer_kubernetes_ingresses":                    resourceKubernetesNamespaceIngress(),
-			"portainer_kubernetes_gateway":                      resourceKubernetesGateway(),
-			"portainer_kubernetes_gateway_http_route":           resourceKubernetesGatewayHTTPRoute(),
-			"portainer_kubernetes_application":                  resourceKubernetesApplication(),
-			"portainer_kubernetes_namespace_system":             resourceKubernetesNamespaceSystem(),
-			"portainer_kubernetes_delete_object":                resourceKubernetesDeleteObject(),
-			"portainer_resource_control":                        resourceResourceControl(),
-			"portainer_docker_secret":                           resourceDockerSecret(),
-			"portainer_docker_config":                           resourceDockerConfig(),
-			"portainer_kubernetes_cronjob":                      resourceKubernetesCronJob(),
-			"portainer_kubernetes_job":                          resourceKubernetesJob(),
-			"portainer_kubernetes_serviceaccounts":              resourceKubernetesServiceAccounts(),
-			"portainer_kubernetes_configmaps":                   resourceKubernetesConfigMaps(),
-			"portainer_kubernetes_secret":                       resourceKubernetesSecrets(),
-			"portainer_kubernetes_service":                      resourceKubernetesService(),
-			"portainer_kubernetes_role":                         resourceKubernetesRoles(),
-			"portainer_kubernetes_rolebinding":                  resourceKubernetesRoleBindings(),
-			"portainer_kubernetes_clusterrole":                  resourceKubernetesClusterRoles(),
-			"portainer_kubernetes_clusterrolebinding":           resourceKubernetesClusterRoleBindings(),
-			"portainer_kubernetes_volume":                       resourceKubernetesVolumes(),
-			"portainer_kubernetes_node_drain":                   resourceKubernetesNodeDrain(),
-			"portainer_kubernetes_deployment_scale":             resourceKubernetesDeploymentScale(),
-			"portainer_kubernetes_deployment_rollback":          resourceKubernetesDeploymentRollback(),
-			"portainer_kubernetes_storage":                      resourceKubernetesStorage(),
-			"portainer_stack_webhook":                           resourcePortainerStackWebhook(),
-			"portainer_edge_stack_webhook":                      resourcePortainerEdgeStackWebhook(),
-			"portainer_settings_experimental":                   resourceExperimentalSettings(),
-			"portainer_chat":                                    resourcePortainerChat(),
-			"portainer_endpoints_edge_generate_key":             resourcePortainerEdgeGenerateKey(),
-			"portainer_tls":                                     resourcePortainerUploadTLS(),
-			"portainer_edge_configurations":                     resourcePortainerEdgeConfigurations(),
-			"portainer_edge_update_schedules":                   resourcePortainerEdgeUpdateSchedules(),
-			"portainer_support_debug_log":                       resourcePortainerSupportDebugLog(),
-			"portainer_sshkeygen":                               resourcePortainerSSHKeygen(),
-			"portainer_cloud_provider_provision":                resourcePortainerCloudProvision(),
-			"portainer_kubernetes_namespace_access":             resourceKubernetesNamespaceAccess(),
-			"portainer_kubernetes_scoped_kubeconfig":            resourceKubernetesScopedKubeconfig(),
-			"portainer_registry_access":                         resourceRegistryAccess(),
-			"portainer_endpoint_group_access":                   resourceEndpointGroupAccess(),
-			"portainer_policy":                                  resourcePortainerPolicy(),
-			"portainer_alerting_settings":                       resourceAlertingSettings(),
-			"portainer_alerting_rule":                           resourceAlertingRule(),
-			"portainer_alerting_rule_groups":                    resourceAlertingRuleGroups(),
-			"portainer_alerting_rule_tiers":                     resourceAlertingRuleTiers(),
-			"portainer_alerting_silence":                        resourceAlertingSilence(),
-			"portainer_shared_git_credential":                   resourcePortainerSharedGitCredential(),
-			"portainer_user_git_credential":                     resourcePortainerUserGitCredential(),
-			"portainer_helm_user_repository":                    resourceHelmUserRepository(),
-			"portainer_stack_migrate":                           resourceStackMigrate(),
-			"portainer_ldap_settings":                           resourceLDAPSettings(),
-			"portainer_helm_rollback":                           resourceHelmRollback(),
-			"portainer_gitops_source":                           resourceGitopsSource(),
-			"portainer_user_api_key":                            resourceUserAPIKey(),
-			"portainer_registry_configure":                      resourceRegistryConfigure(),
-			"portainer_endpoint_relations":                      resourceEndpointRelations(),
-			"portainer_restore":                                 resourceRestore(),
-			"portainer_stack_delete_by_name":                    resourceStackDeleteByName(),
-			"portainer_edge_job_task_logs":                      resourceEdgeJobTaskLogs(),
-			"portainer_kubernetes_persistent_volume":            resourceKubernetesPersistentVolume(),
-			"portainer_endpoint_group_membership":               resourceEndpointGroupMembership(),
-		},
-		DataSourcesMap: map[string]*schema.Resource{
-			"portainer_user":                                   dataSourceUser(),
-			"portainer_team":                                   dataSourceTeam(),
-			"portainer_environment":                            dataSourceEnvironment(),
-			"portainer_kubesolo_versions":                      dataSourceKubeSoloVersions(),
-			"portainer_kubesolo_offline_bundles":               dataSourceKubeSoloOfflineBundles(),
-			"portainer_kubesolo_config":                        dataSourceKubeSoloConfig(),
-			"portainer_endpoint_group":                         dataSourceEndpointGroup(),
-			"portainer_tag":                                    dataSourceTag(),
-			"portainer_registry":                               dataSourceRegistry(),
-			"portainer_stack":                                  dataSourceStack(),
-			"portainer_edge_group":                             dataSourceEdgeGroup(),
-			"portainer_custom_template":                        dataSourceCustomTemplate(),
-			"portainer_cloud_credentials":                      dataSourceCloudCredentials(),
-			"portainer_edge_stack":                             dataSourceEdgeStack(),
-			"portainer_edge_job":                               dataSourceEdgeJob(),
-			"portainer_edge_configuration":                     dataSourceEdgeConfiguration(),
-			"portainer_webhook":                                dataSourceWebhook(),
-			"portainer_team_membership":                        dataSourceTeamMembership(),
-			"portainer_endpoint_group_access":                  dataSourceEndpointGroupAccess(),
-			"portainer_registry_access":                        dataSourceRegistryAccess(),
-			"portainer_docker_network":                         dataSourceDockerNetwork(),
-			"portainer_docker_volume":                          dataSourceDockerVolume(),
-			"portainer_docker_config":                          dataSourceDockerConfig(),
-			"portainer_docker_secret":                          dataSourceDockerSecret(),
-			"portainer_docker_image":                           dataSourceDockerImage(),
-			"portainer_docker_node":                            dataSourceDockerNode(),
-			"portainer_policy":                                 dataSourcePortainerPolicy(),
-			"portainer_policy_template":                        dataSourcePortainerPolicyTemplate(),
-			"portainer_shared_git_credential":                  dataSourcePortainerSharedGitCredential(),
-			"portainer_user_activity":                          dataSourceUserActivity(),
-			"portainer_role":                                   dataSourceRole(),
-			"portainer_kubernetes_crd":                         dataSourceKubernetesCRD(),
-			"portainer_kubernetes_manifest_dry_run":            dataSourceKubernetesManifestDryRun(),
-			"portainer_kubernetes_ingress_classes":             dataSourceKubernetesIngressClasses(),
-			"portainer_kubernetes_gateway_classes":             dataSourceKubernetesGatewayClasses(),
-			"portainer_kubernetes_scoped_kubeconfigs":          dataSourceKubernetesScopedKubeconfigs(),
-			"portainer_kubernetes_namespace_access":            dataSourceKubernetesNamespaceAccess(),
-			"portainer_kubernetes_resource_quotas":             dataSourceKubernetesResourceQuotas(),
-			"portainer_kubernetes_replicasets":                 dataSourceKubernetesReplicaSets(),
-			"portainer_kubernetes_pods":                        dataSourceKubernetesPods(),
-			"portainer_kubernetes_pod_logs":                    dataSourceKubernetesPodLogs(),
-			"portainer_kubernetes_deployments":                 dataSourceKubernetesDeployments(),
-			"portainer_helm_git_dryrun":                        dataSourceHelmGitDryRun(),
-			"portainer_gitops_repo_refs":                       dataSourceGitopsRepoRefs(),
-			"portainer_gitops_repo_file":                       dataSourceGitopsRepoFile(),
-			"portainer_gitops_source":                          dataSourceGitopsSource(),
-			"portainer_gitops_sources":                         dataSourceGitopsSources(),
-			"portainer_gitops_workflow":                        dataSourceGitopsWorkflow(),
-			"portainer_gitops_workflows":                       dataSourceGitopsWorkflows(),
-			"portainer_gitops_workflow_deployment_resources":   dataSourceGitopsWorkflowDeploymentResources(),
-			"portainer_gitops_source_connection":               dataSourceGitopsSourceConnection(),
-			"portainer_registry_connection":                    dataSourceRegistryConnection(),
-			"portainer_ldap_check":                             dataSourceLDAPCheck(),
-			"portainer_addons":                                 dataSourceAddons(),
-			"portainer_addon_chart_source":                     dataSourceAddonChartSource(),
-			"portainer_addon_catalog":                          dataSourceAddonCatalog(),
-			"portainer_backup_azure_connection":                dataSourceBackupAzureConnection(),
-			"portainer_system":                                 dataSourceSystem(),
-			"portainer_settings_public":                        dataSourceSettingsPublic(),
-			"portainer_edge_mtls_ca_certificate":               dataSourceEdgeMTLSCACertificate(),
-			"portainer_edge_mtls_certificate":                  dataSourceEdgeMTLSCertificate(),
-			"portainer_endpoint_mtls_certificate":              dataSourceEndpointMTLSCertificate(),
-			"portainer_endpoint_mtls_certificate_error":        dataSourceEndpointMTLSCertificateError(),
-			"portainer_edge_waiting_room":                      dataSourceEdgeWaitingRoom(),
-			"portainer_alerting_rule_environments":             dataSourceAlertingRuleEnvironments(),
-			"portainer_alerting_rules":                         dataSourceAlertingRules(),
-			"portainer_auto_updates":                           dataSourceAutoUpdates(),
-			"portainer_omni_machines":                          dataSourceOmniMachines(),
-			"portainer_omni_machine":                           dataSourceOmniMachine(),
-			"portainer_omni_machine_logs":                      dataSourceOmniMachineLogs(),
-			"portainer_omni_talos_versions":                    dataSourceOmniTalosVersions(),
-			"portainer_omni_upgrade_status":                    dataSourceOmniUpgradeStatus(),
-			"portainer_omni_service_account":                   dataSourceOmniServiceAccount(),
-			"portainer_kubernetes_custom_resource_definitions": dataSourceKubernetesCustomResourceDefinitions(),
-			"portainer_kubernetes_custom_resource_definition":  dataSourceKubernetesCustomResourceDefinition(),
-			"portainer_kubernetes_custom_resources":            dataSourceKubernetesCustomResources(),
-			"portainer_kubernetes_custom_resource":             dataSourceKubernetesCustomResource(),
-			"portainer_kubernetes_gpu":                         dataSourceKubernetesGPU(),
-			"portainer_stack_conversion":                       dataSourceStackConversion(),
-			"portainer_kubernetes_storage_classes":             dataSourceKubernetesStorageClasses(),
-			"portainer_kubernetes_storage_class":               dataSourceKubernetesStorageClass(),
-			"portainer_kubernetes_persistent_volume_claims":    dataSourceKubernetesPersistentVolumeClaims(),
-			"portainer_kubernetes_persistent_volume_claim":     dataSourceKubernetesPersistentVolumeClaim(),
-			"portainer_kubernetes_volumes":                     dataSourceKubernetesVolumes(),
-			"portainer_kubernetes_volume":                      dataSourceKubernetesVolume(),
-			"portainer_kubernetes_cron_jobs":                   dataSourceKubernetesCronJobs(),
-			"portainer_kubernetes_endpoints":                   dataSourceKubernetesEndpoints(),
-			"portainer_kubernetes_service_account":             dataSourceKubernetesServiceAccount(),
-			"portainer_kubernetes_application":                 dataSourceKubernetesApplication(),
-			"portainer_kubernetes_resource_counts":             dataSourceKubernetesResourceCounts(),
-			"portainer_ldap_users":                             dataSourceLDAPUsers(),
-			"portainer_ldap_groups":                            dataSourceLDAPGroups(),
-			"portainer_ldap_admin_groups":                      dataSourceLDAPAdminGroups(),
-			"portainer_ldap_login_test":                        dataSourceLDAPLoginTest(),
-			"portainer_user_namespaces":                        dataSourceUserNamespaces(),
-			"portainer_current_user_authorizations":            dataSourceCurrentUserAuthorizations(),
-			"portainer_licenses_info":                          dataSourceLicensesInfo(),
-			"portainer_recommendations":                        dataSourceRecommendations(),
-			"portainer_policy_metadata":                        dataSourcePolicyMetadata(),
-			"portainer_policy_conflicts":                       dataSourcePolicyConflicts(),
-			"portainer_policy_observability_test":              dataSourcePolicyObservabilityTest(),
-			"portainer_alerting_connectivity":                  dataSourceAlertingConnectivity(),
-			"portainer_observability_environment":              dataSourceObservabilityEnvironment(),
-			"portainer_environment_logs":                       dataSourceEnvironmentLogs(),
-			"portainer_environment_metrics":                    dataSourceEnvironmentMetrics(),
-			"portainer_docker_snapshot":                        dataSourceDockerSnapshot(),
-			"portainer_docker_snapshot_containers":             dataSourceDockerSnapshotContainers(),
-			"portainer_docker_snapshot_container":              dataSourceDockerSnapshotContainer(),
-			"portainer_image_status":                           dataSourceImageStatus(),
-			"portainer_edge_update_schedule_info":              dataSourceEdgeUpdateScheduleInfo(),
-			"portainer_agent_versions":                         dataSourceAgentVersions(),
-			"portainer_edge_update_previous_versions":          dataSourceEdgeUpdatePreviousVersions(),
-			"portainer_edge_update_schedules_active":           dataSourceEdgeUpdateSchedulesActive(),
-			"portainer_edge_configuration_files":               dataSourceEdgeConfigurationFiles(),
-			"portainer_edge_stack_stagger_status":              dataSourceEdgeStackStaggerStatus(),
-			"portainer_gitops_repo_file_search":                dataSourceGitopsRepoFileSearch(),
-			"portainer_gitops_helm_values":                     dataSourceGitopsHelmValues(),
-			"portainer_motd":                                   dataSourceMOTD(),
-			"portainer_user_access":                            dataSourceUserAccess(),
-			"portainer_kubernetes_cluster":                     dataSourceKubernetesCluster(),
-			"portainer_kubernetes_nodes":                       dataSourceKubernetesNodes(),
-			"portainer_kubernetes_events":                      dataSourceKubernetesEvents(),
-			"portainer_kubernetes_describe":                    dataSourceKubernetesDescribe(),
-			"portainer_kubernetes_persistent_volumes":          dataSourceKubernetesPersistentVolumes(),
-			"portainer_kubernetes_config":                      dataSourceKubernetesConfig(),
-			"portainer_docker_dashboard":                       dataSourceDockerDashboard(),
-			"portainer_docker_images":                          dataSourceDockerImages(),
-			"portainer_docker_container_gpus":                  dataSourceDockerContainerGpus(),
-			"portainer_app_templates":                          dataSourceAppTemplates(),
-			"portainer_helm_chart":                             dataSourceHelmChart(),
-			"portainer_custom_template_file":                   dataSourceCustomTemplateFile(),
-			"portainer_edge_stack_file":                        dataSourceEdgeStackFile(),
-			"portainer_edge_job_file":                          dataSourceEdgeJobFile(),
-			"portainer_edge_job_tasks":                         dataSourceEdgeJobTasks(),
-			"portainer_edge_job_task_logs":                     dataSourceEdgeJobTaskLogs(),
-			"portainer_endpoints_summary":                      dataSourceEndpointsSummary(),
-			"portainer_endpoint_registries":                    dataSourceEndpointRegistries(),
-			"portainer_team_memberships":                       dataSourceTeamMemberships(),
-			"portainer_kubernetes_pod_metrics":                 dataSourceKubernetesPodMetrics(),
-			"portainer_kubernetes_node_metrics":                dataSourceKubernetesNodeMetrics(),
-			"portainer_kubernetes_application_resources":       dataSourceKubernetesApplicationResources(),
-			"portainer_helm_release_history":                   dataSourceHelmReleaseHistory(),
-		},
-		ConfigureContextFunc: configureProvider,
-	}
-}
 
 // APIClient is a simple client struct to store connection information.
 type APIClient struct {
@@ -403,26 +66,34 @@ func (c *APIClient) DoRequest(ctx context.Context, method, path string, headers 
 	return c.HTTPClient.Do(req)
 }
 
-// configureProvider sets up the API client and appends '/api' if missing from the endpoint.
-func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-	endpoint := d.Get("endpoint").(string)
-	apiKey := d.Get("api_key").(string)
-	user := d.Get("api_user").(string)
-	password := d.Get("api_password").(string)
-	skipSSL := d.Get("skip_ssl_verify").(bool)
-	headersInterface := d.Get("custom_headers").(map[string]interface{})
+// providerConfig is the provider block with the environment defaults applied
+// (see frameworkProvider.Configure).
+type providerConfig struct {
+	Endpoint       string
+	APIKey         string
+	User           string
+	Password       string
+	SkipSSLVerify  bool
+	CustomHeaders  map[string]string
+	MaxRetries     int
+	RequestTimeout string
+}
 
-	customHeaders := make(map[string]string)
-	for k, v := range headersInterface {
-		customHeaders[k] = v.(string)
-	}
+// newAPIClient builds the client every resource and data source shares, and
+// logs in with user and password when no API key is given.
+func newAPIClient(ctx context.Context, cfg providerConfig) (*APIClient, error) {
+	endpoint := cfg.Endpoint
+	apiKey := cfg.APIKey
+	user := cfg.User
+	password := cfg.Password
+	customHeaders := cfg.CustomHeaders
 
 	if apiKey != "" && (user != "" || password != "") {
-		return nil, diag.Errorf("you must specify either 'api_key' or 'api_user'/'api_password', not both")
+		return nil, fmt.Errorf("you must specify either 'api_key' or 'api_user'/'api_password', not both")
 	}
 
 	if (user == "" && password != "") || (user != "" && password == "") {
-		return nil, diag.Errorf("'api_user' and 'api_password' must be specified together")
+		return nil, fmt.Errorf("'api_user' and 'api_password' must be specified together")
 	}
 
 	transport := &http.Transport{
@@ -430,7 +101,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		// so the provider works behind corporate or userspace proxies.
 		Proxy: http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: skipSSL,
+			InsecureSkipVerify: cfg.SkipSSLVerify,
 		},
 	}
 
@@ -444,12 +115,15 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 	}
 
 	var requestTimeout time.Duration
-	if v := d.Get("request_timeout").(string); v != "" {
-		requestTimeout, _ = time.ParseDuration(v) // validated by validateDuration
+	if cfg.RequestTimeout != "" {
+		var err error
+		if requestTimeout, err = time.ParseDuration(cfg.RequestTimeout); err != nil {
+			return nil, fmt.Errorf("invalid request_timeout %q: %w", cfg.RequestTimeout, err)
+		}
 	}
 	transportWithRetry := &retryTransport{
 		next:       transportWithCustomHeaders,
-		maxRetries: d.Get("max_retries").(int),
+		maxRetries: cfg.MaxRetries,
 		timeout:    requestTimeout,
 	}
 
@@ -478,30 +152,29 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		payload, _ := json.Marshal(authBody)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+"/auth", bytes.NewBuffer(payload))
 		if err != nil {
-			return nil, diag.FromErr(fmt.Errorf("failed to create auth request: %w", err))
+			return nil, fmt.Errorf("failed to create auth request: %w", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := httpClient.Do(req)
 		if err != nil {
-			return nil, diag.FromErr(fmt.Errorf("failed to authenticate using username/password: %w", err))
+			return nil, fmt.Errorf("failed to authenticate using username/password: %w", err)
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			respBody, _ := io.ReadAll(resp.Body)
-			return nil, diag.Errorf("authentication failed: %s", string(respBody))
+			return nil, fmt.Errorf("authentication failed: %s", string(respBody))
 		}
 
 		var authResp struct {
 			JWT string `json:"jwt"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-			return nil, diag.FromErr(fmt.Errorf("failed to parse authentication response: %w", err))
+			return nil, fmt.Errorf("failed to parse authentication response: %w", err)
 		}
 		client.JWTToken = authResp.JWT
 	}
 
-	var diags diag.Diagnostics
-	return client, diags
+	return client, nil
 }

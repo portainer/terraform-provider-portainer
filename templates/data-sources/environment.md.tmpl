@@ -1,0 +1,26 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_environment data source (referred to as "endpoint" in the Portainer API) allows you to look up an existing Portainer environment by its name. This is essential for retrieving the ID needed to deploy stacks or configure access control.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_environment` data source (referred to as "endpoint" in the Portainer API) allows you to look up an existing Portainer environment by its name. This is essential for retrieving the ID needed to deploy stacks or configure access control.
+
+## Example Usage
+
+### Look up an environment by name
+
+```hcl
+data "portainer_environment" "local" {
+  name = "local"
+}
+
+output "environment_id" {
+  value = data.portainer_environment.local.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

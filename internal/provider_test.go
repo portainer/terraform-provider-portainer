@@ -17,6 +17,7 @@ func normalizeEndpoint(endpoint string) string {
 }
 
 func TestNormalizeEndpoint(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    string
@@ -81,6 +82,7 @@ func TestNormalizeEndpoint(t *testing.T) {
 // --------------- headerTransport ---------------
 
 func TestHeaderTransportNotNil(t *testing.T) {
+	t.Parallel()
 	// Verify that the headerTransport struct can be instantiated properly.
 	headers := map[string]string{
 		"X-Custom-Header": "test-value",
@@ -100,6 +102,7 @@ func TestHeaderTransportNotNil(t *testing.T) {
 // --------------- APIClient struct ---------------
 
 func TestAPIClientStruct(t *testing.T) {
+	t.Parallel()
 	client := &APIClient{
 		Endpoint: "https://portainer.example.com/api",
 		APIKey:   "test-key",

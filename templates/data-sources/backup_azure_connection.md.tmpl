@@ -1,0 +1,36 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Asks Portainer to test whether it can reach an Azure Blob container with the given credentials, before they are committed with portainer_backup_azure_settings.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Asks Portainer to test whether it can reach an Azure Blob container with the given credentials, before they are committed with `portainer_backup_azure_settings`.
+
+## Example Usage
+
+```hcl
+data "portainer_backup_azure_connection" "check" {
+  auth_method          = "servicePrincipalSecret"
+  storage_account_name = "acmebackups"
+  container_name       = "portainer"
+  tenant_id            = var.azure_tenant_id
+  client_id            = var.azure_client_id
+  client_secret        = var.azure_client_secret
+}
+
+resource "portainer_backup_azure_settings" "nightly" {
+  depends_on = [data.portainer_backup_azure_connection.check]
+  # ...
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+The endpoint answers with a status code rather than a result object, so the outcome is the code itself.

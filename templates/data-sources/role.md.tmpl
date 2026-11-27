@@ -1,0 +1,37 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_role data source allows you to list all available Portainer roles or look up a specific role by name.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_role` data source allows you to list all available Portainer roles or look up a specific role by name.
+
+## Example Usage
+
+### List all roles
+
+```hcl
+data "portainer_role" "all" {}
+
+output "roles" {
+  value = data.portainer_role.all.roles
+}
+```
+
+### Look up a specific role by name
+
+```hcl
+data "portainer_role" "helpdesk" {
+  name = "HelpDesk"
+}
+
+output "helpdesk_role_id" {
+  value = data.portainer_role.helpdesk.roles[0].id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+

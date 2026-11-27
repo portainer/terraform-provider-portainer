@@ -1,0 +1,24 @@
+# Path prefixes the provider builds that are in no Portainer spec on purpose,
+# for the opt-in reverse check (apicoveragelint -reverse), one per line with
+# the reason after "#". "{id}" stands for any one segment.
+
+# API proxies: Portainer forwards these to the environment's own API.
+/endpoints/{id}/docker              # Docker Engine API proxy
+/endpoints/{id}/kubernetes          # Kubernetes API proxy
+
+# Fragments appended to a Docker proxy URL built elsewhere.
+/json                               # Docker container inspect suffix (resource control)
+
+# Terraform resource IDs built with fmt.Sprintf, not URLs.
+/application-resources              # ID of portainer_kubernetes_application_resources
+/cluster                            # ID of portainer_kubernetes_cluster
+/{id}/node-metrics                  # ID of the node metrics data source
+/{id}/{id}/pod-metrics              # ID of the pod metrics data source
+/{id}/events                        # ID of portainer_kubernetes_events
+/{id}/deleted                       # ID of portainer_stack_delete_by_name
+/{id}/{id}/rollback                 # ID of portainer_kubernetes_deployment_rollback
+
+# Removed APIs the provider keeps for older servers.
+/users/{id}/gitcredentials          # portainer_user_git_credential (deprecated): Business Edition 2.42 and earlier
+/chat                               # portainer_chat (deprecated): the OpenAI chat API is gone from every published release
+/cloud/{id}/provision               # portainer_cloud_provider_provision (deprecated): Business Edition 2.39 LTS and 2.41 to 2.43

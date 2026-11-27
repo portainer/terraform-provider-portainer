@@ -1,0 +1,48 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_user_api_key` ephemeral resource issues a Portainer API key that lives for one Terraform run only. The key is created when Terraform opens the ephemeral resource and revoked (`DELETE /users/{id}/tokens/{keyId}`) when it closes it at the end of the same run, so the raw key is never written to the plan or the state.
+
+Use it to hand a short-lived Portainer API key to another provider, a provisioner or a write-only attribute. When the key has to outlive the run, use the [`portainer_user_api_key` resource](../resources/user_api_key.md) instead.
+
+> **Requirements:** Terraform >= 1.10 or OpenTofu >= 1.11 (ephemeral resources). Like the resource, Portainer issues API keys only to a session: the provider must be configured with `api_user` and `api_password` (not `api_key`), and the key can only be issued for that same user.
+
+## Example Usage
+
+```hcl
+provider "portainer" {
+  endpoint     = var.portainer_url
+  api_user     = var.portainer_user
+  api_password = var.portainer_password
+}
+
+ephemeral "portainer_user_api_key" "ci" {
+  user_id  = 1
+  password = var.portainer_password
+  # description is optional: a unique "terraform-ephemeral-<timestamp>" is used when unset
+}
+
+# Hand the key to another provider for this run only.
+provider "restapi" {
+  uri     = var.portainer_url
+  headers = { "X-API-Key" = ephemeral.portainer_user_api_key.ci.raw_api_key }
+}
+```
+
+## Lifecycle & Behavior
+
+- Terraform opens the ephemeral resource in every `plan` and every `apply`, so each run issues its own key and revokes it when the run ends. Nothing is stored between runs and nothing shows up as a change.
+- Portainer requires key descriptions to be unique per user. When `description` is unset, a unique `terraform-ephemeral-<unix nanoseconds>` is generated, so overlapping runs and a key left behind by an interrupted run do not collide. A fixed `description` fails while another key with the same description exists.
+- Portainer API keys do not expire, so there is no renewal; the key is valid until Terraform closes the ephemeral resource. If Terraform is killed before it closes it, the key stays and has to be revoked in Portainer's user settings.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `description`: Defaults to a generated `terraform-ephemeral-<timestamp>`.

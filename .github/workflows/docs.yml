@@ -29,6 +29,44 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          # tfplugindocs reads the schema through `terraform providers schema`;
+          # actions and list resources only appear there from 1.14 on.
+          terraform_version: "^1.14.0"
+          terraform_wrapper: false
+
+      - name: Generated docs check
+        run: |
+          # docs/ is generated from templates/ and the provider schema: fail when
+          # it differs from what tfplugindocs generates (hand edit of docs/, or a
+          # schema change without `make docs-generate`).
+          make docs-generate > docs-generate.log 2>&1 || { cat docs-generate.log; exit 1; }
+          changes=$(git status --porcelain -- docs/)
+          {
+            echo "## Generated docs check"
+            echo ""
+            if [ -z "$changes" ]; then
+              echo "OK — docs/ is what templates/ and the schema generate."
+            else
+              echo "docs/ is out of date: edit templates/ and run \`make docs-generate\`."
+              echo ""
+              echo '```'
+              echo "$changes"
+              git --no-pager diff --stat -- docs/
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$changes" ]; then
+            echo "$changes"
+            git --no-pager diff -- docs/ | head -200
+            exit 1
+          fi
+
+      - name: Registry docs validation
+        run: make docs-validate
+
       - name: Markdown Link Validation
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         env:
@@ -39,45 +77,26 @@ jobs:
           args: >-
             --no-progress
             --exclude-path portainer_data
+            --exclude 'img\.shields\.io'
             './**/*.md'
           fail: true
 
-      - name: Schema/docs drift check
+      - name: Template/schema drift check
         run: |
           go run ./internal/tools/docsdriftlint . | tee docs-drift.out
           status=${PIPESTATUS[0]}
           {
-            echo "## Schema/docs drift check"
+            echo "## Template/schema drift check"
             echo ""
             if [ "$status" -eq 0 ]; then
-              echo "OK — every schema field is documented and every documented field exists."
+              echo "OK — every type has a template that embeds its generated schema, and every field the templates name exists."
             else
               echo '```'
               cat docs-drift.out
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
-          exit $status
-
-      - name: Docs presence check
-        run: |
-          bash scripts/docs-presence-check.sh | tee docs-presence.out
-          status=${PIPESTATUS[0]}
-          missing=$(grep -c '\.md$' docs-presence.out || true)
-          {
-            echo "## Docs presence check"
-            echo ""
-            if [ "$status" -eq 0 ]; then
-              echo "OK — every resource and data source has a docs page."
-            else
-              echo "**Missing docs pages:** $missing"
-              echo ""
-              echo '```'
-              cat docs-presence.out
-              echo '```'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit $status
+          exit "$status"
 
       - name: Examples presence check
         run: |
@@ -94,4 +113,4 @@ jobs:
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
-          exit $status
+          exit "$status"
