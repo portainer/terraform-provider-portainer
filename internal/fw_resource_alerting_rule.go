@@ -180,7 +180,11 @@ func (r *alertingRuleResource) Schema(_ context.Context, _ resource.SchemaReques
 			"alert_manager_id":     optInt("ID of the associated AlertManager settings."),
 			"endpoint_group_ids":   optIntList("IDs of the endpoint groups the rule is restricted to; empty means every relevant environment. Do not also manage the same rule with `portainer_alerting_rule_groups`."),
 			"tag_ids":              optIntList("IDs of the environment tags the rule is restricted to."),
-			"promql_expr":          optString("PromQL expression the rule evaluates; this is what a custom rule measures."),
+			"promql_expr": schema.StringAttribute{
+				Optional: true, Computed: true,
+				Description:   "PromQL expression the rule evaluates; this is what a custom rule measures.",
+				PlanModifiers: []planmodifier.String{alertingPromqlExprPlan{}},
+			},
 			"supported_environment_types": optString("Environment types the rule applies to: `docker`, `kubernetes`, `podman` or `all`.",
 				stringvalidator.OneOf("docker", "kubernetes", "podman", "all")),
 			"labels": schema.MapAttribute{
@@ -522,4 +526,35 @@ func alertingRulePayload(ctx context.Context, enabled bool, config alertingRuleM
 		rule["labels"] = stringMapToGo(ctx, config.Labels, diags)
 	}
 	return rule
+}
+
+// alertingPromqlExprPlan keeps promql_expr from the state, as
+// UseStateForUnknown does, unless the configuration leaves it out and changes
+// what Portainer builds it from: a built-in rule's expression is its template
+// with the condition operator and threshold filled in ("... > 85"), so it is
+// unknown until Portainer has applied the new values.
+type alertingPromqlExprPlan struct{}
+
+func (alertingPromqlExprPlan) Description(context.Context) string {
+	return "Keeps the prior expression unless the threshold or condition operator changes."
+}
+
+func (m alertingPromqlExprPlan) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (alertingPromqlExprPlan) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.StateValue.IsNull() || !req.PlanValue.IsUnknown() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	var planThreshold, stateThreshold types.Float64
+	var planOperator, stateOperator types.String
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("threshold"), &planThreshold)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("threshold"), &stateThreshold)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("condition_operator"), &planOperator)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("condition_operator"), &stateOperator)...)
+	if !planThreshold.Equal(stateThreshold) || !planOperator.Equal(stateOperator) {
+		return
+	}
+	resp.PlanValue = req.StateValue
 }

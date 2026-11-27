@@ -45,12 +45,26 @@ add() {
 # settings") or creates an Edge agent environment (500 "Tunnel server address
 # not set"); Community Edition falls back to the request's host. Values already
 # configured are kept; ACC_EDGE_PORTAINER_URL and ACC_EDGE_TUNNEL_ADDRESS
-# override the defaults (this URL, and its host on port 8000).
+# override the defaults (this URL, and its host on port 8000, with localhost
+# replaced by this machine's address).
 SETTINGS="$(api /settings)" || fail "the settings could not be read at ${URL}"
 EDGE_HOST="$(sed -E 's#^[a-z]+://##; s#[/:].*$##' <<<"${URL}")"
+# Portainer refuses localhost ("Cannot use localhost as environment URL"), the
+# address CI and local runs reach it at: use this machine's own address.
+EDGE_BASE="${URL%/}"
+if [[ "${EDGE_HOST}" == localhost || "${EDGE_HOST}" == 127.* ]]; then
+  IP="$( (hostname -I 2>/dev/null || true) | awk '{print $1}')"
+  [ -n "${IP}" ] || IP="$(ipconfig getifaddr en0 2>/dev/null || true)"
+  if [ -n "${IP}" ]; then
+    FROM="//${EDGE_HOST}"
+    TO="//${IP}"
+    EDGE_BASE="${EDGE_BASE/"${FROM}"/"${TO}"}"
+    EDGE_HOST="${IP}"
+  fi
+fi
 EDGE_URL="$(jq -r '.EdgePortainerUrl // empty' <<<"${SETTINGS}")"
 EDGE_TUNNEL="$(jq -r '.Edge.TunnelServerAddress // empty' <<<"${SETTINGS}")"
-EDGE_URL="${EDGE_URL:-${ACC_EDGE_PORTAINER_URL:-${URL%/}}}"
+EDGE_URL="${EDGE_URL:-${ACC_EDGE_PORTAINER_URL:-${EDGE_BASE}}}"
 EDGE_TUNNEL="${EDGE_TUNNEL:-${ACC_EDGE_TUNNEL_ADDRESS:-${EDGE_HOST}:8000}}"
 # The update payload names the URL EdgePortainerURL (the settings object
 # returns it as EdgePortainerUrl).

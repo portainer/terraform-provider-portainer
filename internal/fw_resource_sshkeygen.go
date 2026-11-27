@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -66,11 +67,14 @@ func (r *sshKeygenResource) Create(ctx context.Context, _ resource.CreateRequest
 	client := r.client
 	const summary = "Failed to generate SSH key"
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/sshkeygen", client.Endpoint), nil)
+	// Business Edition 2.45 rejects a request without a body ("Invalid request
+	// payload: EOF"); 3.x takes either.
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/sshkeygen", client.Endpoint), strings.NewReader("{}"))
 	if err != nil {
 		resp.Diagnostics.AddError(summary, err.Error())
 		return
 	}
+	req.Header.Set("Content-Type", "application/json")
 	if err := setAuthHeader(req, client); err != nil {
 		resp.Diagnostics.AddError(summary, err.Error())
 		return

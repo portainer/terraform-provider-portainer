@@ -20,6 +20,9 @@ type fakeAlertingRules struct {
 	rules  map[int]map[string]interface{}
 	// postWithoutID makes POST answer with an empty object, as the spec allows.
 	postWithoutID bool
+	// renderExpr makes PUT rebuild promqlExpr from the condition operator and
+	// threshold, as Portainer does for a built-in rule.
+	renderExpr bool
 }
 
 func newFakeAlertingRules(seed ...map[string]interface{}) *fakeAlertingRules {
@@ -115,6 +118,9 @@ func (f *fakeAlertingRules) register(m *MockServer) {
 			if _, ok := f.rules[id]; !ok {
 				RespondString(http.StatusNotFound, "application/json", `{"message":"alert rule not found"}`)(w, r)
 				return
+			}
+			if f.renderExpr {
+				body.AlertingRule["promqlExpr"] = fmt.Sprintf("increase(auth_failures[5m]) %v %v", body.AlertingRule["conditionOperator"], body.AlertingRule["threshold"])
 			}
 			f.rules[id] = body.AlertingRule
 			RespondJSON(http.StatusOK, body.AlertingRule)(w, r)

@@ -28,12 +28,18 @@ func accKubernetesEnv(t *testing.T) string {
 func TestAccKubernetesNamespace_UpgradeFromSDKv2(t *testing.T) {
 	envID := accKubernetesEnv(t)
 	name := acctest.RandomWithPrefix("acc-ns")
+	// A licensed Business Edition takes requests and limits separately;
+	// Community Edition one value for both.
+	quota := `{ cpu = "1", memory = "256Mi" }`
+	if accIsBE() {
+		quota = `{ cpu_request = "500m", cpu_limit = "1", memory_request = "128Mi", memory_limit = "256Mi" }`
+	}
 	config := fmt.Sprintf(`
 resource "portainer_kubernetes_namespace" "n" {
   environment_id = %[1]s
   name           = %[2]q
   annotations    = { team = "acc" }
-  resource_quota = { cpu = "1", memory = "256Mi" }
+  resource_quota = %[3]s
 }
 
 resource "portainer_kubernetes_namespace_system" "s" {
@@ -41,7 +47,7 @@ resource "portainer_kubernetes_namespace_system" "s" {
   namespace      = portainer_kubernetes_namespace.n.name
   system         = true
 }
-`, envID, name)
+`, envID, name, quota)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() { accPreCheck(t) },
 		Steps: []resource.TestStep{
@@ -85,7 +91,9 @@ resource "portainer_kubernetes_environment_config" "c" {
 		Steps: []resource.TestStep{
 			{Config: config(true), Check: resource.TestCheckResourceAttr("portainer_kubernetes_environment_config.c", "use_server_metrics", "true")},
 			{Config: config(false), Check: resource.TestCheckResourceAttr("portainer_kubernetes_environment_config.c", "use_server_metrics", "false")},
-			{ResourceName: "portainer_kubernetes_environment_config.c", ImportState: true, ImportStateVerify: true},
+			// Import reads the environment's storage classes, which this
+			// configuration leaves to Portainer.
+			{ResourceName: "portainer_kubernetes_environment_config.c", ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"storage_class"}},
 		},
 	})
 }

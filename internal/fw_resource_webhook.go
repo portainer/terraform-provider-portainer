@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -100,8 +101,27 @@ func (r *webhookResource) Configure(_ context.Context, req resource.ConfigureReq
 	r.client = configuredClient(req.ProviderData, &resp.Diagnostics)
 }
 
+// ImportState takes the numeric webhook ID, or "<endpoint_id>:<resource_id>:<id>":
+// Business Edition lists webhooks only for a given environment and resource,
+// so there the long form is the one that works.
 func (r *webhookResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	fwImportIDOrIdentity(ctx, req, resp)
+	parts := strings.Split(req.ID, ":")
+	if req.ID == "" || len(parts) == 1 {
+		fwImportIDOrIdentity(ctx, req, resp)
+		return
+	}
+	endpointID, err := strconv.ParseInt(parts[0], 10, 64)
+	if len(parts) != 3 || err != nil || parts[1] == "" || parts[2] == "" {
+		resp.Diagnostics.AddError("Invalid import ID",
+			fmt.Sprintf("expected <id> or <endpoint_id>:<resource_id>:<id>, got %q", req.ID))
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[2])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("endpoint_id"), endpointID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("resource_id"), parts[1])...)
+	if resp.Identity != nil {
+		resp.Diagnostics.Append(resp.Identity.SetAttribute(ctx, path.Root("id"), parts[2])...)
+	}
 }
 
 // ModifyPlan keeps the webhook's long-standing behaviour: repointing it at
@@ -171,6 +191,9 @@ func (r *webhookResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 	found, err := webhookRead(ctx, r.client, &state)
 	if err != nil {
+		if state.EndpointID.IsNull() || state.EndpointID.ValueInt64() == 0 {
+			err = fmt.Errorf("%w (Portainer Business Edition lists webhooks only per environment and resource: import as <endpoint_id>:<resource_id>:<id>)", err)
+		}
 		resp.Diagnostics.AddError("Failed to read webhook", err.Error())
 		return
 	}

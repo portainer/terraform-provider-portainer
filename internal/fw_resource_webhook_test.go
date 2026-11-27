@@ -165,6 +165,17 @@ func TestWebhookResource_Lifecycle(t *testing.T) {
 				ImportStateVerifyIgnore: []string{"registry_id"},
 			},
 			{
+				// The long form, which Business Edition needs.
+				ResourceName: "portainer_webhook.w",
+				ImportState:  true,
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					r := s.RootModule().Resources["portainer_webhook.w"].Primary
+					return r.Attributes["endpoint_id"] + ":" + r.Attributes["resource_id"] + ":" + r.ID, nil
+				},
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"registry_id"},
+			},
+			{
 				Config: webhookConfig(mock, "svc-1", "registry_id = 2"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
 					plancheck.ExpectResourceAction("portainer_webhook.w", plancheck.ResourceActionUpdate),
@@ -508,7 +519,13 @@ data "portainer_webhook" "w" {
 				Config:                   accProvider() + config,
 				ResourceName:             "portainer_webhook.w",
 				ImportState:              true,
-				ImportStateVerify:        true,
+				// The long form works on both editions (Business Edition
+				// cannot list webhooks without the environment and resource).
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					r := s.RootModule().Resources["portainer_webhook.w"].Primary
+					return r.Attributes["endpoint_id"] + ":" + r.Attributes["resource_id"] + ":" + r.ID, nil
+				},
+				ImportStateVerify: true,
 			},
 		},
 	})

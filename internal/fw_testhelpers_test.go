@@ -77,3 +77,24 @@ func accPreCheck(t *testing.T) {
 var previousRelease = map[string]resource.ExternalProvider{
 	"portainer": {Source: "portainer/portainer", VersionConstraint: "3.0.0"},
 }
+
+// accRequireVersion skips an acceptance test on a server older than min
+// (e.g. "3.1.0"); what names the feature in the skip message.
+func accRequireVersion(t *testing.T, min, what string) {
+	t.Helper()
+	client, err := newAPIClient(context.Background(), providerConfig{
+		Endpoint: os.Getenv("PORTAINER_ENDPOINT"), APIKey: os.Getenv("PORTAINER_API_KEY"), SkipSSLVerify: true,
+	})
+	if err != nil {
+		t.Fatalf("acceptance client: %v", err)
+	}
+	var version struct {
+		ServerVersion string `json:"ServerVersion"`
+	}
+	if err := doJSON(context.Background(), client, "GET", client.Endpoint+"/system/version", nil, &version); err != nil {
+		t.Fatalf("reading the server version: %v", err)
+	}
+	if versionLess(version.ServerVersion, min) {
+		t.Skipf("%s needs Portainer %s or later; the server is %s", what, min, version.ServerVersion)
+	}
+}

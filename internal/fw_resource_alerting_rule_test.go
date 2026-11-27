@@ -417,3 +417,39 @@ resource "portainer_alerting_rule" "r" {
 		},
 	})
 }
+
+// TestAlertingRuleResource_AdoptThresholdRebuildsExpr: Portainer rebuilds a
+// built-in rule's promql_expr from its threshold, so a threshold change plans
+// the expression unknown instead of keeping the old one (which failed the
+// apply with "Provider produced inconsistent result").
+func TestAlertingRuleResource_AdoptThresholdRebuildsExpr(t *testing.T) {
+	t.Parallel()
+	mock := NewMockServer(t)
+	seed := predefinedAlertingRule(42)
+	seed["promqlExpr"] = "increase(auth_failures[5m]) > 80"
+	fake := newFakeAlertingRules(seed)
+	fake.renderExpr = true
+	fake.register(mock)
+
+	config := func(threshold int) string {
+		return mockProviderConfig(mock) + fmt.Sprintf(`
+resource "portainer_alerting_rule" "r" {
+  rule_id   = 42
+  enabled   = true
+  threshold = %d
+}`, threshold)
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV5ProviderFactories: testProtoV5Factories,
+		Steps: []resource.TestStep{
+			{
+				Config: config(85),
+				Check:  resource.TestCheckResourceAttr("portainer_alerting_rule.r", "promql_expr", "increase(auth_failures[5m]) > 85"),
+			},
+			{
+				Config: config(77),
+				Check:  resource.TestCheckResourceAttr("portainer_alerting_rule.r", "promql_expr", "increase(auth_failures[5m]) > 77"),
+			},
+		},
+	})
+}

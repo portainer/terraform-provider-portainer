@@ -100,7 +100,7 @@ func (e *sshKeygenEphemeral) Open(ctx context.Context, _ ephemeral.OpenRequest, 
 		Public  string `json:"public"`
 		Private string `json:"private"`
 	}
-	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/sshkeygen", nil, &keypair); err != nil {
+	if err := doJSON(ctx, client, http.MethodPost, client.Endpoint+"/sshkeygen", map[string]interface{}{}, &keypair); err != nil {
 		resp.Diagnostics.AddError("Failed to generate SSH key", fmt.Sprintf("failed to generate SSH key: %s", err))
 		return
 	}

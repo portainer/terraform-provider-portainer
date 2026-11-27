@@ -74,6 +74,12 @@ Webhooks can be imported using their numeric ID (listed by `GET /api/webhooks`):
 terraform import portainer_webhook.example 12
 ```
 
+Portainer Business Edition lists webhooks only per environment and resource, so there use `<endpoint_id>:<resource_id>:<id>` (it works on Community Edition too):
+
+```shell
+terraform import portainer_webhook.example 3:my-service:12
+```
+
 `reassign_on_change` is not stored in Portainer and takes its default after an import.
 
 ### Import by identity

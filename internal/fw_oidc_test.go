@@ -674,6 +674,7 @@ resource "portainer_settings" "s" {
 func TestAccOIDCClient(t *testing.T) {
 	accPreCheck(t)
 	accRequireBE(t, "the OIDC provider (Business Edition 3.1)")
+	accRequireVersion(t, "3.1.0", "the OIDC provider")
 	resource.Test(t, resource.TestCase{
 		ProtoV5ProviderFactories: testProtoV5Factories,
 		Steps: []resource.TestStep{{
