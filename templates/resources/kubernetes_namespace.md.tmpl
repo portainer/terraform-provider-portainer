@@ -1,0 +1,73 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_kubernetes_namespace resource allows you to manage Kubernetes namespaces within a specific environment (endpoint) in Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_namespace` resource allows you to manage Kubernetes namespaces within a specific environment (endpoint) in Portainer.
+
+It supports both CE and BE versions of Portainer. Certain features like detailed resource quotas are only fully supported in BE (licensed) versions.
+
+---
+
+## Example Usage
+
+```hcl
+resource "portainer_kubernetes_namespace" "test" {
+  environment_id = 4
+  name           = "testest"
+  owner          = "terraform-test"
+
+  annotations = {
+    "owner" = "terraform"
+    "env"   = "test"
+  }
+
+  resource_quota = {
+    cpu         = "800m"        # CE only
+    memory      = "129Mi"       # CE only
+    cpu_request = "500m"        # BE only
+    cpu_limit   = "1000m"       # BE only
+    memory_request = "64Mi"     # BE only
+    memory_limit   = "256Mi"    # BE only
+  }
+}
+```
+
+## ⚙️ Lifecycle & Behavior
+
+- Terraform updates the namespace if `owner`, `annotations`, or `resource_quota` change.
+- Changing the `name` triggers a destroy and recreate operation due to API limitations (Portainer does not support renaming namespaces directly in API).
+- Resource quotas are applied differently depending on Portainer license:
+  - **CE (Community Edition)**: only `cpu` and `memory` keys are applied.
+  - **BE (Business/Enterprise Edition)**: full quota with `cpu_request`, `cpu_limit`, `memory_request`, and `memory_limit`.
+  - The quota is read back with the keys the configuration uses. On CE, Portainer applies `cpu`/`memory` as both the limit and the request.
+- Without `resource_quota` the namespace is created without a quota.
+- `storage_quotas` and `load_balancer_quota` (Business Edition) are only sent when set, so a configuration without them leaves quotas set elsewhere alone. They are read back from the namespace quota (`<class>.storageclass.storage.k8s.io/requests.storage`, `services.loadbalancers`) while Terraform manages them; an equal quantity in another form (`10240Mi`, `10Gi`) keeps the configured form.
+- You can use `terraform destroy` to delete the namespace completely.
+
+---
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `owner`: Defaults to `""`.
+- `resource_quota`: CE applies `cpu` and `memory`, BE supports `cpu_request`, `cpu_limit`, `memory_request`, `memory_limit`.
+- `load_balancer_quota`: Limit of LoadBalancer services: `limit` (number, required) and `enabled` (bool, default `true`).
+- `id`: Composite ID in format `environmentID:name`
+- `resource_quotas`: **Portainer 3.0+.** List of every ResourceQuota in the namespace: `name`, `hard` (map of hard limits, e.g. `limits.cpu = "2"`, `requests.memory = "1Gi"` `spec.hard`, falling back to `status.hard`) and `used` (map of current usage, `status.used`).
+- `effective_ceiling`: **Portainer 3.0+.** Effective limit per resource across all quotas (Portainer `EffectiveCeiling`), sorted by `resource`: `resource` (e.g. `limits.cpu`, `requests.memory`), `hard` and `used` (Kubernetes quantities such as `500m`, `2Gi`), `bound_by` (name of the quota that sets the limit).
+
+## Import
+
+Kubernetes namespaces can be imported using the composite ID `environmentID:name`:
+
+```shell
+terraform import portainer_kubernetes_namespace.example 1:my-namespace
+```
+
+After import, set `annotations` and `resource_quota` in config to match the live namespace — Read only restores `name`/`owner` (when set) reliably. The live namespace may include system-managed annotations that are never written back to state, so `annotations` in config stays the source of truth.

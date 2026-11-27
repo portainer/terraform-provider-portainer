@@ -1,0 +1,54 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+The `portainer_user_memberships_sync` action refreshes a user's team memberships from the configured LDAP/AD or OAuth provider.
+
+> **Requirements:** Terraform >= 1.14 (actions). OpenTofu does not support actions; there, and with older Terraform, use the [`portainer_user_memberships_sync` resource](../resources/user_memberships_sync.md), which runs the same operation when it is created.
+
+## Example Usage
+
+### Run it from a lifecycle `action_trigger`
+
+```hcl
+action "portainer_user_memberships_sync" "alice" {
+  config {
+    user_id = portainer_user.alice.id
+  }
+}
+
+resource "portainer_ldap_settings" "this" {
+  # ...
+
+  lifecycle {
+    action_trigger {
+      events  = [after_update]
+      actions = [action.portainer_user_memberships_sync.alice]
+    }
+  }
+}
+```
+
+### Run it on demand
+
+```shell
+terraform apply -invoke action.portainer_user_memberships_sync.alice
+```
+
+## Lifecycle & Behavior
+
+- The action runs only when it is invoked: from an `action_trigger` on the events listed there, or with `terraform apply -invoke`. A plan lists the invocations it would run; nothing is stored in state, so there is nothing to destroy and no `triggers` argument is needed to run it again.
+- It sends the same requests as the `portainer_user_memberships_sync` resource does when it is created, with the same defaults, and fails the apply with the same errors.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Actions have no attributes: nothing they return can be referenced elsewhere in the configuration.

@@ -207,6 +207,66 @@ jobs:
           terraform fmt -check
           terraform apply -auto-approve
 
+  acceptance:
+    # The Go acceptance tests (TestAcc* in internal/): terraform-plugin-testing
+    # applies, imports and plans against this Portainer CE with the provider
+    # of this commit, Docker, Swarm and Kubernetes (k3d) environments. Tests
+    # for Business Edition run in be-e2e-test.yml; the rest skip themselves
+    # when what they need is not named (see "Acceptance tests" in README.md).
+    # The cli matrix runs them with OpenTofu too (TF_ACC_TERRAFORM_PATH):
+    # tests of resource identity, list resources and actions skip there.
+    name: Acceptance tests (Go, ${{ matrix.cli }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cli: [terraform, opentofu]
+    env:
+      PORTAINER_ENDPOINT: https://localhost:9443
+      # The public test key of portainer_data/, see README.md.
+      PORTAINER_API_KEY: ptr_xrP7XWqfZEOoaCJRu5c8qKaWuDtVc2Zb07Q5g22YpS8=
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 🧰 E2E setup (with Kubernetes)
+        uses: ./.github/actions/e2e-setup
+        with:
+          kubernetes: "true"
+          # Actions and list resources need Terraform 1.14; older skips them.
+          terraform-version: "^1.14.0"
+
+      - name: ☸️ Create the Kubernetes environment
+        run: |
+          cd e2e-tests/environment
+          terraform init -input=false
+          terraform apply -auto-approve -input=false
+
+      - name: 🐳 Name the environments, a Swarm service and a container
+        run: ACC_SWARM=1 bash e2e-tests/lib/acc-env.sh
+
+      - name: 🪞 Mirror the previous provider release
+        run: echo "TF_CLI_CONFIG_FILE=$(scripts/tf-test-mirror.sh "$RUNNER_TEMP/tfmirror")" >>"$GITHUB_ENV"
+
+      # The setup steps above keep using Terraform; only the Go tests run tofu.
+      - name: ⬇️ Install OpenTofu
+        if: matrix.cli == 'opentofu'
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: latest
+          tofu_wrapper: false
+
+      - name: 🔗 Run the tests with OpenTofu
+        if: matrix.cli == 'opentofu'
+        run: echo "TF_ACC_TERRAFORM_PATH=$(command -v tofu)" >>"$GITHUB_ENV"
+
+      - name: 🧪 Run acceptance tests
+        env:
+          TF_ACC: "1"
+        run: go test ./internal/ -run '^TestAcc' -count=1 -v -timeout 90m
+
   regressions:
     # Scripted tests for what one apply cannot show: drift made outside
     # Terraform, imports, secrets kept out of state, failed deployments and the

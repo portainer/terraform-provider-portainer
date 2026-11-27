@@ -11,7 +11,7 @@
 set -euo pipefail
 
 CONTAINER="${BE_CONTAINER:-e2e-portainer-ee}"
-VERSION="${PORTAINER_VERSION:-2.45.3}"
+VERSION="${PORTAINER_VERSION:-2.45.4}"
 NETWORK="${K3D_NETWORK:-k3d-mycluster}"
 GATEWAY_API_VERSION="v1.2.1"
 

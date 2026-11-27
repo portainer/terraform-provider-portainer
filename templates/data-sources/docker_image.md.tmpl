@@ -1,0 +1,32 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_docker_image data source allows you to look up an existing Docker image within a specific Portainer environment.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_docker_image` data source allows you to look up an existing Docker image within a specific Portainer environment.
+
+## Example Usage
+
+### Look up a Docker image by name
+
+```hcl
+data "portainer_docker_image" "nginx" {
+  endpoint_id = 1
+  name        = "nginx:latest"
+}
+
+output "image_id" {
+  value = data.portainer_docker_image.nginx.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `name`: Full name of the image (e.g. `repo/img:tag`).
+- `id`: ID (Digest) of the Docker image.

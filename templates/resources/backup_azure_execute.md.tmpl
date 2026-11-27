@@ -1,0 +1,39 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Runs an Azure Blob backup once, outside the schedule.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Runs an Azure Blob backup once, outside the schedule.
+
+> **See also:** the [`portainer_backup_azure_execute` action](../actions/backup_azure_execute.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+
+```hcl
+resource "portainer_backup_azure_execute" "adhoc" {
+  auth_method          = "storageAccountKey"
+  storage_account_name = "acmebackups"
+  container_name       = "portainer"
+  storage_account_key  = var.azure_storage_key
+
+  triggers = {
+    before_upgrade = var.portainer_version
+  }
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `id`: Synthetic identifier carrying a timestamp.
+
+## Attributes Reference
+
+This does **not** touch the stored schedule: no cron rule is sent. Every argument forces a new resource, since a backup is a one-shot action.

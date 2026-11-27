@@ -1,0 +1,27 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Inspects one custom resource definition.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Inspects one custom resource definition.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_custom_resource_definition" "widgets" {
+  endpoint_id = portainer_environment.prod.id
+  name        = "widgets.example.com"
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+`scope` is what decides whether `portainer_kubernetes_custom_resource` needs a `namespace`.

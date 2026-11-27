@@ -1,0 +1,35 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_stack data source allows you to look up an existing Portainer stack by its name within a specific environment.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_stack` data source allows you to look up an existing Portainer stack by its name within a specific environment.
+
+## Example Usage
+
+### Look up a stack by name
+
+```hcl
+data "portainer_environment" "local" {
+  name = "local"
+}
+
+data "portainer_stack" "nginx" {
+  name        = "nginx-stack"
+  endpoint_id = data.portainer_environment.local.id
+}
+
+output "stack_id" {
+  value = data.portainer_stack.nginx.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `id`: ID of the Portainer stack.

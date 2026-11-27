@@ -1,0 +1,26 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_gitops_source data source reads a single GitOps source by ID, including its access control and the workflows deployed from it.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_gitops_source` data source reads a single GitOps source by ID, including its access control and the workflows deployed from it.
+
+## Example Usage
+
+```hcl
+data "portainer_gitops_source" "infra" {
+  source_id = 12
+}
+
+# A source cannot be deleted while a workflow still uses it.
+output "infra_workflows" {
+  value = [for w in data.portainer_gitops_source.infra.workflows : w.name]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+

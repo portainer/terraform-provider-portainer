@@ -1,0 +1,30 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reads the parsed X.509 details of the mTLS certificate whose rejection is keeping an environment's agent from connecting.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reads the parsed X.509 details of the mTLS certificate whose rejection is keeping an environment's agent from connecting.
+
+## Example Usage
+
+```hcl
+data "portainer_endpoint_mtls_certificate_error" "agent" {
+  endpoint_id = portainer_endpoint_trust.shop_floor_3.endpoint_id
+}
+
+output "rejected_certificate_expiry" {
+  value = data.portainer_endpoint_mtls_certificate_error.agent.valid_not_after
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+An environment that has never presented a certificate reports `configured = false` with every other attribute empty, rather than failing the plan. A call that fails for any other reason still fails.

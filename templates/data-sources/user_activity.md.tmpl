@@ -1,0 +1,61 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_user_activity data source allows you to retrieve user activity logs or authentication logs from Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_user_activity` data source allows you to retrieve user activity logs or authentication logs from Portainer.
+
+## Example Usage
+
+### List recent user activity logs
+
+```hcl
+data "portainer_user_activity" "recent" {
+  log_type = "activity"
+  limit    = 50
+}
+
+output "activity_logs" {
+  value = data.portainer_user_activity.recent.activity_logs
+}
+```
+
+### List authentication logs filtered by keyword
+
+```hcl
+data "portainer_user_activity" "auth" {
+  log_type = "auth"
+  keyword  = "admin"
+  limit    = 20
+}
+
+output "auth_logs" {
+  value = data.portainer_user_activity.auth.auth_logs
+}
+```
+
+### Filter activity logs by username and date range
+
+```hcl
+data "portainer_user_activity" "filtered" {
+  log_type  = "activity"
+  username  = ["admin"]
+  after     = 1700000000
+  before    = 1710000000
+  sort_by   = "timestamp"
+  sort_desc = true
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `log_type`: Type of logs: `activity` (default) or `auth`.
+- `sort_desc`: Defaults to `false`.
+- `offset`: Defaults to `0`.
+- `limit`: Defaults to `100`.

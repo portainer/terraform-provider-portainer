@@ -1,0 +1,82 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_docker_node resource allows you to update, inspect, and delete Docker Swarm nodes via the Portainer API.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_docker_node` resource allows you to update, inspect, and delete Docker Swarm nodes via the Portainer API.
+
+You can change attributes such as availability, role, name or labels, or even remove the node entirely from the cluster using this resource.
+
+## Example Usage
+```hcl
+resource "portainer_docker_node" "example" {
+  endpoint_id  = 1
+  node_id      = "wna048ajhbc1n1t5ispvf6mvg"
+  version      = 4869
+  name         = "node-name"
+  availability = "active"
+  role         = "manager"
+
+  labels = {
+    foo = "barrerun"
+  }
+}
+
+```
+
+## Lifecycle & Behavior
+- You can update node's role, availability, name, or labels by running:
+```hcl
+terraform apply
+```
+
+- To destroy the node:
+```hcl
+terraform destroy
+```
+
+## Arguments Reference
+| Name         | Type        | Required     | Description                                                          |
+|--------------|-------------|--------------|----------------------------------------------------------------------|
+| `endpoint_id`| number      | ✅ yes       | ID of the Portainer environment (endpoint)                          |
+| `node_id`    | string      | ✅ yes       | ID of the Docker Swarm node to update                               |
+| `version`    | number      | ✅ yes       | Version of the swarm node, required for updates and deletion        |
+| `name`       | string      | 🚫 optional  | Custom name to assign to the node                                   |
+| `availability`| string     | 🚫 optional  | Node availability (`active`, `pause`, or `drain`)                   |
+| `role`       | string      | 🚫 optional  | Node role in the cluster (`manager` or `worker`)                    |
+| `labels`     | map(string) | 🚫 optional  | Key-value metadata labels to attach to the node                     |
+                     |
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `id`: A combination of endpoint ID and node ID (`{endpoint}-{node}`)
+
+## Import
+
+Swarm nodes can be imported as `<endpoint_id>:<node_id>`. The format from before v3.0.0, `<endpoint_id>-<node_id>`, is still accepted.
+
+```shell
+terraform import portainer_docker_node.example 1:ktnbjxoalbkvbvedmg1urrz8h
+```
+
+### Import by identity
+
+Terraform 1.12 and later can also import by resource identity: the environment ID as `endpoint_id` and the Swarm node ID as `node_id` in an `import` block. The ID string above keeps working.
+
+```hcl
+import {
+  to       = portainer_docker_node.example
+  identity = {
+    endpoint_id = 1
+    node_id     = "ktnbjxoalbkvbvedmg1urrz8h"
+  }
+}
+```
+
+`terraform query` (Terraform 1.14+) with the [`portainer_docker_node` list resource](../list-resources/docker_node.md) finds the objects to import and can generate the `import` blocks (`terraform query -generate-config-out=generated.tf`). The identity is stored in the state from v3.1.0 on; state written by v3.0.0 gets it on the next refresh, without a plan change. OpenTofu supports neither resource identity nor list resources; it keeps importing by ID.

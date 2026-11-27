@@ -1,0 +1,32 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Totals what the cluster's applications request and are limited to, which is what you compare against the cluster's capacity before scheduling more.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Totals what the cluster's applications request and are limited to, which is what you compare against the cluster's capacity before scheduling more.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_application_resources" "prod" {
+  environment_id = 1
+}
+
+data "portainer_kubernetes_cluster" "prod" {
+  environment_id = 1
+}
+
+output "cpu_committed_vs_headroom" {
+  value = "${data.portainer_kubernetes_application_resources.prod.cpu_request} cores requested, ${data.portainer_kubernetes_cluster.prod.max_cpu}m still schedulable"
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+CPU is reported in cores as a fractional number, while `portainer_kubernetes_cluster` reports its headroom in millicores — do not compare the two without converting.

@@ -1,0 +1,32 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Inspects one application running in a Kubernetes cluster.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Inspects one application running in a Kubernetes cluster.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_application" "web" {
+  endpoint_id = portainer_environment.prod.id
+  namespace   = "apps"
+  name        = "web"
+}
+
+output "web_pods_missing" {
+  value = data.portainer_kubernetes_application.web.total_pods - data.portainer_kubernetes_application.web.running_pods
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+A gap between `total_pods` and `running_pods` is what to watch. Pods, containers, published ports and resource figures nest several levels deep and differ by workload kind, so `details` carries the whole response as JSON alongside the fields above.

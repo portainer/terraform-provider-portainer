@@ -1,35 +1,34 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 const deploymentPath = "/endpoints/1/kubernetes/apis/apps/v1/namespaces/default/deployments/web"
 
-// updatedDeployment returns ResourceData for the application resource with
-// before in state and after as the new manifest, as an apply sees it.
-func updatedDeployment(t *testing.T, before, after string) (*schema.Resource, *schema.ResourceData) {
+// updateDeployment runs k8sUpdateManifest for the deployment "web" as the
+// application resource does, with delete and create sent to the mock.
+func updateDeployment(t *testing.T, mock *MockServer, before, after string) error {
 	t.Helper()
-	r := resourceKubernetesApplication()
-	state := &terraform.InstanceState{ID: "1:default:web", Attributes: map[string]string{
-		"id": "1:default:web", "endpoint_id": "1", "namespace": "default", "manifest": before,
-	}}
-	diff := &terraform.InstanceDiff{Attributes: map[string]*terraform.ResourceAttrDiff{
-		"manifest": {Old: before, New: after},
-	}}
-	d, err := schema.InternalMap(r.SchemaMap()).Data(state, diff)
-	if err != nil {
-		t.Fatalf("Data failed: %v", err)
-	}
-	return r, d
+	r := &k8sManifestResource{kind: k8sKindApplication, client: mock.Client()}
+	ctx := context.Background()
+	return k8sUpdateManifest(ctx, r.client, mock.URL+deploymentPath, "web", "deployment web", before, after, false,
+		func() error { return r.deleteObject(ctx, "1:default:web", time.Minute) },
+		func() error {
+			_, err := r.createObject(ctx, k8sManifestValues{
+				EndpointID: types.Int64Value(1), Namespace: types.StringValue("default"), Manifest: types.StringValue(after),
+			}, time.Minute)
+			return err
+		})
 }
 
 // TestK8sUpdateManifest_PatchesInPlace: a changed manifest is a merge patch on
@@ -37,14 +36,15 @@ func updatedDeployment(t *testing.T, before, after string) (*schema.Resource, *s
 // Fields dropped from the manifest are nulled, unchanged replicas are left to
 // whatever scales the workload.
 func TestK8sUpdateManifest_PatchesInPlace(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("PATCH", deploymentPath, RespondJSON(http.StatusOK, map[string]interface{}{}))
 
-	r, d := updatedDeployment(t,
+	err := updateDeployment(t, mock,
 		"kind: Deployment\nmetadata:\n  name: web\n  labels:\n    app: web\n    tier: old\nspec:\n  replicas: 2\n  template:\n    spec:\n      containers:\n        - name: web\n          image: nginx:1.29\n",
 		"kind: Deployment\nmetadata:\n  name: web\n  labels:\n    app: web\nspec:\n  replicas: 2\n  template:\n    spec:\n      containers:\n        - name: web\n          image: nginx:1.30\n",
 	)
-	if err := rcUpdate(r, d, mock.Client()); err != nil {
+	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -72,14 +72,14 @@ func TestK8sUpdateManifest_PatchesInPlace(t *testing.T) {
 	if _, ok := spec["replicas"]; ok {
 		t.Errorf("unchanged replicas must not be sent, got spec %v", spec)
 	}
-	if d.Id() != "1:default:web" {
-		t.Errorf("the ID must stay, got %q", d.Id())
-	}
 }
 
 // TestK8sUpdateManifest_Recreates covers the changes an object cannot take in
 // place: they fall back to delete and create, as every update did before.
 func TestK8sUpdateManifest_Recreates(t *testing.T) {
+	k8sDeletePollInterval = time.Millisecond
+	t.Cleanup(func() { k8sDeletePollInterval = time.Second })
+
 	const before = "kind: Deployment\nmetadata:\n  name: web\nspec:\n  selector:\n    matchLabels:\n      app: web\n"
 	cases := map[string]struct {
 		after   string
@@ -97,8 +97,7 @@ func TestK8sUpdateManifest_Recreates(t *testing.T) {
 			mock.On("DELETE", deploymentPath, RespondJSON(http.StatusOK, map[string]interface{}{}))
 			mock.On("POST", "/endpoints/1/kubernetes/apis/apps/v1/namespaces/default/deployments", RespondJSON(http.StatusCreated, map[string]interface{}{}))
 
-			r, d := updatedDeployment(t, before, tc.after)
-			if err := rcUpdate(r, d, mock.Client()); err != nil {
+			if err := updateDeployment(t, mock, before, tc.after); err != nil {
 				t.Fatalf("Update failed: %v", err)
 			}
 			if mock.FindRequest("DELETE", deploymentPath) == nil || mock.FindRequest("POST", "/endpoints/1/kubernetes/apis/apps/v1/namespaces/default/deployments") == nil {
@@ -111,19 +110,53 @@ func TestK8sUpdateManifest_Recreates(t *testing.T) {
 // TestK8sUpdateManifest_PatchError: an error other than a rejected change is
 // reported and leaves the object alone.
 func TestK8sUpdateManifest_PatchError(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("PATCH", deploymentPath, RespondJSON(http.StatusForbidden, map[string]interface{}{"message": "forbidden"}))
 
-	r, d := updatedDeployment(t, "kind: Deployment\nmetadata:\n  name: web\n", "kind: Deployment\nmetadata:\n  name: web\n  labels:\n    a: b\n")
-	if err := rcUpdate(r, d, mock.Client()); err == nil {
-		t.Fatal("expected the failed PATCH to be reported")
+	err := updateDeployment(t, mock, "kind: Deployment\nmetadata:\n  name: web\n", "kind: Deployment\nmetadata:\n  name: web\n  labels:\n    a: b\n")
+	if err == nil || !strings.Contains(err.Error(), "failed to update deployment web") {
+		t.Fatalf("expected the failed PATCH to be reported, got %v", err)
 	}
 	if mock.FindRequest("DELETE", deploymentPath) != nil {
 		t.Error("a failed PATCH must not delete the object")
 	}
 }
 
+// TestK8sUpdateManifest_DeleteErrorAborts: when the delete of a recreate
+// fails, nothing is created.
+func TestK8sUpdateManifest_DeleteErrorAborts(t *testing.T) {
+	t.Parallel()
+	mock := NewMockServer(t)
+	mock.On("DELETE", deploymentPath, RespondString(http.StatusInternalServerError, "application/json", `{"message":"boom"}`))
+
+	err := updateDeployment(t, mock, "kind: Deployment\nmetadata:\n  name: web\n", "kind: Deployment\nmetadata:\n  name: web2\n")
+	if err == nil || !strings.Contains(err.Error(), "failed to delete Job") {
+		t.Fatalf("expected the failed delete to be reported, got %v", err)
+	}
+	if mock.FindRequest("POST", "/endpoints/1/kubernetes/apis/apps/v1/namespaces/default/deployments") != nil {
+		t.Error("a failed delete must not be followed by a create")
+	}
+}
+
+func TestK8sUpdateManifest_IdentityChangedRecreates(t *testing.T) {
+	t.Parallel()
+	mock := NewMockServer(t)
+	calls := []string{}
+	err := k8sUpdateManifest(context.Background(), mock.Client(), mock.URL+deploymentPath, "web", "deployment web",
+		"kind: Deployment\nmetadata:\n  name: web\n", "kind: Deployment\nmetadata:\n  name: web\n", true,
+		func() error { calls = append(calls, "delete"); return errors.New("stop") },
+		func() error { calls = append(calls, "create"); return nil })
+	if err == nil || strings.Join(calls, ",") != "delete" {
+		t.Errorf("a changed namespace/type must recreate the object, got calls %v err %v", calls, err)
+	}
+	if len(mock.Requests()) != 0 {
+		t.Errorf("no PATCH expected, got %d requests", len(mock.Requests()))
+	}
+}
+
 func TestK8sMergePatch(t *testing.T) {
+	t.Parallel()
 	t.Run("secret key removed from stringData", func(t *testing.T) {
 		patch := k8sMergePatch(
 			map[string]interface{}{"kind": "Secret", "stringData": map[string]interface{}{"a": "1", "b": "2"}},
@@ -176,8 +209,7 @@ func TestK8sUpdateManifest_RecreateWaitsForDeletion(t *testing.T) {
 	mock.On("DELETE", deploymentPath, RespondJSON(http.StatusOK, map[string]interface{}{}))
 	mock.On("POST", "/endpoints/1/kubernetes/apis/apps/v1/namespaces/default/deployments", RespondJSON(http.StatusCreated, map[string]interface{}{}))
 
-	r, d := updatedDeployment(t, "kind: Deployment\nmetadata:\n  name: web\n", "kind: Deployment\nmetadata:\n  name: web2\n")
-	if err := rcUpdate(r, d, mock.Client()); err != nil {
+	if err := updateDeployment(t, mock, "kind: Deployment\nmetadata:\n  name: web\n", "kind: Deployment\nmetadata:\n  name: web2\n"); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 	requests := mock.Requests()

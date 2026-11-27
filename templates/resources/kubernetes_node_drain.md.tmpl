@@ -1,0 +1,38 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_kubernetes_node_drain resource drains a Kubernetes node through Portainer, evicting its pods so the node can be taken out of service for maintenance. Every option mirrors the equivalent kubectl drain flag.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_node_drain` resource drains a Kubernetes node through Portainer, evicting its pods so the node can be taken out of service for maintenance. Every option mirrors the equivalent `kubectl drain` flag.
+
+Draining is a one-shot operation, so this resource behaves like an action: it runs on create, has nothing to read back, and removing it from the configuration only drops it from state — the node is **not** uncordoned. Changing any argument replaces the resource, which drains again.
+
+Requires Portainer **2.45.0** or newer for the advanced options (`force`, `timeout_seconds`, `grace_period_seconds`, `ignore_daemon_sets`, `delete_empty_dir_data`, `disable_eviction`); earlier versions accept the drain request but ignore the payload.
+
+> **See also:** the [`portainer_kubernetes_node_drain` action](../actions/kubernetes_node_drain.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+
+```hcl
+resource "portainer_kubernetes_node_drain" "maintenance" {
+  environment_id = 1
+  node_name      = "worker-1"
+
+  ignore_daemon_sets    = true
+  delete_empty_dir_data = true
+  timeout_seconds       = 300
+  grace_period_seconds  = 30
+  force                 = false
+  disable_eviction      = false
+}
+```
+
+## Arguments Reference
+
+{{ .SchemaMarkdown | trimspace }}
+
+The defaults above are Portainer's own (`libkubectl.DefaultDrainOptions`), so leaving a field unset behaves exactly like omitting it from the API request.

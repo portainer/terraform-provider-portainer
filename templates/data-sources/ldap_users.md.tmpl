@@ -1,0 +1,47 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Searches an LDAP directory for users, using a directory configuration supplied here rather than the one Portainer has saved.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Searches an LDAP directory for users, using a directory configuration supplied here rather than the one Portainer has saved.
+
+## Example Usage
+
+```hcl
+data "portainer_ldap_users" "people" {
+  url       = "ldap.example.com:389"
+  reader_dn = "cn=readonly,dc=example,dc=com"
+  password  = var.ldap_password
+
+  search {
+    base_dn             = "ou=people,dc=example,dc=com"
+    filter              = "(objectClass=person)"
+    user_name_attribute = "uid"
+  }
+}
+
+output "ldap_user_names" {
+  value = [for u in data.portainer_ldap_users.people.entries : u.name]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+### `entries`
+
+| Name | Type | Description |
+|------|------|-------------|
+| `groups` | list(string) | Groups the entry belongs to. |
+| `name` | string | Name the directory reports for the entry. |
+
+### `search`
+
+These endpoints take the whole directory configuration with the request rather than reusing the instance's saved settings, which is what lets a configuration be tried out before it is committed with `portainer_ldap_settings`. `reader_dn` and `password` are omitted from the request when unset, so `anonymous_mode` really does bind anonymously rather than with a blank password.

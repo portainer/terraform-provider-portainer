@@ -14,15 +14,29 @@
 // Portainer release that adds paths makes this tool fail until each new path
 // is either covered or listed, so nothing new goes unnoticed.
 //
+// The field check then goes one level deeper. For every operation on a
+// covered path that has a JSON or form request body, it lists the top-level
+// properties of the request schema (following $ref, allOf, oneOf and anyOf)
+// and reports those the provider never sends. A name counts as sent when the
+// provider's non-test internal/*.go use it as a json struct tag, a string key
+// of a composite literal, a string index assigned to, or a multipart field
+// name, compared case-insensitively because Portainer decodes JSON that way.
+// The published openapi.yaml only $refs one file per area (tags.yaml, ...);
+// those must sit next to it, the tool reads local files only. Fields left out
+// on purpose are listed in ignore-fields.txt, one
+// "<METHOD> <path> <field>  # <reason>" per line, where any of the three may
+// be "*". Pass -fields=false to run the path check alone.
+//
 // Exit codes:
 //
-//	0 — every spec path is covered or ignored
-//	1 — one or more spec paths are neither
+//	0 — every spec path and request field is covered or ignored
+//	1 — one or more spec paths or request fields are neither
 //	2 — invalid invocation or I/O error
 //
 // Usage:
 //
-//	apicoveragelint -spec openapi.yaml [-spec other.yaml] [root]
+//	apicoveragelint -spec openapi.yaml [-spec other.yaml] [-fields=false] [root]
+//	apicoveragelint -reverse -spec openapi.yaml [-spec other.yaml] [root]
 package main
 
 import (
@@ -57,6 +71,8 @@ const param = "{}"
 func main() {
 	var specs specFlags
 	flag.Var(&specs, "spec", "OpenAPI spec file listing the paths (repeatable)")
+	checkFieldsFlag := flag.Bool("fields", true, "also check the request fields of covered operations")
+	reverseFlag := flag.Bool("reverse", false, "only list the provider paths that no given spec has (see reverse.go)")
 	flag.Parse()
 	root := "."
 	if args := flag.Args(); len(args) > 0 {
@@ -79,6 +95,18 @@ func main() {
 		os.Exit(2)
 	}
 
+	if *reverseFlag {
+		n, err := reverseCheck(root, paths)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "apicoveragelint: %v\n", err)
+			os.Exit(2)
+		}
+		if n > 0 {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	patterns, err := providerPatterns(filepath.Join(root, "internal"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "apicoveragelint: %v\n", err)
@@ -88,6 +116,18 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "apicoveragelint: %v\n", err)
 		os.Exit(2)
+	}
+
+	var ops []operation
+	if *checkFieldsFlag {
+		for _, file := range specs {
+			o, err := readSpecOperations(file)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "apicoveragelint: %v\n", err)
+				os.Exit(2)
+			}
+			ops = append(ops, o...)
+		}
 	}
 
 	var missing, stale []string
@@ -120,9 +160,45 @@ func main() {
 			fmt.Printf("%s: not called by the provider and not in ignore.txt\n", p)
 		}
 		fmt.Printf("apicoveragelint: %d of %d API paths are neither covered nor ignored.\n", len(missing), len(paths))
-		os.Exit(1)
+	} else {
+		fmt.Printf("apicoveragelint: OK — %d API paths: %d called by the provider, %d ignored with a reason.\n", len(paths), covered, len(paths)-covered)
 	}
-	fmt.Printf("apicoveragelint: OK — %d API paths: %d called by the provider, %d ignored with a reason.\n", len(paths), covered, len(paths)-covered)
+	status := 0
+	if len(missing) > 0 {
+		status = 1
+	}
+	if *checkFieldsFlag && !runFieldCheck(root, ops, patterns) {
+		status = 1
+	}
+	os.Exit(status)
+}
+
+// runFieldCheck prints the field check and reports whether it passed. I/O
+// errors exit with 2.
+func runFieldCheck(root string, ops []operation, patterns [][]string) bool {
+	sent, err := providerFieldNames(filepath.Join(root, "internal"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "apicoveragelint: %v\n", err)
+		os.Exit(2)
+	}
+	ignores, err := readFieldIgnore(filepath.Join(root, "internal", "tools", "apicoveragelint", "ignore-fields.txt"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "apicoveragelint: %v\n", err)
+		os.Exit(2)
+	}
+	r := checkFields(ops, patterns, sent, ignores)
+	for _, e := range r.Stale {
+		fmt.Printf("note: %s is in ignore-fields.txt but is sent or no longer in the spec; remove it\n", e)
+	}
+	if len(r.Missing) > 0 {
+		for _, k := range r.Missing {
+			fmt.Printf("%s: request field not sent by the provider and not in ignore-fields.txt\n", k)
+		}
+		fmt.Printf("apicoveragelint: %d of %d request fields are neither sent nor ignored.\n", len(r.Missing), r.Fields)
+		return false
+	}
+	fmt.Printf("apicoveragelint: OK — %d request fields of %d covered operations: %d sent by the provider, %d ignored with a reason.\n", r.Fields, r.Operations, r.Sent, r.Ignored)
+	return true
 }
 
 // readSpecPaths adds the paths of an openapi.yaml: the keys under "paths:",

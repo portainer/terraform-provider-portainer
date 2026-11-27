@@ -1,0 +1,46 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_sshkeygen resource allows you to generate a public/private SSH keypair using the Portainer API.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+## Overview
+The `portainer_sshkeygen` resource allows you to generate a public/private SSH keypair using the Portainer API.
+
+Useful for secure deployments and automations where keys must be generated dynamically in a reproducible and managed way.
+
+---
+
+## 📘 Example Usage
+
+```hcl
+resource "portainer_sshkeygen" "generated" {}
+
+output "public_key" {
+  value = portainer_sshkeygen.generated.public
+}
+```
+
+---
+
+## ⚙️ Lifecycle & Behavior
+- **Create**: generates SSH keypair via `POST /sshkeygen`
+
+---
+
+## 🧾 Arguments Reference
+
+This resource accepts no input arguments.
+
+---
+
+## 📤 Attributes Reference
+
+> Note: The `private` key is marked as sensitive, so it won't be shown unless you run `terraform output --sensitive`.
+
+{{ .SchemaMarkdown | trimspace }}
+
+See also: the [`portainer_sshkeygen` ephemeral resource](../ephemeral-resources/sshkeygen.md) keeps the secret out of the plan and the state (Terraform >= 1.10, OpenTofu >= 1.11).

@@ -1,0 +1,77 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_team resource allows you to manage teams in Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_team` resource allows you to manage teams in Portainer.
+
+## Example Usage
+
+### Create Team
+
+```hcl
+resource "portainer_team" "your-team" {
+  name = "your-team"
+}
+```
+
+### Create User in Team
+```hcl
+resource "portainer_team" "your-team" {
+  name = "your-team"
+}
+
+resource "portainer_user" "your-user" {
+  username = "youruser"
+  password = "supersecurepassword"
+  role     = 2
+  team_id   = portainer_team.your-team.id
+}
+```
+## Lifecycle & Behavior
+
+Users are updated if any of the attributes change (e.g. name).
+
+- To delete a team created via Terraform, simply run:
+```hcl
+terraform destroy
+```
+
+- To change a name of team, update the role field and re-apply:
+```hcl
+terraform apply
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `deny_portainer_access`: An apply against a server that ignores it fails.
+- `id`: ID of the Portainer team.
+
+## Import
+
+Teams can be imported using their numeric ID:
+
+```shell
+terraform import portainer_team.example 3
+```
+
+### Import by identity
+
+Terraform 1.12 and later can also import by resource identity: the object's numeric ID as `id` in an `import` block. The ID string above keeps working.
+
+```hcl
+import {
+  to       = portainer_team.example
+  identity = {
+    id = "3"
+  }
+}
+```
+
+`terraform query` (Terraform 1.14+) with the [`portainer_team` list resource](../list-resources/team.md) finds the objects to import and can generate the `import` blocks (`terraform query -generate-config-out=generated.tf`). The identity is stored in the state from v3.1.0 on; state written by v3.0.0 gets it on the next refresh, without a plan change. OpenTofu supports neither resource identity nor list resources; it keeps importing by ID.

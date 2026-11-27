@@ -1,0 +1,30 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reads the version and configuration of KubeSolo running in a KubeSolo environment. Portainer takes them from the environment's latest snapshot: an async Edge Agent sends it, and for other agents Portainer reads it through the agent. The read fails while the environment has no snapshot with KubeSolo's state yet, for example right after the machine was provisioned.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Requires Portainer Business Edition 3.0 or later.** On Community Edition or an older server the read fails with an error that says so.
+
+Reads the version and configuration of KubeSolo running in a KubeSolo environment. Portainer takes them from the environment's latest snapshot: an async Edge Agent sends it, and for other agents Portainer reads it through the agent. The read fails while the environment has no snapshot with KubeSolo's state yet, for example right after the machine was provisioned.
+
+The configuration includes KubeSolo's secrets, such as the Edge key, so `config_json` is sensitive. From Portainer Business Edition 3.1 the secrets are redacted: the Edge key reads as `***`, so take the key from where it is issued (for example the environment's `edge_key`) rather than from this data source.
+
+Portainer's own KubeSolo install over SSH (`/kubesolo/tests` and `/kubesolo/install`) is not available in the provider: it is an asynchronous background job, which does not fit a Terraform resource. See the `kubesolo_edge` example for installing KubeSolo against a `portainer_environment` through cloud-init.
+
+## Example Usage
+
+```hcl
+data "portainer_kubesolo_config" "edge" {
+  environment_id = portainer_environment.kubesolo.id
+}
+
+output "kubesolo_version" {
+  value = data.portainer_kubesolo_config.edge.version
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

@@ -1,0 +1,38 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Previews the Helm values a deployment would receive, by merging values files from a git repository.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Previews the Helm values a deployment would receive, by merging values files from a git repository.
+
+## Example Usage
+
+```hcl
+data "portainer_gitops_helm_values" "monitoring" {
+  repository = "https://github.com/example/platform"
+  reference  = "refs/heads/main"
+
+  values_files = [
+    "monitoring/values.yaml",
+    "monitoring/values-prod.yaml",
+  ]
+}
+
+output "merged_values" {
+  value = data.portainer_gitops_helm_values.monitoring.merged_values
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+`values_files` is applied in order and later files win, the same way `helm -f` treats them. `files_processed` is reported in the order Portainer actually merged them and is deliberately **not** sorted, because that order is what decides which value wins - a file missing from it was not found in the repository.
+
+Watch `commit_hash` to notice the repository moving under a configuration.

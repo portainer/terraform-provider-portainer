@@ -35,3 +35,9 @@ variable "git_credential_authorization_type" {
   type        = number
   default     = 0
 }
+
+variable "git_credential_url_pattern" {
+  description = "Repository URL pattern the credential is offered for (e.g. github.com/my-org/*); required by Portainer Business Edition 3.1 and later, not supported before 2.45"
+  type        = string
+  default     = null
+}

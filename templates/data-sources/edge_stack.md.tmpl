@@ -1,0 +1,26 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_edge_stack data source allows you to look up an existing Portainer Edge stack by its name.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_edge_stack` data source allows you to look up an existing Portainer Edge stack by its name.
+
+## Example Usage
+
+### Look up an Edge stack by name
+
+```hcl
+data "portainer_edge_stack" "monitoring" {
+  name = "edge-monitoring"
+}
+
+output "edge_stack_id" {
+  value = data.portainer_edge_stack.monitoring.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

@@ -1,0 +1,243 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_edge_stack resource allows you to manage Portainer Edge Stacks.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+## Overview
+
+The `portainer_edge_stack` resource allows you to manage **Portainer Edge Stacks**. 
+You can create Edge Stacks using:
+- Inline content (`stack_file_content`)
+- Local file (`stack_file_path`)
+- Git repository (`repository_url`)
+
+---
+
+## Example Usage
+
+### Create Edge Stack from `stack_file_content`
+
+```hcl
+resource "portainer_edge_stack" "example_string" {
+  name                  = "nginx-edge-string"
+  deployment_type       = 0 # 0 = Compose, 1 = Kubernetes
+  edge_groups           = [1]
+  stack_file_content    = <<-EOT
+    version: "3"
+    services:
+      web:
+        image: nginx
+  EOT
+  environment = {
+    FOO  = "BAR"
+    FOO2 = "test"
+  }
+}
+```
+
+### Create Edge Stack from file
+
+```hcl
+resource "portainer_edge_stack" "example_file" {
+  name               = "nginx-edge-file"
+  deployment_type    = 0
+  edge_groups        = [1]
+  stack_file_path    = "./templates/nginx.yml"
+  environment = {
+    FOO  = "BAR"
+    FOO2 = "test"
+  }
+}
+```
+
+### Create Edge Stack from Git repository
+
+```hcl
+resource "portainer_edge_stack" "example_git" {
+  name                     = "nginx-edge-git"
+  deployment_type          = 0
+  edge_groups              = [1]
+  repository_url           = "https://github.com/example/repo"
+  repository_username      = "gituser"
+  repository_password      = "supersecret"
+  repository_reference_name = "refs/heads/main"
+  file_path_in_repository  = "docker-compose.yml"
+  environment = {
+    FOO  = "BAR"
+    FOO2 = "test"
+  }
+}
+```
+
+### From a Helm chart repository (Business Edition)
+
+```hcl
+resource "portainer_edge_stack" "monitoring" {
+  name            = "monitoring"
+  deployment_type = 1 # Helm charts deploy to Kubernetes
+  edge_groups     = [portainer_edge_group.k8s.id]
+
+  helm_config {
+    chart_url     = "https://prometheus-community.github.io/helm-charts"
+    chart_name    = "kube-prometheus-stack"
+    chart_version = "51.2.0"
+    namespace     = "monitoring"
+    atomic        = true
+    timeout       = "5m0s"
+
+    values_inline = yamlencode({
+      grafana = {
+        enabled = true
+      }
+    })
+  }
+}
+```
+
+---
+
+## Lifecycle & Behavior
+
+- **To delete an Edge Stack:**
+
+```bash
+terraform destroy
+```
+
+- **To update an Edge Stack:** Modify any attributes and re-apply:
+
+```bash
+terraform apply
+```
+
+> **⚠️ Important:** One of `stack_file_content`, `stack_file_path`, or `repository_url` must be provided.
+
+---
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `use_manifest_namespaces`: For Kubernetes only – respect namespaces in the manifest (default: `false`)
+- `kubernetes_prune`: Sent as `DeployerOptions` on create and update (not for `helm_config` stacks)
+- `kubernetes_force_apply`: Kubernetes only (`deployment_type = 1`), Portainer 3.0+: delete and recreate a resource whose immutable fields changed instead of failing the deployment (destroys the resource and everything tied to its identity).
+- `pre_pull_image`: Defaults to `false`.
+- `retry_deploy`: Whether to retry deploy if first attempt fails (default: `false`)
+- `dryrun`: If true, validate but do not persist the Edge Stack (default: `false`)
+- `repository_reference_name`: Defaults to `refs/heads/main`.
+- `file_path_in_repository`: Defaults to `docker-compose.yml`.
+- `git_repository_authentication`: Enable auth for Git repo (default: `false`)
+- `repository_password_wo_version`: Forces recreation, like `repository_password`
+- `stack_webhook`: Defaults to `false`.
+- `update_interval`: Polling interval (enables GitOps polling, e.g. `30m`, `1h`)
+- `force_update`: Whether to force redeploy (default: `false`)
+- `pull_image`: When `true`, updates also send `RepullImageAndRedeploy`, which replaces the `RePullImage` flag Portainer deprecated in 2.36. Portainer's create endpoints (string, file, repository, Helm) have no re-pull field, so it is not sent when the stack is created, except as `AutoUpdate.ForcePullImage` of a GitOps repository stack; a new stack pulls its images on its first deployment anyway, and `pre_pull_image` pulls them before it. Until the first update Portainer reports `false`, and the configured `true` is kept.
+- `repository_git_credential_id`: ID of the Git credentials to use (replaces username/password)
+- `always_clone`: Defaults to `false`.
+
+## Arguments by Deployment Method
+
+### For String-based Edge Stack
+Arguments: `stack_file_content`.
+
+### For File-based Edge Stack
+Arguments: `stack_file_path`, `pre_pull_image`, `retry_deploy`, `dryrun`.
+
+### For Repository-based Edge Stack
+Arguments: `repository_url`, `source_id`, `repository_reference_name`, `file_path_in_repository`, `git_repository_authentication`, `repository_username`, `repository_password`, `repository_password_wo`, `repository_password_wo_version`, `stack_webhook`, `update_interval`, `force_update`, `pull_image`, `relative_path`, `repository_git_credential_id`, `always_clone`, `per_device_configs_path`, `per_device_configs_match_type`, `per_device_configs_group_match_type`, `helm_config`, `stagger_config`.
+
+### `helm_config` Block
+
+> **Business Edition only.** The Helm repository endpoints do not exist in Portainer CE.
+
+Setting this block selects the Helm repository deployment source, the same way `stack_file_content` selects the inline one. It is mutually exclusive with `stack_file_content`, `stack_file_path` and `repository_url`.
+
+A Helm chart deploys to Kubernetes, so `deployment_type` has to be `1`.
+
+Leaving `chart_version` unset means Portainer resolves the latest published version at apply time, so a later apply can move the stack to a newer chart without the configuration changing. Pin it where that matters.
+
+The optional fields are left out of the request when empty, so an update never clears a chart setting that was configured outside Terraform.
+
+### `stagger_config` Block
+
+> **Business Edition only.** Community Edition ignores it. Only sent when the block is set: leaving it out keeps the stagger configuration Portainer has recorded. Read back only while the block is configured (an import does not bring it in).
+
+Rolls an update of the stack out to its devices in batches. Sent on every create and update endpoint (string, file, repository and Helm stacks).
+
+## 🧮 Computed Outputs
+
+> `Webhook` currently working only for Portainer BE edition
+
+---
+
+## Timeouts
+
+`portainer_edge_stack` supports the following [Timeouts](https://developer.hashicorp.com/terraform/language/resources/syntax#operation-timeouts) configuration options:
+
+| Operation | Default  | Description                          |
+|-----------|----------|--------------------------------------|
+| `create`  | 15 minutes | Time limit for creating the edge stack |
+| `update`  | 15 minutes | Time limit for updating the edge stack |
+| `delete`  | 10 minutes | Time limit for deleting the edge stack |
+
+### Example
+
+```hcl
+resource "portainer_edge_stack" "example" {
+  name            = "nginx-edge"
+  deployment_type = 0
+  edge_groups     = [1]
+  stack_file_content = <<-EOT
+    version: "3"
+    services:
+      web:
+        image: nginx
+  EOT
+
+  timeouts {
+    create = "30m"
+    update = "30m"
+    delete = "20m"
+  }
+}
+```
+
+---
+
+## Import
+
+Edge stacks can be imported using their numeric ID:
+
+```shell
+terraform import portainer_edge_stack.example 42
+```
+
+After import, run `terraform show` to verify the imported state, then `terraform plan` to confirm no changes are pending. For git-backed stacks, the plan should show **no changes** when your `.tf` config matches the live stack.
+
+The import also reads the per-device configurations (`per_device_configs_path`, `per_device_configs_match_type`, `per_device_configs_group_match_type`) and a `stagger_config` other than Portainer's default (all at once, nothing else set), which later reads refresh only while configured. Add them to the configuration: the per-device attributes force recreation when they differ. A stack adopted by creating one with an existing name does not read them, so it is not planned for recreation.
+
+### Import by identity
+
+Terraform 1.12 and later can also import by resource identity: the object's numeric ID as `id` in an `import` block. The ID string above keeps working.
+
+```hcl
+import {
+  to       = portainer_edge_stack.example
+  identity = {
+    id = "42"
+  }
+}
+```
+
+`terraform query` (Terraform 1.14+) with the [`portainer_edge_stack` list resource](../list-resources/edge_stack.md) finds the objects to import and can generate the `import` blocks (`terraform query -generate-config-out=generated.tf`). The identity is stored in the state from v3.1.0 on; state written by v3.0.0 gets it on the next refresh, without a plan change. OpenTofu supports neither resource identity nor list resources; it keeps importing by ID.
+
+### Which fields update in place vs. force recreation
+
+Portainer's `PUT /edge_stacks/{id}/git` endpoint only honors a subset of the git config:
+
+- **Updated in place:** `repository_reference_name`, `always_clone` (sent as `RelativePath`), `stagger_config` (and edge group / deployment-type changes via the same endpoint). The stack ID, edge agent bindings, and webhook are preserved.
+- **Forces recreation (`ForceNew`):** `repository_url`, `file_path_in_repository`, `repository_username`, `repository_password`, `relative_path`, and `stack_file_path`. The Portainer git-update endpoint does not expose source URL or in-repo file-path mutation; changing the source means a different stack from Portainer's perspective.

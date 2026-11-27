@@ -1,0 +1,30 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Inspects one volume, joining its persistent volume, its claim and its storage class.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Inspects one volume, joining its persistent volume, its claim and its storage class.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_volume" "data" {
+  endpoint_id = portainer_environment.prod.id
+  namespace   = "apps"
+  volume      = "data"
+}
+
+output "volume_reclaim_policy" {
+  value = data.portainer_kubernetes_volume.data.persistent_volume_reclaim_policy
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+The CSI and object-reference structures in the full response are too deep and too Kubernetes-version-specific to flatten usefully, so `details` carries the whole response as JSON alongside the fields above.

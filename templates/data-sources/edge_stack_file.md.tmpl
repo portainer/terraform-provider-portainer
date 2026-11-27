@@ -1,0 +1,20 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reads the stack file stored behind an edge stack, which is what Portainer distributes to the edge agents.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Reads the stack file stored behind an edge stack, which is what Portainer distributes to the edge agents.
+
+## Example Usage
+
+```hcl
+data "portainer_edge_stack_file" "fleet" {
+  edge_stack_id = portainer_edge_stack.fleet.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

@@ -1,0 +1,79 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_docker_config resource allows you to manage Docker configs within a specific environment (endpoint) in Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_docker_config` resource allows you to manage Docker configs within a specific environment (endpoint) in Portainer.
+Configs are immutable, and any change will cause them to be re-created.
+
+---
+
+## 📘 Example Usage
+
+```hcl
+resource "portainer_docker_config" "example_config" {
+  endpoint_id = 1
+  name        = "server.conf"
+  data        = base64encode("THIS IS NOT A REAL CERTIFICATE\n")
+
+  labels = {
+    property1 = "string"
+    property2 = "string"
+    foo       = "bar"
+  }
+
+  templating = {
+    name     = "some-driver"
+    OptionA  = "value for driver-specific option A"
+    OptionB  = "value for driver-specific option B"
+  }
+}
+```
+
+## Lifecycle & Behavior
+Updating them (changing `data, labels`, etc.) will **force recreation**.
+
+Terraform will automatically destroy and re-create config on change.
+
+Use `terraform destroy` to remove the config.
+
+## Arguments Reference
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `templating`: Templating configuration (e.g., `name`, `Options`)
+- `id`: ID of the created Docker config (from Portainer)
+
+> ⚠️ Note: **The `data` must be a valid base64-encoded string. Use Terraform's `base64encode()` function if needed.**
+
+## Import
+
+Docker configs can be imported using a composite ID in the form `<endpoint_id>:<config_id>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<config_id>` is the Docker Swarm config ID (a string). The format from before v3.0.0, `<endpoint_id>-<config_id>`, is still accepted.
+
+```shell
+terraform import portainer_docker_config.example 1:abc123
+```
+
+### Import by identity
+
+Terraform 1.12 and later can also import by resource identity: the environment ID as `endpoint_id` and the Docker Swarm config ID as `id` in an `import` block. The ID string above keeps working.
+
+```hcl
+import {
+  to       = portainer_docker_config.example
+  identity = {
+    endpoint_id = 1
+    id          = "abc123"
+  }
+}
+```
+
+The config data is not read back, so the plan after an import shows `data` as a change, as with an import by ID.
+
+`terraform query` (Terraform 1.14+) with the [`portainer_docker_config` list resource](../list-resources/docker_config.md) finds the objects to import and can generate the `import` blocks (`terraform query -generate-config-out=generated.tf`). The identity is stored in the state from v3.1.0 on; state written by v3.0.0 gets it on the next refresh, without a plan change. OpenTofu supports neither resource identity nor list resources; it keeps importing by ID.

@@ -1,0 +1,43 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Queries resource-scoped logs for an environment over a time window.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Queries resource-scoped logs for an environment over a time window.
+
+## Example Usage
+
+```hcl
+data "portainer_environment_logs" "errors" {
+  endpoint_id = portainer_environment.prod.id
+  from        = "2026-01-01T00:00:00Z"
+  to          = "2026-01-02T00:00:00Z"
+  namespace   = "apps"
+  severity    = "error"
+  limit       = 100
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+### `logs`
+
+| Name | Type | Description |
+|------|------|-------------|
+| `labels` | map(string) | Labels attached to the line. |
+| `message` | string | The log line itself. |
+| `severity` | string | Severity of the line. |
+| `source` | string | Where the line came from. |
+| `time` | string | When the line was logged. |
+
+`from` and `to` are required: this queries a window, not a tail. The filters that are left unset are omitted from the request rather than sent empty.
+
+Logs change between reads, so a configuration that depends on this value will show a difference on every plan. Use it for an output or a local file, not as an input to another resource.

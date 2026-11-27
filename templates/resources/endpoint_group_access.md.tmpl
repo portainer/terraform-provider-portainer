@@ -1,0 +1,55 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_endpoint_group_access resource allows you to manage access control for a Portainer endpoint group.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_endpoint_group_access` resource allows you to manage access control for a Portainer endpoint group.
+
+## Example Usage
+
+```hcl
+# Create a team
+resource "portainer_team" "dev_team" {
+  name = "Development"
+}
+
+# Create an endpoint group
+resource "portainer_endpoint_group" "example" {
+  name        = "example-group"
+  description = "A group for development endpoints"
+}
+
+# Assign access to the team for the endpoint group
+resource "portainer_endpoint_group_access" "dev_team_access" {
+  endpoint_group_id = portainer_endpoint_group.example.id
+  team_id           = portainer_team.dev_team.id
+  role_id           = 0 # 0 = Standard User (usually implies read-only or standard access depending on global settings)
+}
+
+# Assign access to a specific user for the endpoint group
+# resource "portainer_endpoint_group_access" "user_access" {
+#   endpoint_group_id = portainer_endpoint_group.example.id
+#   user_id           = 25
+#   role_id           = 0
+# }
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `team_id`: One of `team_id` or `user_id` must be provided.
+- `user_id`: One of `team_id` or `user_id` must be provided.
+- `role_id`: Defaults to `0`.
+
+## Import
+
+Access entries can be imported as `<endpoint_group_id>:team:<team_id>` or `<endpoint_group_id>:user:<user_id>`. The format from before v3.0.0, `<endpoint_group_id>/team/<team_id>`, is still accepted.
+
+```shell
+terraform import portainer_endpoint_group_access.example 2:team:4
+```

@@ -1,0 +1,51 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_user_access data source answers "what can this person actually see, and why". It resolves a user's team memberships and their effective access on every environment, with the policy each grant comes from — user policy, team policy, or inheritance from an environment group.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_user_access` data source answers "what can this person actually see, and why". It resolves a user's team memberships and their **effective** access on every environment, with the policy each grant comes from — user policy, team policy, or inheritance from an environment group.
+
+Requires Portainer **2.42.0** or newer (Community or Business Edition); older servers, such as the 2.39 LTS line, fail with an error naming the requirement.
+
+With no `user_id` it describes the account the provider authenticates as, which is how a configuration discovers whose API key it is holding.
+
+## Example Usage
+
+### Audit an administrator's reach
+
+```hcl
+data "portainer_user_access" "alice" {
+  user_id = 8
+}
+
+output "alice_environments" {
+  value = [
+    for a in data.portainer_user_access.alice.effective_access :
+    "${a.endpoint_name} — ${a.role_name} (via ${a.access_location})"
+  ]
+}
+```
+
+### Check which account Terraform is using
+
+```hcl
+data "portainer_user_access" "me" {}
+
+output "terraform_runs_as" {
+  value = data.portainer_user_access.me.username
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `memberships`: Each entry has `id`, `team_id` and `role` (1 = team leader, 2 = team member).
+
+## Attributes Reference
+
+`role_priority` is how Portainer resolves a conflict when several grants apply to the same environment, and `access_location` names which of them won.

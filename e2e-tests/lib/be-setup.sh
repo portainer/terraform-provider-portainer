@@ -11,7 +11,7 @@ set -euo pipefail
 
 CONTAINER="${BE_CONTAINER:-e2e-portainer-ee}"
 PORT="${BE_PORT:-9443}"
-VERSION="${PORTAINER_VERSION:-2.45.3}"
+VERSION="${PORTAINER_VERSION:-2.45.4}"
 URL="https://localhost:${PORT}"
 PASSWORD="e2e-Business-Admin-123"
 
@@ -22,9 +22,11 @@ fail() {
 
 docker rm -f "${CONTAINER}" >/dev/null 2>&1 || true
 echo "▶️ Start a fresh Portainer EE ${VERSION}" >&2
+# 3.1 serves its OIDC provider only behind the "oidc" feature flag; older
+# releases log the unknown flag and go on.
 docker run -d --name "${CONTAINER}" -p "${PORT}:9443" \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  "portainer/portainer-ee:${VERSION}" >/dev/null
+  "portainer/portainer-ee:${VERSION}" --feat=oidc >/dev/null
 
 UP=""
 for _ in $(seq 1 60); do

@@ -1,0 +1,57 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Previews what a policy would collide with, and how many environments could actually run it, before it is created.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Previews what a policy would collide with, and how many environments could actually run it, before it is created.
+
+## Example Usage
+
+```hcl
+data "portainer_policy_conflicts" "baseline" {
+  policy_json = jsonencode({
+    name                = "baseline-v2"
+    environmentGroupIds = [portainer_endpoint_group.shops.id]
+  })
+}
+
+output "policy_would_conflict_with" {
+  value = [for c in data.portainer_policy_conflicts.baseline.conflicts : c.existing_policy_name]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+### `conflicts`
+
+| Name | Type | Description |
+|------|------|-------------|
+| `environment_count` | number | Environments in that group. |
+| `environment_group_id` | number | Identifier of the environment group. |
+| `environment_group_name` | string | Name of the environment group. |
+| `existing_policy_id` | number | Identifier of the policy already applying there. |
+| `existing_policy_name` | string | Name of that policy. |
+| `supported_environments` | number | Of those, the ones that can run the policy. |
+| `unsupported_environments` | number | Of those, the ones that cannot. |
+
+### `new_groups`
+
+| Name | Type | Description |
+|------|------|-------------|
+| `environment_count` | number | Environments in that group. |
+| `environment_group_id` | number | Identifier of the environment group. |
+| `environment_group_name` | string | Name of the environment group. |
+| `supported_environments` | number | Of those, the ones that can run the policy. |
+| `unsupported_environments` | number | Of those, the ones that cannot. |
+
+Portainer does not describe this request's shape in its API specification, so `policy_json` is passed through exactly as given rather than flattened into arguments that could not be kept accurate.
+
+This is a data source rather than a resource because the endpoint changes nothing - it answers a question about a candidate policy.

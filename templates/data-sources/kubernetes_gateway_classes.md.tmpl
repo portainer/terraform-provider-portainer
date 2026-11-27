@@ -1,0 +1,27 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_kubernetes_gateway_classes data source lists the Gateway API GatewayClasses available in a Kubernetes cluster, so a portainer_kubernetes_gateway can reference a class that actually exists instead of hard-coding its name per environment.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_gateway_classes` data source lists the Gateway API GatewayClasses available in a Kubernetes cluster, so a `portainer_kubernetes_gateway` can reference a class that actually exists instead of hard-coding its name per environment.
+
+> **Requires Portainer Business Edition 3.0 or later.** On Community Edition or an older server the read fails with an error that says so.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_gateway_classes" "all" {
+  environment_id = 1
+}
+
+output "gateway_class_names" {
+  value = [for c in data.portainer_kubernetes_gateway_classes.all.gateway_classes : c.name]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+

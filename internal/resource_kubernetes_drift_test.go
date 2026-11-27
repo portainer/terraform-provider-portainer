@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -60,6 +61,7 @@ func liveDeployment(image string, replicas int) map[string]interface{} {
 // quantities are not drift; a changed authored field is, and the plan shows
 // it with its live value.
 func TestK8sReadManifestDrift(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name      string
 		live      map[string]interface{}
@@ -75,17 +77,15 @@ func TestK8sReadManifestDrift(t *testing.T) {
 			mock := NewMockServer(t)
 			mock.On("GET", "/endpoints/1/kubernetes/apis/apps/v1/namespaces/default/deployments/web", RespondJSON(http.StatusOK, tc.live))
 
-			r := resourceKubernetesApplication()
-			d := r.TestResourceData()
-			d.SetId("1:default:web")
-			_ = d.Set("endpoint_id", 1)
-			_ = d.Set("namespace", "default")
-			_ = d.Set("manifest", driftDeployment)
-
-			if err := rcRead(r, d, mock.Client()); err != nil {
-				t.Fatalf("Read failed: %v", err)
+			url := mock.URL + "/endpoints/1/kubernetes/apis/apps/v1/namespaces/default/deployments/web"
+			gone, drifted, err := k8sReadManifestDrift(context.Background(), mock.Client(), url, "deployment web", driftDeployment)
+			if err != nil || gone {
+				t.Fatalf("Read failed: gone=%v err=%v", gone, err)
 			}
-			got := d.Get("manifest").(string)
+			got := driftDeployment
+			if drifted != "" {
+				got = drifted
+			}
 			if tc.wantDrift == "" {
 				if got != driftDeployment {
 					t.Errorf("no drift: the authored manifest must stay untouched, got:\n%s", got)
@@ -105,25 +105,24 @@ func TestK8sReadManifestDrift(t *testing.T) {
 }
 
 func TestK8sReadManifestDrift_Deleted(t *testing.T) {
+	t.Parallel()
 	mock := NewMockServer(t)
 	mock.On("GET", "/endpoints/1/kubernetes/api/v1/namespaces/default/configmaps/cfg", RespondJSON(http.StatusNotFound, map[string]interface{}{}))
 
-	r := resourceKubernetesConfigMaps()
-	d := r.TestResourceData()
-	d.SetId("1:default:cfg")
-	_ = d.Set("manifest", "kind: ConfigMap\nmetadata:\n  name: cfg\n")
-
-	if err := rcRead(r, d, mock.Client()); err != nil {
+	url := mock.URL + "/endpoints/1/kubernetes/api/v1/namespaces/default/configmaps/cfg"
+	gone, _, err := k8sReadManifestDrift(context.Background(), mock.Client(), url, "configmap cfg", "kind: ConfigMap\nmetadata:\n  name: cfg\n")
+	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
-	if d.Id() != "" {
-		t.Errorf("expected the deleted object to drop out of state, got ID %q", d.Id())
+	if !gone {
+		t.Error("expected the deleted object to drop out of state")
 	}
 }
 
 // TestK8sComparable_ClusterScopedNamespace covers a namespace written on a
 // cluster-scoped object, which the API server drops: it is not drift.
 func TestK8sComparable_ClusterScopedNamespace(t *testing.T) {
+	t.Parallel()
 	authored := map[string]interface{}{"kind": "ClusterRole", "metadata": map[string]interface{}{"name": "r", "namespace": "devops-tools"}}
 	live := map[string]interface{}{"kind": "ClusterRole", "metadata": map[string]interface{}{"name": "r", "uid": "x"}}
 	if !k8sSubsetEqual(k8sComparable(authored, live), live) {
@@ -135,6 +134,7 @@ func TestK8sComparable_ClusterScopedNamespace(t *testing.T) {
 }
 
 func TestK8sSubsetEqual(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		authored map[string]interface{}
@@ -194,6 +194,7 @@ func TestK8sSubsetEqual(t *testing.T) {
 }
 
 func TestK8sScalarEqual_Quantities(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		a, b interface{}
 		want bool

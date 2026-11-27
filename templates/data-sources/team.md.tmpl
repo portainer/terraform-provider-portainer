@@ -1,0 +1,26 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_team data source allows you to look up an existing Portainer team by its name.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_team` data source allows you to look up an existing Portainer team by its name.
+
+## Example Usage
+
+### Look up a team by name
+
+```hcl
+data "portainer_team" "developers" {
+  name = "Developers"
+}
+
+output "team_id" {
+  value = data.portainer_team.developers.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

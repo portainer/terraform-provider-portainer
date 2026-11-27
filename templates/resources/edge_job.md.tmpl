@@ -1,0 +1,98 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_edge_job resource allows you to create and schedule Edge Jobs in Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_edge_job` resource allows you to create and schedule Edge Jobs in Portainer.
+You can use either inline `file_content` or upload a script via `file_path`.
+
+## Example Usage
+### Create Edge Job using file_content
+```hcl
+resource "portainer_edge_group" "static_group" {
+  name    = "static-group"
+  dynamic = false
+}
+
+resource "portainer_edge_job" "string_job" {
+  name            = "job-from-string"
+  cron_expression = "0 * * * *"
+  edge_groups     = [portainer_edge_group.static_group.id]
+  endpoints       = [2]
+  recurring       = true
+  file_content = <<-EOT
+    echo "Hello from string job!"
+  EOT
+}
+```
+
+### Create Edge Job from a script file
+```hcl
+resource "portainer_edge_group" "static_group" {
+  name    = "static-group"
+  dynamic = false
+}
+
+resource "portainer_edge_job" "file_job" {
+  name            = "job-from-file"
+  cron_expression = "0 12 * * *"
+  edge_groups     = edge_groups     = [portainer_edge_group.static_group.id]
+  endpoints       = [2]
+  recurring       = false
+  file_path       = "scripts/my-job.sh"
+}
+```
+## Lifecycle & Behavior
+Edge jobs are always re-applied when Terraform is run, as Portainer treats them as triggered actions.
+- To delete an edge group created via Terraform, simply run:
+```hcl
+terraform destroy
+```
+
+- To re-run with new content, change the script or cron and apply:
+```hcl
+terraform apply
+```
+> ⚠️ You must provide either file_content or file_path – not both. ⚠️ If recurring = false, the job runs once immediately.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `cron_expression`: Cron expression for job scheduling (e.g. `0 * * * *`)
+- `recurring`: Defaults to `true`.
+
+## Arguments by Deployment Method
+
+### For String-based Job Creation
+Arguments: `file_content`.
+
+### For File-based Job Creation
+Arguments: `file_path`.
+
+## Import
+
+Edge jobs can be imported using their numeric ID:
+
+```shell
+terraform import portainer_edge_job.example 6
+```
+
+### Import by identity
+
+Terraform 1.12 and later can also import by resource identity: the object's numeric ID as `id` in an `import` block. The ID string above keeps working.
+
+```hcl
+import {
+  to       = portainer_edge_job.example
+  identity = {
+    id = "6"
+  }
+}
+```
+
+`terraform query` (Terraform 1.14+) with the [`portainer_edge_job` list resource](../list-resources/edge_job.md) finds the objects to import and can generate the `import` blocks (`terraform query -generate-config-out=generated.tf`). The identity is stored in the state from v3.1.0 on; state written by v3.0.0 gets it on the next refresh, without a plan change. OpenTofu supports neither resource identity nor list resources; it keeps importing by ID.

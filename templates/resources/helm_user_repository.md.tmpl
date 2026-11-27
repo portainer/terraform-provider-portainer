@@ -1,0 +1,34 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_helm_user_repository resource manages per-user Helm chart repositories in Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_helm_user_repository` resource manages per-user Helm chart repositories in Portainer.
+
+## Example Usage
+
+```hcl
+resource "portainer_helm_user_repository" "bitnami" {
+  user_id = 1
+  url     = "https://charts.bitnami.com/bitnami"
+}
+```
+
+## Lifecycle & Behavior
+This resource creates a Helm repository association for a specific user. Deleting the resource removes the repository from the user's list. The URL and user_id are immutable; changing either forces recreation.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Helm user repositories can be imported using the repository ID:
+
+```bash
+terraform import portainer_helm_user_repository.bitnami 5
+```
+
+Note: After import, you must set `user_id` in config for subsequent reads to work.

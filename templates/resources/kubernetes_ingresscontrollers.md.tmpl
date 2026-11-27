@@ -1,0 +1,49 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_kubernetes_ingresscontrollers resource allows you to manage and update ingress controllers for a Kubernetes environment in Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_ingresscontrollers` resource allows you to manage and update ingress controllers for a Kubernetes environment in Portainer.
+
+This includes setting the availability, type, and usage of specific ingress controllers.
+
+## Example Usage
+```hcl
+resource "portainer_kubernetes_ingresscontrollers" "test" {
+  environment_id = 1
+
+  controllers {
+    name         = "nginx"
+    class_name   = "nginx"
+    type         = "nginx"
+    availability = true
+    used         = true
+    new          = false
+  }
+}
+```
+
+## Lifecycle & Behavior
+- This resource updates ingress controller configurations via the Portainer API.
+- You can enable, disable or modify ingress controllers declaratively via Terraform.
+- Portainer only takes `class_name` and `availability`; it fills `name`, `type`, `used` and `new` in itself, so they are informational and a difference in them is not planned once the controller is in state.
+- Only the listed classes are managed; other controllers in the cluster are left alone. Every `class_name` must exist in the cluster, otherwise the apply fails.
+- Destroying the resource makes the listed controllers available again (Portainer's default).
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `controllers.class_name`: Class name used by the ingress controller (e.g. `"nginx"`).
+
+## Import
+
+Ingress controller settings can be imported using the numeric environment ID:
+
+```shell
+terraform import portainer_kubernetes_ingresscontrollers.example 5
+```

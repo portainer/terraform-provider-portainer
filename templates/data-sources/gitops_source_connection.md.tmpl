@@ -1,0 +1,45 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_gitops_source_connection data source asks Portainer to test whether it can reach and authenticate against a Git repository. It works both for a repository that is not stored yet — to validate credentials before creating a portainer_gitops_source — and for an existing source.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_gitops_source_connection` data source asks Portainer to test whether it can reach and authenticate against a Git repository. It works both for a repository that is not stored yet — to validate credentials before creating a `portainer_gitops_source` — and for an existing source.
+
+## Example Usage
+
+### Validate credentials before creating a source
+
+```hcl
+data "portainer_gitops_source_connection" "check" {
+  url             = "https://github.com/acme/infra.git"
+  username        = "ci-bot"
+  password        = var.git_token
+  fail_on_error   = true
+}
+
+resource "portainer_gitops_source" "infra" {
+  depends_on = [data.portainer_gitops_source_connection.check]
+
+  url      = "https://github.com/acme/infra.git"
+  username = "ci-bot"
+  password = var.git_token
+}
+```
+
+### Re-test a stored source
+
+```hcl
+data "portainer_gitops_source_connection" "infra" {
+  source_id = portainer_gitops_source.infra.id
+}
+
+output "infra_reachable" {
+  value = data.portainer_gitops_source_connection.infra.success
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

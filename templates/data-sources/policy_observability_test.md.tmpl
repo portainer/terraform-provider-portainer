@@ -1,0 +1,30 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Checks whether Portainer can reach a OneUptime instance with the given details, before a policy is pointed at it.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Checks whether Portainer can reach a OneUptime instance with the given details, before a policy is pointed at it.
+
+## Example Usage
+
+```hcl
+data "portainer_policy_observability_test" "oneuptime" {
+  one_uptime_url = "https://oneuptime.example.com"
+  api_key        = var.oneuptime_api_key
+  project_id     = var.oneuptime_project
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+The credentials are omitted from the request when unset, so a blank key is never sent and rejected for the wrong reason.
+
+`fail_on_error` defaults to `true`, which is the point of a pre-flight check. Set it to `false` to read `success` and `message` and branch on them instead.

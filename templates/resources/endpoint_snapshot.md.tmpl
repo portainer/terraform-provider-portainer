@@ -1,0 +1,39 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_endpoint_snapshot resource allows you to trigger an immediate snapshot of environment(s) (also called endpoints) in Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_endpoint_snapshot` resource allows you to trigger an immediate snapshot of environment(s) (also called endpoints) in Portainer.
+
+> **See also:** the [`portainer_endpoint_snapshot` action](../actions/endpoint_snapshot.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+### Snapshot All Endpoints
+```hcl
+resource "portainer_endpoint_snapshot" "all" {}
+```
+
+### Snapshot Specific Endpoint
+```hcl
+resource "portainer_endpoint_snapshot" "specific" {
+  endpoint_id = 3
+}
+```
+
+## Lifecycle & Behavior
+This is an action: creating the resource takes the snapshot once. There is no state in Portainer to read back, so nothing is refreshed; change an argument (it forces a new resource) or use `terraform apply -replace` to run it again.
+
+Snapshot is executed during:
+```hcl
+terraform apply
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `id`: Always `"snapshot"` or `endpoint-{id}` depending on target.

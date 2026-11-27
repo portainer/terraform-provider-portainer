@@ -1,0 +1,58 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_tag resource allows you to manage tags in Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_tag` resource allows you to manage tags in Portainer.
+
+## Example Usage
+
+### Create Tag
+
+```hcl
+resource "portainer_tag" "your-tag" {
+  name = "your-tag"
+}
+```
+## Lifecycle & Behavior
+
+Tags are recreated if their name changes.
+
+- To delete a tag created via Terraform, simply run:
+```hcl
+terraform destroy
+```
+
+- To rename a tag, update the name and re-apply:
+```hcl
+terraform apply
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Tags can be imported using their numeric ID:
+
+```shell
+terraform import portainer_tag.example 42
+```
+
+### Import by identity
+
+Terraform 1.12 and later can also import by resource identity: the object's numeric ID as `id` in an `import` block. The ID string above keeps working.
+
+```hcl
+import {
+  to       = portainer_tag.example
+  identity = {
+    id = "42"
+  }
+}
+```
+
+`terraform query` (Terraform 1.14+) with the [`portainer_tag` list resource](../list-resources/tag.md) finds the objects to import and can generate the `import` blocks (`terraform query -generate-config-out=generated.tf`). The identity is stored in the state from v3.1.0 on; state written by v3.0.0 gets it on the next refresh, without a plan change. OpenTofu supports neither resource identity nor list resources; it keeps importing by ID.

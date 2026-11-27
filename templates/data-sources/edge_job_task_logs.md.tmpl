@@ -1,0 +1,29 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reads the collected log output of a single edge job task.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Reads the collected log output of a single edge job task.
+
+## Example Usage
+
+```hcl
+data "portainer_edge_job_task_logs" "nightly" {
+  edge_job_id = portainer_edge_job.nightly.id
+  task_id     = data.portainer_edge_job_tasks.nightly.tasks[0].id
+}
+
+output "nightly_output" {
+  value = data.portainer_edge_job_task_logs.nightly.logs
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Logs only exist after collection has been requested with the `portainer_edge_job_task_logs` **resource** and the edge agent has checked in and uploaded them. Until then this returns an empty string rather than failing, so a plan does not break on a job that has not reported yet.

@@ -1,0 +1,39 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_kubernetes_namespace_system resource allows you to toggle the "system" flag for a Kubernetes namespace in Portainer. This flag marks the namespace as a system-managed one, which can be useful for visibility filtering and administrative controls.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_namespace_system` resource allows you to toggle the "system" flag for a Kubernetes namespace in Portainer. This flag marks the namespace as a system-managed one, which can be useful for visibility filtering and administrative controls.
+
+## Example Usage
+```hcl
+resource "portainer_kubernetes_namespace_system" "system_flag" {
+  environment_id = 4
+  namespace      = "kube-system"
+  system         = true
+}
+```
+
+## Lifecycle & Behavior
+- This resource uses a `PUT` request to set the system state of a namespace.
+- The state is read back from the namespace, so a change made outside Terraform shows up as drift.
+- Portainer never marks the `default` namespace as a system namespace; `system = true` on it fails at plan time.
+- Destroying the resource sets `system = false`.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `id`: Composite ID in format `environment_id:namespace`.
+
+## Import
+
+Kubernetes namespace system flag resources can be imported using the composite ID `environmentID:namespace`:
+
+```shell
+terraform import portainer_kubernetes_namespace_system.example 1:kube-system
+```

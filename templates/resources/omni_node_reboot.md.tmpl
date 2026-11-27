@@ -1,0 +1,34 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reboots a node of an Omni cluster.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reboots a node of an Omni cluster.
+
+> **See also:** the [`portainer_omni_node_reboot` action](../actions/omni_node_reboot.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+
+```hcl
+resource "portainer_omni_node_reboot" "cp_1" {
+  credential_id = portainer_cloud_credentials.omni.id
+  cluster       = portainer_omni_cluster.edge_fleet.name
+  node          = "cp-1"
+
+  triggers = {
+    after_upgrade = portainer_omni_cluster.edge_fleet.talos_version
+  }
+}
+```
+
+## Arguments Reference
+
+{{ .SchemaMarkdown | trimspace }}
+
+A reboot is a one-shot action with no state to read back, so without a `triggers` value the resource runs once and then stays put.

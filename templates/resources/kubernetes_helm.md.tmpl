@@ -1,0 +1,74 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_kubernetes_helm resource allows you to deploy a Helm chart into a Kubernetes environment managed by Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_helm` resource allows you to deploy a Helm chart into a Kubernetes environment managed by Portainer.
+
+## Example Usage
+```hcl
+resource "portainer_kubernetes_helm" "example" {
+  environment_id = 4
+  chart          = "nginx"
+  name           = "my-nginx"
+  namespace      = "default"
+  repo           = "https://charts.bitnami.com/bitnami"
+  values         = ""
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `chart`: The name of the Helm chart (e.g. `nginx`, `redis`).
+- `namespace`: Kubernetes namespace to install the chart into (e.g. `default`).
+- `repo`: The Helm chart repository URL (e.g. `https://charts.bitnami.com/bitnami`).
+
+## Lifecycle & Behavior
+- Terraform updates the namespace if `owner`, `annotations`, or `resource_quota` change.
+- Changing the `name` will trigger a destroy and recreate operation due to API limitations (Portainer does not support renaming namespaces).
+- You can use `terraform destroy` to delete the namespace completely.
+
+### Timeouts
+
+`portainer_kubernetes_helm` provides the following [Timeouts](https://developer.hashicorp.com/terraform/language/resources/syntax#operation-timeouts) configuration options:
+
+| Operation | Default  | Description                              |
+|-----------|----------|------------------------------------------|
+| `create`  | 15 minutes | Time to wait for Helm chart installation |
+| `delete`  | 10 minutes | Time to wait for Helm release deletion   |
+
+#### Example
+
+```hcl
+resource "portainer_kubernetes_helm" "example" {
+  environment_id = 4
+  chart          = "nginx"
+  name           = "my-nginx"
+  namespace      = "default"
+  repo           = "https://charts.bitnami.com/bitnami"
+  values         = ""
+
+  timeouts {
+    create = "20m"
+    delete = "15m"
+  }
+}
+```
+
+---
+
+## Import
+
+Kubernetes Helm releases can be imported using the composite ID `environmentID:namespace:releaseName`:
+
+```shell
+terraform import portainer_kubernetes_helm.example 1:default:my-release
+```
+
+After import, set `chart`, `repo`, and `values` in config to match the live release — Read only confirms the release exists and restores identity fields. The chart/repo fields are `ForceNew`, so leaving them blank after import will trigger a destroy+recreate on the next apply, not a benign diff.

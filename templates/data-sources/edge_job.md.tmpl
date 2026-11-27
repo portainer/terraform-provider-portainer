@@ -1,0 +1,26 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_edge_job data source allows you to look up an existing Portainer Edge job by its name.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_edge_job` data source allows you to look up an existing Portainer Edge job by its name.
+
+## Example Usage
+
+### Look up an Edge job by name
+
+```hcl
+data "portainer_edge_job" "backup" {
+  name = "nightly-backup"
+}
+
+output "job_id" {
+  value = data.portainer_edge_job.backup.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

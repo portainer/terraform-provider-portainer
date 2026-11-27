@@ -1,0 +1,31 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_docker_network data source allows you to look up an existing Docker network within a specific Portainer environment.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_docker_network` data source allows you to look up an existing Docker network within a specific Portainer environment.
+
+## Example Usage
+
+### Look up a Docker network by name
+
+```hcl
+data "portainer_docker_network" "my_network" {
+  endpoint_id = 1
+  name        = "frontend-network"
+}
+
+output "network_id" {
+  value = data.portainer_docker_network.my_network.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `id`: ID of the Docker network.

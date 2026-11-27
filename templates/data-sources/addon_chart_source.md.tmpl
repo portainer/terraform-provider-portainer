@@ -1,0 +1,35 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Checks where an addon's chart would be pulled from, before an install is attempted. Use it to find out whether a registry is reachable and which versions it offers.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Checks where an addon's chart would be pulled from, before an install is attempted. Use it to find out whether a registry is reachable and which versions it offers.
+
+## Example Usage
+
+```hcl
+data "portainer_addon_chart_source" "portal" {
+  addon_id    = "portal-template"
+  registry_id = portainer_registry.internal.id
+  chart       = "portainer/charts/portal"
+}
+
+resource "portainer_addon" "portal" {
+  addon_id    = data.portainer_addon_chart_source.portal.addon_id
+  registry_id = portainer_registry.internal.id
+  chart       = "portainer/charts/portal"
+  version     = data.portainer_addon_chart_source.portal.versions[0]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+A registry that answered but holds no such chart is still `reachable`, with an empty `versions`. Indexing into `versions` in a configuration therefore needs the list checked first, or the plan fails on a registry that is up but has nothing published.

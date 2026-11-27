@@ -1,0 +1,33 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_stack_webhook resource allows you to trigger an update of a Portainer-managed stack via its webhook.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_stack_webhook` resource allows you to trigger an update of a Portainer-managed stack via its webhook.  
+This is useful for GitOps workflows or external automation systems.
+
+> Currently working only for Portainer BE edition
+
+## Example Usage
+```hcl
+resource "portainer_stack_webhook" "trigger_my_stack" {
+  webhook_id = "65001023-9dd7-415f-9cff-358ba0a78463"  # Webhook token of the stack
+}
+```
+## Lifecycle & Behavior
+This is an action: creating the resource triggers the stack webhook once. There is no state in Portainer to read back, so nothing is refreshed; change an argument (it forces a new resource) or use `terraform apply -replace` to run it again.
+
+- When you apply this resource, it triggers the execution of the webhook (stack update), simply run:
+```hcl
+terraform apply
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `id`: ID of the webhook trigger.

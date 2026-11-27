@@ -1,0 +1,33 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Lists the PersistentVolumes of a cluster, including which claim each is bound to and which ones are left over.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Lists the PersistentVolumes of a cluster, including which claim each is bound to and which ones are left over.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_persistent_volumes" "prod" {
+  environment_id = 1
+}
+
+# Storage whose claim is gone but which Retain kept from being reclaimed.
+output "orphaned_storage" {
+  value = [
+    for v in data.portainer_kubernetes_persistent_volumes.prod.persistent_volumes : v.name
+    if v.phase == "Released"
+  ]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+
+## Attributes Reference
+
+Pair this with `portainer_kubernetes_persistent_volume` to pin the reclaim policy of the volumes that matter.

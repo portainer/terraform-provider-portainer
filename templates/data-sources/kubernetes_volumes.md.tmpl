@@ -1,0 +1,29 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Lists the volumes in a cluster, or in one namespace.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Lists the volumes in a cluster, or in one namespace.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_volumes" "all" {
+  endpoint_id       = portainer_environment.prod.id
+  with_applications = true
+}
+
+output "volume_names" {
+  value = [for v in jsondecode(data.portainer_kubernetes_volumes.all.volumes) : v.persistentVolumeClaim.name]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Portainer does not give this listing a fixed shape in its own specification, so it is carried through as JSON rather than flattened into attributes that could go stale. For a typed view of a single volume, use `portainer_kubernetes_volume`.

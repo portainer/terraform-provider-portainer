@@ -1,0 +1,53 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_edge_update_schedules resource allows you to schedule update or rollback procedures for Edge agents in Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+## Overview
+The `portainer_edge_update_schedules` resource allows you to schedule update or rollback procedures for Edge agents in Portainer.
+
+> Currently working only for Portainer BE edition
+
+---
+
+## 📘 Example Usage
+
+```hcl
+resource "portainer_edge_update_schedules" "example" {
+  name            = "scheduled-edge-update"
+  agent_image     = "portainer/agent:2.19.0"
+  updater_image   = "portainer/portainer-updater:2.19.0"
+  registry_id     = 1
+  scheduled_time  = "2025-05-10T10:00:00Z"
+  group_ids       = [1]
+  type            = 0 # 0 = update, 1 = rollback
+}
+```
+
+---
+
+## ⚙️ Lifecycle & Behavior
+- **Create** uses `POST /edge_update_schedules`
+- **Read** uses `GET /edge_update_schedules/{id}`
+- **Update** uses `POST /edge_update_schedules/{id}`
+- **Delete** uses `DELETE /edge_update_schedules/{id}`
+
+---
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `scheduled_time`: Time in RFC3339 format (e.g., `2025-05-10T10:00:00Z`)
+
+## Import
+
+Edge update schedules can be imported using their numeric ID:
+
+```shell
+terraform import portainer_edge_update_schedules.example 42
+```

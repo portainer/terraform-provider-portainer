@@ -1,0 +1,27 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Returns the kubectl describe output for a single Kubernetes resource, which is the fastest way to see why an object is unhealthy.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Returns the `kubectl describe` output for a single Kubernetes resource, which is the fastest way to see why an object is unhealthy.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_describe" "web_pod" {
+  environment_id = 1
+  kind           = "pod"
+  name           = "web-6b8f7d9c4d-abcde"
+  namespace      = "prod"
+}
+
+output "web_pod_details" {
+  value = data.portainer_kubernetes_describe.web_pod.describe
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

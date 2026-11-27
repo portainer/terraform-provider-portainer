@@ -1,0 +1,38 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reports the GPUs a Kubernetes cluster has, what is using them, and what cannot be scheduled.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reports the GPUs a Kubernetes cluster has, what is using them, and what cannot be scheduled.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_gpu" "prod" {
+  endpoint_id = portainer_environment.prod.id
+}
+
+output "gpu_workloads_stuck" {
+  value = [
+    for w in data.portainer_kubernetes_gpu.prod.workloads : w.pod_name
+    if w.scheduling_issue != ""
+  ]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `nodes`: The GPU nodes: `name`, `status`, `status_reason`, `capacity`, `allocatable`, `allocated`.
+- `workloads`: Workloads asking for GPUs: `pod_name`, `namespace`, `node_name`, `pod_phase`, `owner_kind`, `owner_name`, `scheduling_issue`, `gpu_requests`.
+
+## Attributes Reference
+
+A non-zero `degraded_count`, or a workload with a non-empty `scheduling_issue`, is what is worth alerting on here.

@@ -1,0 +1,35 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Reports whether the image behind a container, a service or a whole stack has been superseded in its registry.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Reports whether the image behind a container, a service or a whole stack has been superseded in its registry.
+
+## Example Usage
+
+```hcl
+data "portainer_image_status" "web" {
+  kind        = "container"
+  endpoint_id = portainer_environment.prod.id
+  resource_id = "abc123"
+}
+
+data "portainer_image_status" "stack" {
+  kind        = "stack"
+  resource_id = portainer_stack.web.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+Portainer has three endpoints for this, one per subject, which is what `kind` selects. `endpoint_id` is required for `container` and `service`; a stack is addressed by its own identifier and has no environment in its path.
+
+Only `outdated` means a newer image is published. `refresh` re-checks the registry instead of answering from Portainer's cache, at the cost of a registry round trip per image.

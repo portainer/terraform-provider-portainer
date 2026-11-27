@@ -1,0 +1,63 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_alerting_settings resource manages Portainer alerting (observability) settings, including enabling/disabling alerting and configuring notification channels.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_alerting_settings` resource manages Portainer alerting (observability) settings, including enabling/disabling alerting and configuring notification channels.
+
+This is a settings-style resource: `terraform apply` creates or updates the settings, and `terraform destroy` disables alerting.
+
+## Example Usage
+
+### Enable internal alerting with a Slack notification channel
+```hcl
+resource "portainer_alerting_settings" "main" {
+  enabled       = true
+  name          = "Internal AlertManager"
+  portainer_url = "https://portainer.example.com"
+
+  notification_channels {
+    channel_id = 1
+    name       = "ops-slack"
+    type       = "slack"
+    enabled    = true
+
+    config = {
+      webhookURL = "https://hooks.slack.com/services/T00/B00/xxx"
+      channel    = "#alerts"
+    }
+  }
+}
+```
+
+### Enable external AlertManager
+```hcl
+resource "portainer_alerting_settings" "external" {
+  enabled       = true
+  name          = "External AlertManager"
+  url           = "http://alertmanager.monitoring.svc:9093"
+  portainer_url = "https://portainer.example.com"
+}
+```
+
+## Lifecycle & Behavior
+- **Create/Update**: Sends `PUT /observability/alerting/settings` with the provided configuration.
+- **Read**: Reads from `GET /observability/alerting/settings` and matches the entry by ID.
+- **Delete**: Disables alerting by sending `enabled = false` via `PUT`.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `notification_channels.type`: Type: `slack`, `webhook`, `teams`, `discord`, `email`, `pagerduty`, `opsgenie`.
+- `id`: The ID of the alerting settings entry in Portainer.
+
+## Import
+Alerting settings can be imported using the settings ID:
+```bash
+terraform import portainer_alerting_settings.main <settings-id>
+```

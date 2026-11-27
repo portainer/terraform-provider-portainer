@@ -44,7 +44,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        portainer: ["2.45.3", "3.0.1"]
+        portainer: ["2.45.4", "3.0.1", "3.1.0"]
     env:
       PORTAINER_VERSION: ${{ matrix.portainer }}
     steps:
@@ -68,3 +68,34 @@ jobs:
         env:
           TF_VAR_license_key: ${{ secrets.PORTAINER_BE_LICENSE }}
         run: bash e2e-tests/lib/be-run.sh
+
+      # The Go acceptance tests (TestAcc* in internal/) against the same
+      # instance, licensed by the be_license test above. They run even when a
+      # scripted test failed, so one failure does not hide the other.
+      - name: ⬇️ Terraform for the acceptance tests
+        if: ${{ !cancelled() }}
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          # Actions and list resources need Terraform 1.14; older skips them.
+          terraform_version: "^1.14.0"
+          terraform_wrapper: false
+
+      - name: 🐳 Name the environments, a Swarm service and a container
+        if: ${{ !cancelled() }}
+        env:
+          PORTAINER_ENDPOINT: ${{ env.PORTAINER_URL }}
+          PORTAINER_ACC_K8S_ENV_ID: ${{ env.TF_VAR_k8s_environment_id }}
+        run: ACC_SWARM=1 bash e2e-tests/lib/acc-env.sh
+
+      - name: 🧪 Business Edition acceptance tests (Go)
+        if: ${{ !cancelled() }}
+        env:
+          TF_ACC: "1"
+          PORTAINER_ACC_BE: "1"
+          PORTAINER_ENDPOINT: ${{ env.PORTAINER_URL }}
+          # D2K exists from Business Edition 3.0 on.
+          ACC_SKIP: ${{ startsWith(matrix.portainer, '2.') && '^TestAccD2KEnvironmentResource$' || '^$' }}
+        run: |
+          TF_CLI_CONFIG_FILE="$(scripts/tf-test-mirror.sh "$RUNNER_TEMP/tfmirror")"
+          export TF_CLI_CONFIG_FILE
+          go test ./internal/ -run '^TestAcc' -skip "$ACC_SKIP" -count=1 -v -timeout 90m

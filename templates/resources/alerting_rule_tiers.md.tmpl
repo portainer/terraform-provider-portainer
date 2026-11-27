@@ -1,0 +1,59 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Configures the multi-severity tiers of an editable built-in alert rule: the same metric firing at warning above one threshold and critical above another.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Configures the multi-severity tiers of an editable built-in alert rule: the same metric firing at warning above one threshold and critical above another.
+
+## Example Usage
+
+```hcl
+resource "portainer_alerting_rule_tiers" "cpu_saturation" {
+  rule_id            = 7
+  enabled            = true
+  condition_operator = ">"
+  duration           = 5
+
+  tier {
+    severity  = "critical"
+    threshold = 90
+  }
+
+  tier {
+    severity  = "warning"
+    threshold = 75
+  }
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `rule_id`: Changing it forces a new resource.
+- `enabled`: Defaults to `true`.
+- `tier.enabled`: Defaults to `true`.
+
+## Attributes Reference
+
+The tiers are a list rather than a set: they are an ordered ladder of severities, and reordering them is a change worth seeing in a plan.
+
+`description`, `condition_operator` and `duration` are left out of the request while they are unset, because Portainer keeps the rule's own value for an omitted field - blanking a built-in rule's description is not what an apply about thresholds should do. Once read, they are tracked, so a later change to one of them is applied normally.
+
+Portainer rejects this call for rules that are not editable internal rules, and some built-in rules fix their operator and reject a change to `condition_operator`.
+
+Portainer has no endpoint to clear a tier configuration, so destroying the resource stops managing it and leaves the rule as configured.
+
+## Import
+
+```bash
+terraform import portainer_alerting_rule_tiers.cpu_saturation 7
+```
+
+The import ID is the alert rule identifier.

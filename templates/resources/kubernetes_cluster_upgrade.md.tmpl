@@ -1,0 +1,32 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Upgrades a provisioned Kubernetes cluster to the next stable version.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Upgrades a provisioned Kubernetes cluster to the next stable version.
+
+> **See also:** the [`portainer_kubernetes_cluster_upgrade` action](../actions/kubernetes_cluster_upgrade.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+
+```hcl
+resource "portainer_kubernetes_cluster_upgrade" "example" {
+  endpoint_id = portainer_environment.prod.id
+
+  triggers = {
+    run_at = timestamp()
+  }
+}
+```
+
+## Arguments Reference
+
+{{ .SchemaMarkdown | trimspace }}
+
+This is a one-shot action with no state to read back, so without a `triggers` value the resource runs once and then stays put.

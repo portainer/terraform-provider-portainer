@@ -1,0 +1,35 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Fetches one custom resource.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Fetches one custom resource.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_custom_resource" "prod_widget" {
+  endpoint_id = portainer_environment.prod.id
+  definition  = "widgets.example.com"
+  namespace   = "apps"
+  name        = "prod"
+}
+
+output "widget_spec" {
+  value = jsondecode(data.portainer_kubernetes_custom_resource.prod_widget.manifest).spec
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+A custom resource has no fixed shape, so it is carried through as JSON rather than flattened into attributes that could never cover every definition. Decode it with `jsondecode()`.
+
+Portainer has separate paths for namespaced and cluster-scoped resources; leaving `namespace` unset is what selects the cluster-scoped one, which mirrors the definition's own `scope`.

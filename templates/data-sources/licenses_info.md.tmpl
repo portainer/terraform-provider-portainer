@@ -1,0 +1,28 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Summarises the licensing of the Portainer instance.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Summarises the licensing of the Portainer instance.
+
+## Example Usage
+
+```hcl
+data "portainer_licenses_info" "current" {}
+
+output "licence_overused" {
+  value = data.portainer_licenses_info.current.overuse_started_at > 0
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+A non-zero `overuse_started_at` means the instance is running more nodes than the licence covers, which is the field worth alerting on.

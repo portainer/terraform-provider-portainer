@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Verify that every Terraform resource and data source registered in
-# internal/provider.go is demonstrated by at least one example under
+# Verify that every Terraform resource and data source served by the
+# provider is demonstrated by at least one example under
 # examples/.
 #
 # The check is CONTENT-based, not directory-name based: an example "exists"
@@ -26,32 +26,17 @@ export LC_ALL=C
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
-provider_file="internal/provider.go"
-if [[ ! -f "$provider_file" ]]; then
-    echo "examples-presence-check: cannot find $provider_file" >&2
+# The provider reports its own type names (internal/tools/typenames), so
+# nothing here depends on how the Go code registers them.
+types="$(go run ./internal/tools/typenames)" || {
+    echo "examples-presence-check: cannot list the provider's types" >&2
     exit 2
-fi
-
-resources="$(awk '
-    /ResourcesMap:/   { in_res = 1; in_ds = 0; next }
-    /DataSourcesMap:/ { in_res = 0; in_ds = 1; next }
-    /^[[:space:]]*\},?[[:space:]]*$/    { in_res = 0; in_ds = 0; next }
-    in_res && /"portainer_/ {
-        if (match($0, /"portainer_[A-Za-z0-9_]+"/)) print substr($0, RSTART + 11, RLENGTH - 12)
-    }
-' "$provider_file")"
-
-data_sources="$(awk '
-    /ResourcesMap:/   { in_res = 1; in_ds = 0; next }
-    /DataSourcesMap:/ { in_res = 0; in_ds = 1; next }
-    /^[[:space:]]*\},?[[:space:]]*$/    { in_res = 0; in_ds = 0; next }
-    in_ds && /"portainer_/ {
-        if (match($0, /"portainer_[A-Za-z0-9_]+"/)) print substr($0, RSTART + 11, RLENGTH - 12)
-    }
-' "$provider_file")"
+}
+resources="$(awk '$1 == "resource" { sub(/^portainer_/, "", $2); print $2 }' <<< "$types")"
+data_sources="$(awk '$1 == "data-source" { sub(/^portainer_/, "", $2); print $2 }' <<< "$types")"
 
 if [[ -z "$resources" && -z "$data_sources" ]]; then
-    echo "examples-presence-check: no entities parsed from $provider_file" >&2
+    echo "examples-presence-check: the provider reported no resources or data sources" >&2
     exit 2
 fi
 

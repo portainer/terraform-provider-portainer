@@ -1,0 +1,137 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_docker_volume resource allows you to create and manage Docker volumes via the Portainer API.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_docker_volume` resource allows you to create and manage Docker volumes via the Portainer API.
+
+## Example Usage
+
+### Create a Docker Volume
+```hcl
+resource "portainer_docker_volume" "example" {
+  endpoint_id = 1
+  name        = "my-test-volume"
+  driver      = "local"
+}
+```
+
+### Advanced: Create a Volume with driver configuration and labels
+```hcl
+resource "portainer_docker_volume" "example" {
+  endpoint_id = 1
+  name        = "my-test-volume"
+  driver      = "local"
+
+  driver_opts = {
+    device = "tmpfs"
+    o      = "size=100m,uid=1000"
+    type   = "tmpfs"
+  }
+
+  labels = {
+    env     = "test"
+    managed = "terraform"
+  }
+}
+```
+
+### Advanced: Create a Volume with ClusterVolumeSpec
+```hcl
+resource "portainer_docker_volume" "clustered" {
+  endpoint_id = 1
+  name        = "shared-data"
+  driver      = "custom"
+
+  cluster_volume_spec {
+    group = "analytics"
+
+    access_mode {
+      scope   = "single"
+      sharing = "none"
+      mount_volume = {
+        path = "/mnt/data"
+      }
+    }
+
+    secrets = [
+      {
+        key    = "vol-cred"
+        secret = "secret-ref"
+      }
+    ]
+
+    accessibility_requirements {
+      requisite = [
+        {
+          property1 = "ssd"
+          property2 = "zone-a"
+        }
+      ]
+      preferred = [
+        {
+          property1 = "nvme"
+          property2 = "zone-b"
+        }
+      ]
+    }
+
+    capacity_range {
+      required_bytes = 1000000000
+      limit_bytes    = 5000000000
+    }
+
+    availability = "active"
+  }
+}
+```
+
+## Lifecycle & Behavior
+Creating a volume sends a POST request to the Docker API via Portainer.
+
+Deleting a volume removes it via the corresponding DELETE call.
+- You can recreate the volume by changing its name or any ForceNew parameter and running:
+```hcl
+terraform apply
+```
+
+- To destroy the volume:
+```hcl
+terraform destroy
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `driver`: Volume driver to use (e.g., `local`, `custom`).
+- `driver_opts`: Driver-specific options (e.g., `device`, `type`, `o`)
+- `id`: Unique identifier of the volume.
+
+## Import
+
+Docker volumes can be imported using a composite ID in the form `<endpoint_id>:<volume_name>`, where `<endpoint_id>` is the numeric ID of the Portainer environment and `<volume_name>` is the Docker volume name. The format from before v3.0.0, `<endpoint_id>-<volume_name>`, is still accepted.
+
+```shell
+terraform import portainer_docker_volume.example 1:my-volume
+```
+
+### Import by identity
+
+Terraform 1.12 and later can also import by resource identity: the environment ID as `endpoint_id` and the volume name as `name` in an `import` block. The ID string above keeps working.
+
+```hcl
+import {
+  to       = portainer_docker_volume.example
+  identity = {
+    endpoint_id = 1
+    name        = "my-volume"
+  }
+}
+```
+
+`terraform query` (Terraform 1.14+) with the [`portainer_docker_volume` list resource](../list-resources/docker_volume.md) finds the objects to import and can generate the `import` blocks (`terraform query -generate-config-out=generated.tf`). The identity is stored in the state from v3.1.0 on; state written by v3.0.0 gets it on the next refresh, without a plan change. OpenTofu supports neither resource identity nor list resources; it keeps importing by ID.

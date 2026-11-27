@@ -1,0 +1,31 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_settings_public data source reads the settings Portainer exposes without authentication — how the instance expects users to log in, whether Edge Compute is on, and whether it has been set up at all.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_settings_public` data source reads the settings Portainer exposes without authentication — how the instance expects users to log in, whether Edge Compute is on, and whether it has been set up at all.
+
+## Example Usage
+
+```hcl
+data "portainer_settings_public" "this" {}
+
+# Edge environments and Edge stacks need the feature switched on.
+resource "portainer_environment" "edge" {
+  count = data.portainer_settings_public.this.enable_edge_compute_features ? 1 : 0
+
+  name                = "edge-device"
+  environment_address = "https://portainer.example.com"
+  type                = 4
+}
+```
+
+## Arguments Reference
+
+This data source takes no arguments.
+
+{{ .SchemaMarkdown | trimspace }}

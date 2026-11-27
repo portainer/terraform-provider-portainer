@@ -1,0 +1,42 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_policy_template data source allows you to look up a built-in Portainer Fleet Governance Policy Template by ID or name. Templates provide pre-configured policy definitions that can be used when creating policies.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_policy_template` data source allows you to look up a built-in Portainer Fleet Governance Policy Template by ID or name. Templates provide pre-configured policy definitions that can be used when creating policies.
+
+## Example Usage
+
+### Look up a policy template by name
+
+```hcl
+data "portainer_policy_template" "security_baseline" {
+  name = "Security Baseline"
+}
+
+output "template_data" {
+  value = data.portainer_policy_template.security_baseline.data
+}
+```
+
+### Look up a policy template by ID
+
+```hcl
+data "portainer_policy_template" "example" {
+  template_id = "security-k8s-baseline"
+}
+
+output "template_name" {
+  value = data.portainer_policy_template.example.name
+}
+```
+
+## Arguments Reference
+
+Exactly one of `template_id` or `name` must be specified.
+
+{{ .SchemaMarkdown | trimspace }}

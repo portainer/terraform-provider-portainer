@@ -1,0 +1,44 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Tries a set of credentials against an LDAP directory and reports whether the directory accepted them.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Tries a set of credentials against an LDAP directory and reports whether the directory accepted them.
+
+## Example Usage
+
+```hcl
+data "portainer_ldap_login_test" "alice" {
+  url       = "ldap.example.com:389"
+  reader_dn = "cn=readonly,dc=example,dc=com"
+  password  = var.ldap_password
+
+  search {
+    base_dn             = "ou=people,dc=example,dc=com"
+    user_name_attribute = "uid"
+  }
+
+  username      = "alice"
+  test_password = var.alice_password
+}
+
+output "alice_can_log_in" {
+  value = data.portainer_ldap_login_test.alice.valid
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+### `search`
+
+`password` is the reader account's; `test_password` is the one being tested. They are deliberately separate arguments rather than one reused field, because conflating them would be a security trap.
+
+`fail_on_error` defaults to `false`: a rejected login is usually the answer being asked for rather than an error. Set it to `true` to make a rejection stop the plan.

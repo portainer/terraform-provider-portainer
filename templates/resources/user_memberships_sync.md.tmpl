@@ -1,0 +1,32 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Refreshes a user's team memberships from the configured LDAP/AD or OAuth provider.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Refreshes a user's team memberships from the configured LDAP/AD or OAuth provider.
+
+> **See also:** the [`portainer_user_memberships_sync` action](../actions/user_memberships_sync.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+
+```hcl
+resource "portainer_user_memberships_sync" "example" {
+  user_id = portainer_user.alice.id
+
+  triggers = {
+    run_at = timestamp()
+  }
+}
+```
+
+## Arguments Reference
+
+{{ .SchemaMarkdown | trimspace }}
+
+This is a one-shot action with no state to read back, so without a `triggers` value the resource runs once and then stays put.

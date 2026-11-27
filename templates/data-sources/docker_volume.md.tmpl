@@ -1,0 +1,31 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_docker_volume data source allows you to look up an existing Docker volume within a specific Portainer environment.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_docker_volume` data source allows you to look up an existing Docker volume within a specific Portainer environment.
+
+## Example Usage
+
+### Look up a Docker volume by name
+
+```hcl
+data "portainer_docker_volume" "data" {
+  endpoint_id = 1
+  name        = "db-data"
+}
+
+output "volume_mount" {
+  value = data.portainer_docker_volume.data.mount_point
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `id`: Name/ID of the Docker volume.

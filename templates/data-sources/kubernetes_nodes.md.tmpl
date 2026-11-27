@@ -1,0 +1,33 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Lists the nodes of a Kubernetes cluster with their capacity, the headroom Portainer computes for them, and their current usage.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Lists the nodes of a Kubernetes cluster with their capacity, the headroom Portainer computes for them, and their current usage.
+
+## Example Usage
+
+```hcl
+data "portainer_kubernetes_nodes" "prod" {
+  environment_id = 1
+}
+
+output "cordoned_nodes" {
+  value = [for n in data.portainer_kubernetes_nodes.prod.nodes : n.name if n.unschedulable]
+}
+
+output "unready_nodes" {
+  value = [for n in data.portainer_kubernetes_nodes.prod.nodes : n.name if !n.ready]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+
+## Attributes Reference
+
+`available_cpu` and `available_memory` are Portainer's own view of what is still schedulable, which is not simply capacity minus usage. `usage_cpu` and `usage_memory` come from metrics-server and are empty on a cluster that does not run it — that is reported as unknown rather than failing the read. `unschedulable` is what `portainer_kubernetes_node_drain` leaves behind.

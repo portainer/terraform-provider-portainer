@@ -1,0 +1,26 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_edge_group data source allows you to look up an existing Portainer Edge group by its name.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_edge_group` data source allows you to look up an existing Portainer Edge group by its name.
+
+## Example Usage
+
+### Look up an Edge group by name
+
+```hcl
+data "portainer_edge_group" "retail_stores" {
+  name = "Retail-Stores"
+}
+
+output "edge_group_id" {
+  value = data.portainer_edge_group.retail_stores.id
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}

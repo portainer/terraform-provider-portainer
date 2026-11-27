@@ -1,0 +1,28 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Counts what a Docker environment holds: containers by state, images, volumes, networks, services and stacks — the same figures Portainer's own dashboard shows.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+Counts what a Docker environment holds: containers by state, images, volumes, networks, services and stacks — the same figures Portainer's own dashboard shows.
+
+## Example Usage
+
+```hcl
+data "portainer_docker_dashboard" "prod" {
+  environment_id = 1
+}
+
+output "unhealthy_containers" {
+  value = data.portainer_docker_dashboard.prod.containers_unhealthy
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+A container without a healthcheck counts towards neither `containers_healthy` nor `containers_unhealthy`.

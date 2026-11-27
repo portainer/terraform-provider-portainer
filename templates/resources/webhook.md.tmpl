@@ -1,0 +1,75 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_webhook resource allows you to create and manage webhooks in Portainer. Webhooks can be used to trigger actions such as pulling and redeploying stacks or images via external systems.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_webhook` resource allows you to create and manage webhooks in Portainer. Webhooks can be used to trigger actions such as pulling and redeploying stacks or images via external systems.
+
+> Currently working only for Portainer BE edition
+
+## Example Usage
+```hcl
+resource "portainer_webhook" "stack" {
+  endpoint_id   = 1
+  resource_id   = "3"        # Stack ID
+  webhook_type  = 1          # 1 = Stack
+}
+```
+## Lifecycle & Behavior
+- Create webhook, simply run:
+```hcl
+terraform destroy
+```
+
+- Delete webhook:
+```hcl
+terraform apply
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Repointing a webhook
+
+By default, changing `resource_id` or `webhook_type` **replaces** the webhook. The replacement gets a new token, so every URL already handed out stops working.
+
+Portainer Business Edition can move a webhook to another resource in place, which keeps its token. Set `reassign_on_change = true` to use it:
+
+```hcl
+resource "portainer_webhook" "deploy" {
+  endpoint_id        = portainer_environment.prod.id
+  resource_id        = portainer_stack.web.id
+  webhook_type       = 1
+  reassign_on_change = true
+}
+```
+
+It is off by default on purpose: Portainer CE has no reassign endpoint, so turning it on there makes the apply fail rather than replace the webhook the way it always has.
+
+## Import
+
+Webhooks can be imported using their numeric ID (listed by `GET /api/webhooks`):
+
+```shell
+terraform import portainer_webhook.example 12
+```
+
+`reassign_on_change` is not stored in Portainer and takes its default after an import.
+
+### Import by identity
+
+Terraform 1.12 and later can also import by resource identity: the object's numeric ID as `id` in an `import` block. The ID string above keeps working.
+
+```hcl
+import {
+  to       = portainer_webhook.example
+  identity = {
+    id = "12"
+  }
+}
+```
+
+`terraform query` (Terraform 1.14+) with the [`portainer_webhook` list resource](../list-resources/webhook.md) finds the objects to import and can generate the `import` blocks (`terraform query -generate-config-out=generated.tf`). The identity is stored in the state from v3.1.0 on; state written by v3.0.0 gets it on the next refresh, without a plan change. OpenTofu supports neither resource identity nor list resources; it keeps importing by ID.

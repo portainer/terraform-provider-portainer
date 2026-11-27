@@ -1,0 +1,38 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_helm_rollback resource triggers a rollback of a Helm release to a previous revision. This is an action-style resource: it performs the rollback on create and has no read or delete side effects.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_helm_rollback` resource triggers a rollback of a Helm release to a previous revision. This is an action-style resource: it performs the rollback on create and has no read or delete side effects.
+
+> **See also:** the [`portainer_helm_rollback` action](../actions/helm_rollback.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+
+```hcl
+resource "portainer_helm_rollback" "rollback" {
+  endpoint_id  = 1
+  release_name = "my-release"
+  namespace    = "default"
+  revision     = 3
+}
+```
+
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/helm_rollback)
+
+## Lifecycle & Behavior
+This resource performs a one-time Helm rollback when applied. It does not manage ongoing state and will re-trigger on each `terraform apply`.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `wait`: Defaults to `false`.
+- `wait_for_jobs`: Defaults to `false`.
+- `recreate`: Defaults to `true`.
+- `force`: Defaults to `false`.
+- `timeout`: Defaults to `300`.

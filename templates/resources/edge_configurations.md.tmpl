@@ -1,0 +1,72 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_edge_configurations resource allows you to create, update, read, and delete Edge Configurations in Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+## Overview
+The `portainer_edge_configurations` resource allows you to create, update, read, and delete Edge Configurations in Portainer.
+It also optionally allows setting the state of the configuration after creation or update.
+
+---
+
+## 📘 Example Usage
+
+```hcl
+resource "portainer_edge_configurations" "example_edge_configuration" {
+  name            = "Test Edge Config"
+  type            = "general"
+  category        = "configuration"
+  base_dir        = "/etc/some/path/of/edge/config"                        # optional
+  edge_group_ids  = [1]                                                    # optional
+  file_path       = "${path.module}/config.zip"
+}
+```
+- [Example on GitHub](https://github.com/portainer/terraform-provider-portainer/tree/main/examples/edge_configurations)
+
+---
+
+## ⚙️ Lifecycle & Behavior
+- **Create** uploads a configuration file and sets the name, type, and association to edge groups.
+- **Update** updates the configuration via `PUT /edge_configurations/{id}` (supports changing `type`, `edge_group_ids`, and `file_path`, and is also triggered when the contents of the file at `file_path` change — see `file_sha256` below).
+- **Delete** removes the configuration via `DELETE /edge_configurations/{id}`.
+- **Read** retrieves metadata and synchronizes state with Portainer using `GET /edge_configurations/{id}`. The Portainer API does not return file content or any digest, so `file_sha256` is preserved from state and recomputed locally during plan.
+
+> 💡 **File content change detection:** During plan the provider reads `file_path` and computes its SHA256 into the `file_sha256` computed attribute. If the new hash differs from state, Terraform plans an in-place Update — even when `file_path` itself didn't change. This means rewriting the file in place (or `terraform apply` after the file's bytes change) will correctly re-upload it. `file_path` must be readable at plan time.
+
+> ⚠️ **Same-name limitation:** Portainer's `POST /edge_configurations` endpoint does not return the new configuration's ID. To resolve the ID after create, the provider snapshots existing edge configurations matching the requested `name` *before* the POST and picks the new entry that appears afterwards. If multiple entries appear (concurrent writers) the most recently created one is chosen. Because Portainer permits multiple edge configurations with the same `name`, **avoid creating Terraform-managed and out-of-band configurations with identical names** — if a same-name entry is created concurrently with `terraform apply`, the provider may bind to the wrong record. This will be fully resolved once Portainer returns the ID on POST.
+
+---
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Notes on Arguments and Attributes
+
+- `type`: Allowed values: `general`, `filename`, or `foldername`
+- `category`: Changing forces recreation.
+
+## Import
+
+Edge configurations can be imported using their numeric ID:
+
+```shell
+terraform import portainer_edge_configurations.example 42
+```
+
+### Import by identity
+
+Terraform 1.12 and later can also import by resource identity: the object's numeric ID as `id` in an `import` block. The ID string above keeps working.
+
+```hcl
+import {
+  to       = portainer_edge_configurations.example
+  identity = {
+    id = "42"
+  }
+}
+```
+
+`terraform query` (Terraform 1.14+) with the [`portainer_edge_configurations` list resource](../list-resources/edge_configurations.md) finds the objects to import and can generate the `import` blocks (`terraform query -generate-config-out=generated.tf`). The identity is stored in the state from v3.1.0 on; state written by v3.0.0 gets it on the next refresh, without a plan change. OpenTofu supports neither resource identity nor list resources; it keeps importing by ID.

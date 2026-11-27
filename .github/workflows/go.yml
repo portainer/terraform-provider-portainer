@@ -18,7 +18,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
@@ -32,9 +32,29 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
+      # The unit tests run real Terraform against a mock Portainer. 1.14 is
+      # the oldest release with actions and list resources (query); with an
+      # older one those tests skip.
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "^1.14.0"
+          terraform_wrapper: false
+
+      # The upgrade tests apply with the previous release first; mirror it once
+      # instead of downloading it from the registry in every one of them.
+      - name: Cache the provider mirror of the upgrade tests
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/tfmirror
+          key: tfmirror-${{ runner.os }}-${{ hashFiles('scripts/tf-test-mirror.sh') }}
+
+      - name: Mirror the previous provider release
+        run: echo "TF_CLI_CONFIG_FILE=$(scripts/tf-test-mirror.sh "$RUNNER_TEMP/tfmirror")" >>"$GITHUB_ENV"
+
       - name: Run unit tests with coverage
         run: |
-          go test ./internal/ -v -count=1 -race \
+          go test ./internal/ -v -count=1 -race -parallel 8 -timeout 45m \
             -covermode=atomic \
             -coverprofile=coverage.out
 
@@ -119,6 +139,46 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
 
+  # The unit tests again with OpenTofu as the CLI (TF_ACC_TERRAFORM_PATH).
+  # Tests of resource identity, list resources and actions skip themselves:
+  # OpenTofu supports none of them (skipOnOpenTofu in internal/).
+  go-test-opentofu:
+    name: Unit tests (OpenTofu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      # 1.11 is the oldest release with ephemeral resources and write-only
+      # attributes.
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: latest
+          tofu_wrapper: false
+
+      - name: Cache the provider mirror of the upgrade tests
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/tfmirror
+          key: tfmirror-tofu-${{ runner.os }}-${{ hashFiles('scripts/tf-test-mirror.sh') }}
+
+      - name: Mirror the previous provider release
+        run: echo "TF_CLI_CONFIG_FILE=$(scripts/tf-test-mirror.sh "$RUNNER_TEMP/tfmirror")" >>"$GITHUB_ENV"
+
+      - name: Run unit tests with OpenTofu
+        run: |
+          tofu version
+          TF_ACC_TERRAFORM_PATH="$(command -v tofu)" \
+            go test ./internal/ -v -count=1 -race -parallel 8 -timeout 45m
+
   golangci-lint:
     runs-on: ubuntu-latest
     steps:
@@ -127,7 +187,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum

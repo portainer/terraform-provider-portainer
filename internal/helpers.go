@@ -11,24 +11,11 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-cty/cty"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gopkg.in/yaml.v3"
 )
-
-// removeFromStateContext is the context-aware equivalent of schema.RemoveFromState
-// (which has no *Context variant in plugin-sdk v2). It clears the ID so the
-// resource is removed from state, used as DeleteContext for action-style
-// resources that have nothing to delete server-side.
-func removeFromStateContext(_ context.Context, d *schema.ResourceData, _ interface{}) diag.Diagnostics {
-	d.SetId("")
-	return nil
-}
 
 // setAuthHeader sets the Portainer authentication header on req from the
 // client's configured credentials: the API key (X-API-Key) is preferred, and
@@ -42,21 +29,6 @@ func setAuthHeader(req *http.Request, client *APIClient) error {
 		req.Header.Set("Authorization", "Bearer "+client.JWTToken)
 	} else {
 		return fmt.Errorf("no valid authentication method provided (api_key or jwt token)")
-	}
-	return nil
-}
-
-// setFields applies multiple d.Set calls and returns the first error encountered,
-// wrapping it with the offending field name. It replaces the repeated
-// `_ = d.Set(...)` pattern in Read handlers so schema mismatches surface as a
-// diagnostic instead of being silently dropped. d.Set only errors on a schema
-// type mismatch (a provider bug), so in practice this never fails at runtime —
-// it just makes those failures visible during development and testing.
-func setFields(d *schema.ResourceData, fields map[string]interface{}) error {
-	for k, v := range fields {
-		if err := d.Set(k, v); err != nil {
-			return fmt.Errorf("failed to set %q: %w", k, err)
-		}
 	}
 	return nil
 }
@@ -456,106 +428,4 @@ func validateDuration(v interface{}, key string) ([]string, []error) {
 		return nil, []error{fmt.Errorf("%q must not be negative", key)}
 	}
 	return nil, nil
-}
-
-// writeOnlyString returns the configured value of a write-only attribute,
-// which never reaches state and so can only be read from the raw
-// configuration. An unset or unknown value is returned as "".
-func writeOnlyString(d *schema.ResourceData, key string) (string, error) {
-	return writeOnlyStringAt(d, cty.GetAttrPath(key))
-}
-
-// writeOnlyStringAt is writeOnlyString for a write-only attribute inside a
-// block, e.g. cty.GetAttrPath("ldap_settings").IndexInt(0).GetAttr("password_wo").
-func writeOnlyStringAt(d *schema.ResourceData, path cty.Path) (string, error) {
-	raw, diags := d.GetRawConfigAt(path)
-	if diags.HasError() {
-		return "", fmt.Errorf("unable to read %s: %v", formatCtyPath(path), diags)
-	}
-	if !raw.IsKnown() || raw.IsNull() {
-		return "", nil
-	}
-	return raw.AsString(), nil
-}
-
-// writeOnlySecretSchema is the write-only twin of the secret attribute
-// secretKey: same value, never stored in state. versionKey has to be set
-// alongside it, because Terraform cannot see a change of a value it never
-// stores.
-func writeOnlySecretSchema(secretKey, versionKey, what string) *schema.Schema {
-	return &schema.Schema{
-		Type:          schema.TypeString,
-		Optional:      true,
-		Sensitive:     true,
-		WriteOnly:     true,
-		ConflictsWith: []string{secretKey},
-		RequiredWith:  []string{versionKey},
-		Description:   fmt.Sprintf("Write-only %s (supports ephemeral values; never stored in Terraform state). Conflicts with `%s`. Requires Terraform 1.11 or later.", what, secretKey),
-	}
-}
-
-// writeOnlyVersionSchema is the version attribute of the write-only woKey.
-// With forceNew the resource is replaced when it changes, matching a secret
-// attribute that is ForceNew itself.
-func writeOnlyVersionSchema(woKey string, forceNew bool) *schema.Schema {
-	desc := fmt.Sprintf("Version of `%s`. Increment it to send a new value.", woKey)
-	if forceNew {
-		desc += " Changing it forces resource recreation."
-	}
-	return &schema.Schema{
-		Type:        schema.TypeInt,
-		Optional:    true,
-		ForceNew:    forceNew,
-		Description: desc,
-	}
-}
-
-// secretValue returns the secret in key, or the one in its write-only twin
-// woKey when versionKey is set. The write-only value is only in the
-// configuration, which every apply carries.
-//
-// A configured write-only value wins over key: when a configuration moves
-// from key to woKey, an optional-computed key still holds the old secret from
-// state, which used to be sent instead of the new one. That old value is
-// cleared from state then, which is the point of moving to woKey.
-func secretValue(d *schema.ResourceData, key, woKey, versionKey string) (string, error) {
-	if d.Get(versionKey).(int) != 0 {
-		wo, err := writeOnlyString(d, woKey)
-		if err != nil {
-			return "", err
-		}
-		if wo != "" {
-			if d.Get(key).(string) != "" {
-				if err := d.Set(key, ""); err != nil {
-					return "", err
-				}
-			}
-			return wo, nil
-		}
-	}
-	return d.Get(key).(string), nil
-}
-
-// twinSecret is secretValue for a secret whose write-only twin follows the
-// naming convention: <field>_wo with <field>_wo_version.
-func twinSecret(d *schema.ResourceData, field string) (string, error) {
-	return secretValue(d, field, field+"_wo", field+"_wo_version")
-}
-
-// formatCtyPath renders a cty path the way Terraform names attributes
-// (ldap_settings.0.password_wo) for error messages.
-func formatCtyPath(path cty.Path) string {
-	parts := make([]string, 0, len(path))
-	for _, step := range path {
-		switch s := step.(type) {
-		case cty.GetAttrStep:
-			parts = append(parts, s.Name)
-		case cty.IndexStep:
-			if s.Key.Type() == cty.Number {
-				i, _ := s.Key.AsBigFloat().Int64()
-				parts = append(parts, strconv.FormatInt(i, 10))
-			}
-		}
-	}
-	return strings.Join(parts, ".")
 }

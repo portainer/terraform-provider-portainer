@@ -1,0 +1,43 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Manages Portainer's scheduled backup to local storage on the Portainer host, including how long archives are kept.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Manages Portainer's scheduled backup to local storage on the Portainer host, including how long archives are kept.
+
+## Example Usage
+
+```hcl
+resource "portainer_backup_local_settings" "nightly" {
+  cron_rule      = "0 3 * * *"
+  retention_days = 14
+
+  # Required in FIPS mode (Portainer BE 3.1+); keeps it out of state:
+  # password_wo         = var.backup_archive_password
+  # password_wo_version = 1
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## FIPS mode (Portainer BE 3.1+)
+
+A Portainer Business Edition 3.1 instance running in FIPS mode refuses unencrypted backups, and a schedule without a password stops running there. Set `password` (or `password_wo` with `password_wo_version`) when the instance runs in FIPS mode. The password is only sent when configured, so older servers are unaffected, and it is never read back.
+
+## Attributes Reference
+
+Removing the resource stops managing the settings; Portainer has no endpoint to clear them.
+
+## Import
+
+The local backup settings are instance-wide, so any import ID works:
+
+```shell
+terraform import portainer_backup_local_settings.example portainer-backup-local-settings
+```

@@ -13,69 +13,45 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gopkg.in/yaml.v3"
 )
 
-// k8sConfirmExistsByGET issues a GET against a Kubernetes object to verify it
-// still exists. On HTTP 404 it clears the resource ID via d.SetId("") so the
-// next plan recreates it (out-of-band deletion detection). On any other non-2xx
-// it returns diagnostics carrying the response body. Resources defined by a
-// manifest use k8sReadManifestDrift, which also detects a changed content.
-//
-// Returns nil diagnostics with the ID preserved when the object exists, or nil
-// diagnostics with the ID cleared when it is gone. Callers should check d.Id() == ""
-// before setting any other fields.
-func k8sConfirmExistsByGET(ctx context.Context, d *schema.ResourceData, client *APIClient, url, kind string) diag.Diagnostics {
-	if err := doJSON(ctx, client, http.MethodGet, url, nil, nil); err != nil {
-		if isAPINotFound(err) {
-			d.SetId("")
-			return nil
-		}
-		return diag.FromErr(fmt.Errorf("failed to read %s: %w", kind, err))
-	}
-	return nil
-}
-
-// k8sReadManifestDrift is k8sConfirmExistsByGET that also detects a change of
-// the object's content. The live object is always a superset of the authored
-// manifest - the API server adds status, metadata and defaulted fields - so
-// only the fields the manifest sets are compared. When one of them differs,
-// manifest in state becomes those fields with their live values, which shows
-// exactly the drifted fields in the plan; the next apply puts the authored
-// manifest back. Without drift the state is left alone, so the authored text
-// (comments, formatting) stays as written.
-func k8sReadManifestDrift(ctx context.Context, d *schema.ResourceData, client *APIClient, url, kind string) diag.Diagnostics {
+// k8sReadManifestDrift reads a manifest-defined object and detects a change
+// of its content. gone reports an object deleted outside Terraform (HTTP 404),
+// which the caller removes from state. The live object is always a superset of
+// the authored manifest - the API server adds status, metadata and defaulted
+// fields - so only the fields the manifest sets are compared. When one of them
+// differs, drifted holds those fields with their live values, to be stored as
+// manifest so the plan shows exactly the drifted fields; the next apply puts
+// the authored manifest back. Without drift drifted is empty and the state is
+// left alone, so the authored text (comments, formatting) stays as written.
+func k8sReadManifestDrift(ctx context.Context, client *APIClient, url, kind, manifest string) (gone bool, drifted string, err error) {
 	var live map[string]interface{}
 	if err := doJSON(ctx, client, http.MethodGet, url, nil, &live); err != nil {
 		if isAPINotFound(err) {
-			d.SetId("")
-			return nil
+			return true, "", nil
 		}
-		return diag.FromErr(fmt.Errorf("failed to read %s: %w", kind, err))
+		return false, "", fmt.Errorf("failed to read %s: %w", kind, err)
 	}
 
-	// After an import there is no manifest to compare with yet.
-	authored, err := parseManifest(d.Get("manifest").(string))
-	if err != nil || len(authored) == 0 {
-		return nil
+	// After an import there is no manifest to compare with yet; an
+	// unparsable one is reported by the next apply.
+	authored, _ := parseManifest(manifest)
+	if len(authored) == 0 {
+		return false, "", nil
 	}
 	authored = k8sComparable(k8sNormalizeAuthored(authored), live)
 	if k8sSubsetEqual(authored, live) {
-		return nil
+		return false, "", nil
 	}
 
-	var drifted bytes.Buffer
-	enc := yaml.NewEncoder(&drifted)
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
 	if err := enc.Encode(k8sProjectLive(authored, live)); err != nil {
-		return diag.FromErr(fmt.Errorf("failed to render the live %s: %w", kind, err))
+		return false, "", fmt.Errorf("failed to render the live %s: %w", kind, err)
 	}
-	if err := d.Set("manifest", drifted.String()); err != nil {
-		return diag.FromErr(err)
-	}
-	return nil
+	return false, buf.String(), nil
 }
 
 // k8sScaledKinds are workloads whose replica count is commonly changed by
@@ -289,31 +265,32 @@ func k8sProjectLive(authored, live interface{}) interface{} {
 // new one does not, so a field removed from the manifest is removed from the
 // object too.
 //
-// name is the object's name from the resource ID; identity lists the
-// attributes that address the object (namespace, type). The object is deleted
-// and created again when it cannot be changed in place: another name, kind or
-// address, or a field the API server does not allow to change (HTTP 422, e.g.
-// a Job's pod template or a Deployment's selector).
-func k8sUpdateManifest(ctx context.Context, d *schema.ResourceData, client *APIClient, url, name, kind string, del, create func() diag.Diagnostics, identity ...string) diag.Diagnostics {
-	recreate := func() diag.Diagnostics {
-		if diags := del(); diags.HasError() {
-			return diags
+// name is the object's name from the resource ID; previousManifest is the
+// manifest in state (empty after an import) and manifest the planned one;
+// identityChanged reports a change of the attributes that address the object
+// (namespace, type). The object is deleted and created again when it cannot be
+// changed in place: another name, kind or address, or a field the API server
+// does not allow to change (HTTP 422, e.g. a Job's pod template or a
+// Deployment's selector).
+func k8sUpdateManifest(ctx context.Context, client *APIClient, url, name, kind, previousManifest, manifest string, identityChanged bool, del, create func() error) error {
+	recreate := func() error {
+		if err := del(); err != nil {
+			return err
 		}
 		if err := k8sWaitDeleted(ctx, client, url); err != nil {
-			return diag.FromErr(fmt.Errorf("%s: %w", kind, err))
+			return fmt.Errorf("%s: %w", kind, err)
 		}
 		return create()
 	}
 
-	oldRaw, newRaw := d.GetChange("manifest")
-	desired, err := parseManifest(newRaw.(string))
+	desired, err := parseManifest(manifest)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("manifest must be valid JSON or YAML: %w", err))
+		return fmt.Errorf("manifest must be valid JSON or YAML: %w", err)
 	}
 	// Empty after an import, which leaves manifest unset.
-	previous, _ := parseManifest(oldRaw.(string))
+	previous, _ := parseManifest(previousManifest)
 
-	if !k8sSameObject(previous, desired, name) || d.HasChanges(identity...) {
+	if !k8sSameObject(previous, desired, name) || identityChanged {
 		return recreate()
 	}
 
@@ -326,7 +303,7 @@ func k8sUpdateManifest(ctx context.Context, d *schema.ResourceData, client *APIC
 		return recreate()
 	}
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to update %s: %w", kind, err))
+		return fmt.Errorf("failed to update %s: %w", kind, err)
 	}
 	return nil
 }

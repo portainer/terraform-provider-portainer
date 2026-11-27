@@ -290,6 +290,11 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_edge_job_task_logs`             | [edge_job_task_logs.md](docs/resources/edge_job_task_logs.md)                                  | [example](examples/edge_job_task_logs/)              | ✅     | ❌ / ❌                             | ❌        |
 | `portainer_kubernetes_persistent_volume`   | [kubernetes_persistent_volume.md](docs/resources/kubernetes_persistent_volume.md)              | [example](examples/kubernetes_persistent_volume/)    | ✅     | ❌ / ✅                             | ❌        |
 | `portainer_endpoint_group_membership`      | [endpoint_group_membership.md](docs/resources/endpoint_group_membership.md)                    | [example](examples/endpoint_group_membership/)       | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_oidc_client` | [oidc_client.md](docs/resources/oidc_client.md) | [example](examples/oidc_client/) | ✅     | ✅ / ✅                             | ❌        |
+| `portainer_oidc_client_secret` | [oidc_client_secret.md](docs/resources/oidc_client_secret.md) | [example](examples/oidc_client_secret/) | ✅     | ✅ / ✅                             | ❌        |
+| `portainer_oidc_keys_rotate` | [oidc_keys_rotate.md](docs/resources/oidc_keys_rotate.md) | [example](examples/oidc_keys_rotate/) | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_oidc_client_sessions_end` | [oidc_client_sessions_end.md](docs/resources/oidc_client_sessions_end.md) | [example](examples/oidc_client_sessions_end/) | ✅     | ❌ / ❌                             | ❌        |
+| `portainer_oidc_user_sessions_end` | [oidc_user_sessions_end.md](docs/resources/oidc_user_sessions_end.md) | [example](examples/oidc_user_sessions_end/) | ✅     | ❌ / ❌                             | ❌        |
 
 
 
@@ -438,6 +443,9 @@ See our [examples](./docs/resources/) per resources in docs.
 | `portainer_kubernetes_node_metrics` | [kubernetes_node_metrics.md](docs/data-sources/kubernetes_node_metrics.md) | [example](examples/data_kubernetes_node_metrics/) | ✅     | ❌        |
 | `portainer_kubernetes_application_resources` | [kubernetes_application_resources.md](docs/data-sources/kubernetes_application_resources.md) | [example](examples/data_kubernetes_application_resources/) | ✅     | ❌        |
 | `portainer_helm_release_history` | [helm_release_history.md](docs/data-sources/helm_release_history.md) | [helm release history docs](docs/data-sources/helm_release_history.md) | ✅ | ❌ |
+| `portainer_oidc_clients` | [oidc_clients.md](docs/data-sources/oidc_clients.md) | [example](examples/data_oidc_clients/) | ✅     | ❌        |
+| `portainer_oidc_client_sessions` | [oidc_client_sessions.md](docs/data-sources/oidc_client_sessions.md) | [example](examples/data_oidc_client_sessions/) | ✅     | ❌        |
+| `portainer_oidc_launcher` | [oidc_launcher.md](docs/data-sources/oidc_launcher.md) | [example](examples/data_oidc_launcher/) | ✅     | ❌        |
 
 
 ### 🐳 Podman Support via Docker Resources
@@ -594,6 +602,37 @@ terraform {
 }
 ```
 Now you're ready to test your provider against the local Portainer instance.
+
+### Unit and acceptance tests
+The Go tests in `internal/` run real Terraform (>= 1.14, older skips the action and list resource tests) through `terraform-plugin-testing`. The upgrade tests apply with the previous release (3.0.0) first; `scripts/tf-test-mirror.sh` mirrors it once and prints a CLI configuration that installs it from the mirror, which the Makefile targets use.
+
+```sh
+make unit-test   # unit tests against a mock Portainer, in parallel
+```
+
+Acceptance tests (`TestAcc*`) run against a real Portainer and skip themselves without one. CI runs them in the `Acceptance tests (Go)` job of the PR workflow (Portainer CE with Docker, Swarm and k3d) and after the Business Edition e2e tests. Locally, against the instance of `make up`:
+
+```sh
+make up
+export PORTAINER_ENDPOINT=https://localhost:9443
+export PORTAINER_API_KEY=ptr_xrP7XWqfZEOoaCJRu5c8qKaWuDtVc2Zb07Q5g22YpS8=
+# Optional: name the environments; ACC_SWARM=1 turns this host into a Swarm
+# manager and starts the service and container the Docker tests use.
+eval "$(ACC_SWARM=1 bash e2e-tests/lib/acc-env.sh)"
+make testacc   # or: TF_ACC=1 go test ./internal/ -run '^TestAccTag' -v
+```
+
+| Variable | Enables |
+|----------|---------|
+| `PORTAINER_ACC_DOCKER_ENV_ID` | Docker standalone tests (stacks, networks, volumes) |
+| `PORTAINER_ACC_SWARM_ENV_ID`, `PORTAINER_ACC_SWARM_SERVICE`, `PORTAINER_ACC_CONTAINER` | Swarm, webhook, service update and resource control tests |
+| `PORTAINER_ACC_K8S_ENV_ID` | Kubernetes tests (k3d, see above) |
+| `PORTAINER_ACC_BE=1` | Business Edition tests (needs a licensed Portainer EE, see `e2e-tests/lib/be-setup.sh`) |
+| `PORTAINER_ACC_EDGE_ENV_ID`, `PORTAINER_ACC_ADDON_ID`, `PORTAINER_ACC_ALERTMANAGER_URL`, ... | Tests that need fixtures CI does not have; see the skip message of each test |
+
+The acceptance tests change the instance (settings, users, environments): run them against a test Portainer only.
+
+**OpenTofu.** Both suites also run with OpenTofu (>= 1.11), as in CI: `TF_ACC_TERRAFORM_PATH="$(command -v tofu)" make unit-test` (or `make testacc`). The tests recognise OpenTofu from `tofu version` (or `PORTAINER_ACC_OPENTOFU=1`), register the provider under the `hashicorp` namespace OpenTofu accepts, and skip the resource identity, list resource and action tests, which OpenTofu does not support. The mirror of `scripts/tf-test-mirror.sh` serves the previous release under both `registry.terraform.io` and `registry.opentofu.org`.
 
 ## Roadmap
 See the [open issues](https://github.com/portainer/terraform-provider-portainer/issues) for a list of proposed features (and known issues). See [CONTRIBUTING](./.github/CONTRIBUTING.md) for more information.

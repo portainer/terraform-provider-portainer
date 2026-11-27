@@ -1,0 +1,28 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  The portainer_kubernetes_delete_object resource allows you to delete Kubernetes objects (e.g. services, ingresses, jobs) within a specific environment (endpoint) and namespace in Portainer.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_delete_object` resource allows you to delete Kubernetes objects (e.g. services, ingresses, jobs) within a specific environment (endpoint) and namespace in Portainer.
+> ⚠️ This is a destructive action. Use carefully – resources deleted through this resource cannot be recovered via Terraform.
+
+> **See also:** the [`portainer_kubernetes_delete_object` action](../actions/kubernetes_delete_object.md) (Terraform >= 1.14) runs the same operation on demand or from a lifecycle `action_trigger`, without a resource in state.
+
+## Example Usage
+```hcl
+resource "portainer_kubernetes_delete_object" "remove_services" {
+  environment_id = 4
+  resource_type  = "services"
+  namespace      = "default"
+  names          = ["service-name-1"]
+}
+```
+
+## Lifecycle & Behavior
+- This resource performs a POST request to the Portainer API to delete the selected objects.
+
+{{ .SchemaMarkdown | trimspace }}

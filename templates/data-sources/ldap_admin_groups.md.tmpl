@@ -1,0 +1,39 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+  Fetches the LDAP groups whose members Portainer would make administrators, for the admin group search settings given here.
+---
+
+# {{ .Name }} ({{ .Type }})
+
+> **Business Edition only.** This endpoint does not exist in Portainer CE.
+
+Fetches the LDAP groups whose members Portainer would make administrators, for the admin group search settings given here.
+
+## Example Usage
+
+```hcl
+data "portainer_ldap_admin_groups" "admins" {
+  url       = "ldap.example.com:389"
+  reader_dn = "cn=readonly,dc=example,dc=com"
+  password  = var.ldap_password
+
+  admin_group_search {
+    group_base_dn = "ou=groups,dc=example,dc=com"
+    group_filter  = "(cn=*-admins)"
+  }
+}
+
+output "portainer_admin_groups" {
+  value = data.portainer_ldap_admin_groups.admins.group_names
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Attributes Reference
+
+### `admin_group_search`
+
+This endpoint answers with a plain list of names rather than the entry objects the user and group searches return. These endpoints take the whole directory configuration with the request rather than reusing the instance's saved settings, which is what lets a configuration be tried out before it is committed with `portainer_ldap_settings`. `reader_dn` and `password` are omitted from the request when unset, so `anonymous_mode` really does bind anonymously rather than with a blank password.

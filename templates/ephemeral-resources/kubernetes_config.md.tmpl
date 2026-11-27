@@ -1,0 +1,36 @@
+---
+page_title: "{{ .Name }} {{ .Type }} - {{ .RenderedProviderName }}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+The `portainer_kubernetes_config` ephemeral resource generates a kubeconfig for Portainer's Kubernetes environments (`GET /kubernetes/config`), like the [`portainer_kubernetes_config` data source](../data-sources/kubernetes_config.md), but without writing it to the plan or the state. The kubeconfig carries the caller's credential, which is why the ephemeral form is preferable.
+
+> **Requirements:** Terraform >= 1.10 or OpenTofu >= 1.11 (ephemeral resources).
+
+## Example Usage
+
+```hcl
+ephemeral "portainer_kubernetes_config" "all" {
+  environment_ids = [4, 5]
+}
+
+locals {
+  kubeconfig = yamldecode(ephemeral.portainer_kubernetes_config.all.kubeconfig)
+}
+
+provider "kubernetes" {
+  host     = local.kubeconfig.clusters[0].cluster.server
+  token    = local.kubeconfig.users[0].user.token
+  insecure = true
+}
+```
+
+## Lifecycle & Behavior
+
+Portainer creates nothing on the server for this call, so there is nothing to close: a fresh kubeconfig is generated in every `plan` and `apply`.
+
+{{ .SchemaMarkdown | trimspace }}

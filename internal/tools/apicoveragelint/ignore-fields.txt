@@ -1,0 +1,21 @@
+# Request fields of covered Portainer API operations that the provider leaves
+# out, one "<METHOD> <path> <field>  # <reason>" per line. METHOD, path and
+# field may be "*"; fields compare case-insensitively. apicoveragelint fails on
+# any request field of a covered operation that the provider never sends and
+# that is not listed here. Remove a line once the field is sent; the tool
+# notes entries that no longer match anything.
+
+# Deprecated by Portainer.
+*      *                                             RepositoryAuthorizationType # deprecated: Git sources (SourceID) replace it
+*      *                                             RepositoryProvider          # deprecated: Git sources (SourceID) replace it
+
+# UI helpers, preferences and one-shot runtime actions, not declarative state.
+*      *                                             createdFromCustomTemplateID # UI bookkeeping/credential lookup from a custom template; the provider passes Git settings explicitly
+*      *                                             fromEdgeStack               # UI helper: reuse the Git credentials stored on an edge stack
+PUT    /endpoints/{id}                               IsSetStatusMessage          # UI status banner flag
+PUT    /users/{id}                                   Theme                       # per-user UI preference
+PUT    /stacks/{id}                                  RollbackTo                  # one-shot rollback action, not desired state
+PUT    /edge_stacks/{id}                             RollbackTo                  # one-shot rollback action, not desired state
+PATCH  /kubernetes/{id}/namespaces/{namespace}/deployments/{name} podAnnotations # the provider only reads deployments (scale); workloads are applied as manifests
+
+# Real gaps: fields a user would want to set. Implement, then remove the line.
