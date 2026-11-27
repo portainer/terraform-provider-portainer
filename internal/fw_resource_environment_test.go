@@ -37,6 +37,10 @@ type fakeEnvironments struct {
 	files   [][]string          // multipart file fields of every POST /endpoints
 	uploads []string            // "<kind>:<folder>:<content>" of every TLS upload
 	edgeID  string              // EdgeID returned on create (EnforceEdgeID)
+	// businessEdition makes an update fail as Business Edition does when a
+	// true TLS skip flag asks it to delete a CA or client certificate file
+	// the environment does not have (issue #165); CE only logs a warning.
+	businessEdition bool
 }
 
 type fakeEnvironment struct {
@@ -241,11 +245,38 @@ func (f *fakeEnvironments) update(w http.ResponseWriter, r *http.Request) {
 		e.PublicURL = body.PublicURL
 	}
 	if body.TLS != nil {
+		// As Portainer does, a skip flag left out of the request keeps its
+		// current value. A true flag deletes the CA file (tlsskipVerify) or the
+		// client certificate and key (tlsskipClientVerify); with TLS on, the
+		// CA file exists unless server verification is skipped already.
+		prev := portainerTLSConfig{}
+		if e.TLSConfig != nil {
+			prev = *e.TLSConfig
+		}
+		if *body.TLS && f.businessEdition {
+			if body.TLSSkipVerify != nil && *body.TLSSkipVerify && (!prev.TLS || prev.TLSSkipVerify) {
+				RespondString(http.StatusInternalServerError, "application/json", `{"message":"Unable to remove TLS CA file from disk"}`)(w, r)
+				return
+			}
+			if body.TLSSkipClientVerify != nil && *body.TLSSkipClientVerify && prev.TLSCert == "" {
+				RespondString(http.StatusInternalServerError, "application/json", `{"message":"Unable to remove TLS cert file from disk"}`)(w, r)
+				return
+			}
+		}
 		e.TLSConfig = &portainerTLSConfig{TLS: *body.TLS}
 		if *body.TLS {
-			e.TLSConfig.TLSSkipVerify = body.TLSSkipVerify != nil && *body.TLSSkipVerify
-			if body.TLSSkipClientVerify != nil && !*body.TLSSkipClientVerify {
-				e.TLSConfig.TLSCert = "/data/tls/cert.pem"
+			e.TLSConfig.TLSSkipVerify = prev.TLS && prev.TLSSkipVerify
+			if body.TLSSkipVerify != nil {
+				e.TLSConfig.TLSSkipVerify = *body.TLSSkipVerify
+			}
+			if prev.TLS {
+				e.TLSConfig.TLSCert = prev.TLSCert
+			}
+			if body.TLSSkipClientVerify != nil {
+				e.TLSConfig.TLSCert = ""
+				if !*body.TLSSkipClientVerify {
+					e.TLSConfig.TLSCert = "/data/tls/cert.pem"
+				}
 			}
 		}
 	}
@@ -399,8 +430,15 @@ resource "portainer_environment" "e" {
 						if p["name"] != "prod-renamed" || p["groupID"] != float64(2) || p["url"] != "tcp://docker.example:2375" || p["publicURL"] != "10.0.0.1" {
 							return fmt.Errorf("unexpected PUT payload %v", p)
 						}
-						if p["tls"] != true || p["tlsskipVerify"] != true || p["tlsskipClientVerify"] != true {
-							return fmt.Errorf("TLS flags must be sent for a directly connected environment: %v", p)
+						if p["tls"] != true {
+							return fmt.Errorf("tls must be sent for a directly connected environment: %v", p)
+						}
+						// Unchanged true skip flags are left out: Business Edition
+						// fails when they ask it to delete a missing file (#165).
+						for _, k := range []string{"tlsskipVerify", "tlsskipClientVerify"} {
+							if _, ok := p[k]; ok {
+								return fmt.Errorf("unchanged %s must not be sent: %v", k, p)
+							}
 						}
 						if fmt.Sprint(p["tagIDs"]) != "[3 4]" {
 							return fmt.Errorf("tagIDs: %v", p["tagIDs"])
@@ -799,6 +837,12 @@ func TestEnvironmentResource_TLS(t *testing.T) {
 				Check: checkEnv(func() error {
 					if got := strings.Join(fake.uploadList(), ";"); got != "ca:1:CA;cert:1:NEW-CERT;key:1:KEY" {
 						return fmt.Errorf("uploads: %s", got)
+					}
+					// false skip flags point Portainer at the uploaded files and
+					// reload the proxy, so they are sent on every update.
+					p := environmentLastPut(t, mock, "1")
+					if p["tls"] != true || p["tlsskipVerify"] != false || p["tlsskipClientVerify"] != false {
+						return fmt.Errorf("a certificate rotation must send tls and the false skip flags: %v", p)
 					}
 					return nil
 				}),
@@ -1631,4 +1675,119 @@ resource "portainer_environment" "e" {
 			},
 		},
 	})
+}
+
+// envAgent is the configuration of issue #165: an Agent environment with the
+// default TLS flags (on, both skip flags true).
+func envAgent(name string, group int, address, policies string) string {
+	return fmt.Sprintf(`
+resource "portainer_environment" "e" {
+  name                 = %q
+  group_id             = %d
+  environment_address  = %q
+  type                 = 2
+  user_access_policies = %s
+}
+`, name, group, address, policies)
+}
+
+// TestEnvironmentResource_AgentOnBusinessEdition (issue #165): on Business
+// Edition, an update carrying tls with a true skip flag fails with 500 when
+// the agent environment has no CA or client certificate file to delete. The
+// create with access policies (Create's follow-up update), a rename, a group
+// change, an address change and a policy removal all succeed, and none of
+// those updates sends a skip flag.
+func TestEnvironmentResource_AgentOnBusinessEdition(t *testing.T) {
+	t.Parallel()
+	mock := NewMockServer(t)
+	fake := newFakeEnvironments(mock)
+	fake.businessEdition = true
+	noSkipFlags := checkEnv(func() error {
+		p := environmentLastPut(t, mock, "1")
+		if p == nil {
+			return fmt.Errorf("expected PUT /endpoints/1")
+		}
+		if p["tls"] != true {
+			return fmt.Errorf("tls must still be sent: %v", p)
+		}
+		for _, k := range []string{"tlsskipVerify", "tlsskipClientVerify"} {
+			if _, ok := p[k]; ok {
+				return fmt.Errorf("unchanged %s must not be sent: %v", k, p)
+			}
+		}
+		return nil
+	})
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV5ProviderFactories: testProtoV5Factories,
+		Steps: []resource.TestStep{
+			{
+				Config: mockProviderConfig(mock) + envAgent("test", 1, "tcp://agent:9001", `{ "2" = 1 }`),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("portainer_environment.e", "user_access_policies.2", "1"),
+					resource.TestCheckResourceAttr("portainer_environment.e", "tls_skip_verify", "true"),
+					resource.TestCheckResourceAttr("portainer_environment.e", "tls_skip_client_verify", "true"),
+					noSkipFlags,
+				),
+			},
+			{
+				Config: mockProviderConfig(mock) + envAgent("test-renamed", 2, "tcp://agent:9001", `{ "2" = 1 }`),
+				Check:  resource.ComposeTestCheckFunc(resource.TestCheckResourceAttr("portainer_environment.e", "name", "test-renamed"), noSkipFlags),
+			},
+			{
+				Config: mockProviderConfig(mock) + envAgent("test-renamed", 2, "tcp://agent2:9001", `{}`),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("portainer_environment.e", "environment_address", "tcp://agent2:9001"),
+					resource.TestCheckResourceAttr("portainer_environment.e", "user_access_policies.%", "0"),
+					noSkipFlags,
+				),
+			},
+		},
+	})
+}
+
+// TestEnvironmentResource_AdoptTLSFlags: Create adopting an existing
+// environment by name sends a true skip flag only when that environment does
+// not skip yet (its CA or client certificate is then deleted, which works on
+// Business Edition), and leaves out the flags it already has.
+func TestEnvironmentResource_AdoptTLSFlags(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		existing portainerTLSConfig
+		want     map[string]bool // flags expected in the PUT; others must be absent
+	}{
+		{"already skipping", portainerTLSConfig{TLS: true, TLSSkipVerify: true}, map[string]bool{}},
+		{"verifying with client cert", portainerTLSConfig{TLS: true, TLSCert: "/data/tls/7/cert.pem"}, map[string]bool{"tlsskipVerify": true, "tlsskipClientVerify": true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			mock := NewMockServer(t)
+			fake := newFakeEnvironments(mock)
+			fake.businessEdition = true
+			tls := tc.existing
+			fake.add(&fakeEnvironment{ID: 7, Name: "test", Type: 2, GroupID: 1, URL: "agent:9001", TLSConfig: &tls})
+			resource.UnitTest(t, resource.TestCase{
+				ProtoV5ProviderFactories: testProtoV5Factories,
+				Steps: []resource.TestStep{{
+					Config: mockProviderConfig(mock) + envAgent("test", 1, "tcp://agent:9001", `{}`),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("portainer_environment.e", "id", "7"),
+						checkEnv(func() error {
+							p := environmentLastPut(t, mock, "7")
+							if p == nil {
+								return fmt.Errorf("expected PUT /endpoints/7")
+							}
+							for _, k := range []string{"tlsskipVerify", "tlsskipClientVerify"} {
+								v, sent := p[k]
+								if tc.want[k] != sent || (sent && v != true) {
+									return fmt.Errorf("%s: sent=%v value=%v, want sent=%v: %v", k, sent, v, tc.want[k], p)
+								}
+							}
+							return nil
+						}),
+					),
+				}},
+			})
+		})
+	}
 }
