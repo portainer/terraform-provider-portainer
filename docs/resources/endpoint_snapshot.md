@@ -45,4 +45,4 @@ terraform apply
 
 ## Notes on Arguments and Attributes
 
-- `id`: Always `"snapshot"` or `endpoint-{id}` depending on target.
+- `id`: `"all"` when every environment is snapshotted (`endpoint_id` unset or `0`), otherwise the environment ID itself (for example `"3"`).

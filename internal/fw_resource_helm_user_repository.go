@@ -51,7 +51,7 @@ func (r *helmUserRepositoryResource) Schema(_ context.Context, _ resource.Schema
 			},
 			"url": schema.StringAttribute{
 				Required:      true,
-				Description:   "Helm repository URL (e.g. https://charts.bitnami.com/bitnami).",
+				Description:   "Helm repository URL (e.g. `https://charts.bitnami.com/bitnami`).",
 				Validators:    []validator.String{httpURLValidator{}},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},

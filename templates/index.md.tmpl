@@ -16,7 +16,7 @@ It supports provisioning and configuration of Portainer users and will be extend
 | [Terraform](https://registry.terraform.io/providers/portainer/portainer/latest)      | ![Done](https://img.shields.io/badge/status-done-brightgreen)           |
 | [OpenTofu](https://search.opentofu.org/provider/portainer/portainer/latest)       | ![Done](https://img.shields.io/badge/status-done-brightgreen) |
 
-Upgrading: see [Upgrading to v3.1.0](guides/version-3-1-upgrade) (no configuration changes needed) and [Upgrading to v3.0.0](guides/version-3-upgrade).
+Upgrading: see [Upgrading to v3.1.0](https://registry.terraform.io/providers/portainer/portainer/latest/docs/guides/version-3-1-upgrade) (no configuration changes needed) and [Upgrading to v3.0.0](https://registry.terraform.io/providers/portainer/portainer/latest/docs/guides/version-3-upgrade).
 
 ## ⚙️ Example Provider Configuration
 ```hcl

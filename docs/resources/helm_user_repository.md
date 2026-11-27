@@ -26,7 +26,7 @@ This resource creates a Helm repository association for a specific user. Deletin
 
 ### Required
 
-- `url` (String) Helm repository URL (e.g. https://charts.bitnami.com/bitnami).
+- `url` (String) Helm repository URL (e.g. `https://charts.bitnami.com/bitnami`).
 - `user_id` (Number) User identifier.
 
 ### Read-Only

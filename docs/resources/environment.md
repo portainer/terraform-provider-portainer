@@ -142,7 +142,7 @@ resource "meu_portainer_environment" "docker_tls" {
 
 ### Required
 
-- `environment_address` (String) Connection URL of the environment (e.g. tcp://host:port for Docker, https://host for Kubernetes/Agent). Used as the endpoint URL Portainer connects to.
+- `environment_address` (String) Connection URL of the environment (e.g. `tcp://host:port` for Docker, `https://host` for Kubernetes/Agent). Used as the endpoint URL Portainer connects to.
 - `name` (String) Name of the Portainer environment (endpoint) as displayed in the UI.
 - `type` (Number) Environment type: 1 = Docker, 2 = Agent, 3 = Azure, 4 = Edge Agent, 5 = Kubernetes, 6 = Kubernetes via agent, 7 = Kubernetes Edge Agent
 

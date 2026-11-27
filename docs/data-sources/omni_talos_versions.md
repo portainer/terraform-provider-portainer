@@ -19,7 +19,7 @@ data "portainer_omni_talos_versions" "supported" {
 }
 
 output "newest_talos" {
-  value = one(reverse(data.portainer_omni_talos_versions.supported.talos_versions))
+  value = reverse(data.portainer_omni_talos_versions.supported.talos_versions)[0]
 }
 ```
 

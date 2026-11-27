@@ -114,7 +114,7 @@ func (r *environmentResource) Schema(ctx context.Context, _ resource.SchemaReque
 			},
 			"environment_address": schema.StringAttribute{
 				Required:      true,
-				Description:   "Connection URL of the environment (e.g. tcp://host:port for Docker, https://host for Kubernetes/Agent). Used as the endpoint URL Portainer connects to.",
+				Description:   "Connection URL of the environment (e.g. `tcp://host:port` for Docker, `https://host` for Kubernetes/Agent). Used as the endpoint URL Portainer connects to.",
 				PlanModifiers: []planmodifier.String{environmentAddressSuppress{}},
 			},
 			"public_ip": schema.StringAttribute{
